@@ -14,7 +14,7 @@
 **One sentence:** LPs and buyers commit privately, the engine computes the close, and cash plus fund interests settle atomically on Canton — with the regulator able to verify, and no party able to see what it shouldn't.
 
 **Why Canton (the load-bearing four, all native to one primitive set):**
-1. Per-party privacy — no LP sees another's roll/exit election; no buyer sees another's price.
+1. Per-party privacy — no LP sees another LP's roll/sell election (the reference price itself is public to the room); in a multi-buyer auction, no buyer sees another's bid.
 2. Atomic multilateral settlement — every leg closes together or none do (no partial-close catastrophe).
 3. Selective disclosure — regulator/LPAC get a scoped, post-close, need-to-know window.
 4. Multi-party workflow across separately-controlled organizations — no shared database anyone owns.
@@ -92,6 +92,25 @@ Mechanics: each sender runs `AllocationFactory_Allocate` (locks holdings into an
 6. Party-id fingerprints change on reset — never hardcode; read from seed output.
 7. Same-synchronizer constraint — all parties/legs on one synchronizer.
 8. Version pinning — 3.5.x / 3.4.11 / JDK 21.
+
+### 2.8 Visibility model — who sees what, and when
+
+The privacy story is precise; conflating "operator" notions is the easy mistake.
+
+- **The Canton infrastructure operator (synchronizer / participant node) is the only party that is *permanently blind*.** It orders and confirms encrypted transactions but never reads contents. That is Canton's guarantee.
+- **The GP/Advisor is NOT permanently blind.** They run the close and must see the outcome to execute it. They see *signals* before clearing and the *full computed allocation* at/after compute.
+- **The reference price is PUBLIC to the room** (disclosed with the fairness opinion). The selling LP must see it to decide. (Buyer-price secrecy only exists in the R2 multi-buyer sealed-bid auction, where buyers are blind to *each other* until clearing.)
+- **Each LP's roll/sell election is private from *other LPs*** (peer privacy) — sealed via the stakeholder model (LP is the sole signatory of its `LPElection`; no other LP is a stakeholder).
+
+| Fact | Synchronizer (infra) | GP/Advisor | Other LPs | Buyer | Regulator/LPAC |
+|---|---|---|---|---|---|
+| Reference price (% NAV) | ✗ contents | ✓ (public to room) | ✓ | ✓ | post-close |
+| An LP's roll/sell election | ✗ | signal only, then allocation | ✗ | ✗ | post-close (scoped) |
+| Buyer's bid (R2 auction) | ✗ | clearing only | ✗ | own only | post-close |
+| Computed allocation / legs | ✗ | ✓ (to execute) | own leg | own leg | post-close (scoped) |
+| Settled result | ✗ | ✓ | own leg | own leg | ✓ scoped window |
+
+"Compute the close" is the **clearing event**: the engine resolves sealed elections (at the public price) into the allocation, which then becomes visible to the parties it binds and, post-close, to the regulator's scoped window.
 
 ---
 
@@ -208,5 +227,88 @@ The thinnest end-to-end thread, ~3 minutes, 5 browser tabs (one profile per pers
 
 1. **Build track:** C-Port hosted devnet vs cn-quickstart LocalNet — needs a focused evaluation (incl. test-USDCx availability on devnet). *Recommended next subagent.*
 2. **Compute-close locus:** fully on-ledger choice vs off-ledger compute + on-ledger settle — depends on how much we disclose to the executor. R1 can compute off-ledger and settle on-ledger; revisit for v2 privacy.
-3. **"Election in" signal:** how the GP learns an election exists without seeing content (separate signal contract vs hashed commitment). MVP: a minimal non-revealing flag.
+3. **"Election in" signal:** how the GP learns an election exists without seeing content. MVP: the LP creates its private `LPElection` plus a contentless `ElectionFiled` marker observed by the GP (a non-revealing flag). Revisit hashed-commitment alternative later.
 4. **Asset-leg realism:** abstract "portfolio interest" token vs something richer. MVP: abstract CIP-56 instrument.
+
+**Resolved during review (kept for the record):**
+- **Deal sequence** — price-before-elections (real CV flow), default = sell, lead/syndicate backstop on oversubscription. (See §3 sequence note.)
+- **Auction vs single lead** — R1 = single negotiated lead at a fairness-validated price; R2 = sealed-bid multi-buyer auction. (§3, §2.8)
+- **Price visibility** — public to the room; private thing is each LP's election (peer privacy) + the R2 buyer bids. (§2.8)
+- **Cash leg** — CIP-56 USD stablecoin (mock → Circle USDCx), not Canton Coin. (§2.3)
+- **Topology** — one participant / many parties for the hackathon; multi-participant = production. (§2.1)
+- **Canonical dataset** — see §6.
+
+---
+
+## 6. Domain model & canonical dataset
+
+One coherent NAV model used by the prototype and to be reused by the future service / Daml spec. **Cash = NAV × price; sums tie out (value in = value out).** Units are denominated in NAV dollars (NAV-per-unit = $1.00) for clarity.
+
+### 6.1 Entities
+
+| Entity | Fields |
+|---|---|
+| **Fund** | name, vintage, `totalNAV`, `navAsOf` (date) |
+| **ContinuationVehicle (CV)** | name, parent fund, asset in scope, `navPerUnit` (=$1.00) |
+| **Asset** | name, `navInScope` (the NAV being transacted = rolled + sold) |
+| **ReferencePrice** | `pctOfNAV` (the secondary price), `fairnessOpinionProvider`; **public to the room** |
+| **ElectionWindow** | `deadline` (date); default election = **SELL** |
+| **LPPosition** | lp, `commitment`, `currentNAV`, `ownershipPct` |
+| **Election** | lp, `choice` ∈ {ROLL, SELL}, `amountNAV` (≤ position); peer-private |
+| **BuyerProfile** | name, `aum`, `mandate`, `EligibilityCredential` |
+| **Bid / PriceTerm** | buyer, `pctOfNAV`. R1: single agreed lead PriceTerm. R2: sealed `Bid` per buyer → clearing |
+| **EligibilityCredential** | issuer, holder, `scheme` (e.g. QP/KYC tier), `validUntil`; reusable |
+| **Allocation (legs)** | ordered transfer legs (cash / units / asset) with from→to + amount |
+
+### 6.2 Canonical dataset — Deal #1 (Meridian)
+
+- **Fund:** Meridian Growth Fund III · 2019 vintage · total NAV **$52.0M** as of **31 Mar 2026**
+- **CV:** Meridian Continuation Vehicle I · **Asset:** Project Atlas (portfolio interest) · NAV-per-unit $1.00
+- **Reference price:** **96% of NAV** · **Fairness opinion:** Houlihan Lokey (price within range) · **Election deadline:** 12 Jul 2026
+- **Hawthorn Pension** (staying / Rolling LP): commitment $15.0M · current NAV **$9.4M** · ~18% of fund → elects **ROLL $8.0M** of NAV
+- **Calder Family Office** (leaving / Exiting LP): commitment $8.0M · current NAV **$5.0M** · ~9.6% → elects **SELL $5.0M** of NAV
+- **Northbeam Secondaries** (Buyer): AUM **$4.2B** · mandate "GP-led secondaries" → buys the $5.0M exiting NAV at 96% = **$4.8M USDC**, receives **5.0M CV units**
+
+**Settlement legs (atomic, all-or-nothing):**
+| # | From → To | Asset | Amount |
+|---|---|---|---|
+| 1 | Northbeam → Calder | USDC (cash) | **$4.8M** ( = $5.0M NAV × 96% ) |
+| 2 | CV → Hawthorn | CV units (roll) | **8.0M units** ($8.0M NAV) |
+| 3 | CV → Northbeam | CV units (for cash) | **5.0M units** ($5.0M NAV) |
+| 4 | Old fund → CV | Project Atlas interest | **$13.0M NAV** ( = 8.0 roll + 5.0 sold ) |
+
+Tie-out: CV issues 13.0M units ($13.0M NAV) backed by $13.0M of asset; Calder's $5.0M NAV converts to $4.8M cash (4% secondary discount). ✔
+
+### 6.3 Canonical dataset — Deal #2 (Brightwater, the flywheel)
+
+- **Fund:** Brightwater Buyout Fund II · 2017 vintage · total NAV **$38.0M** as of 31 Mar 2026
+- **CV:** Brightwater Continuation Vehicle I · **Asset:** Project Vega · **Price:** 97% of NAV
+- **Irongate Endowment** (staying): commitment $12.0M · NAV $7.0M → **ROLL $6.0M**
+- **Sefton Trust** (leaving): commitment $6.0M · NAV $3.0M → **SELL $3.0M**
+- **Northbeam Secondaries** (returning buyer — **credential reused, no re-onboarding**): buys $3.0M NAV at 97% = **$2.91M USDC**, receives 3.0M units
+- Legs: Northbeam→Sefton $2.91M USDC; CV→Irongate 6.0M units; CV→Northbeam 3.0M units; Old fund→CV Project Vega $9.0M NAV. ✔
+
+---
+
+## 7. Daml templates (R1) — starting point for the contract spec
+
+A first cut mapping the (reordered) lifecycle to on-ledger contracts. To be expanded in the dedicated Daml/Canton spec.
+
+| Template / mechanism | Signatory | Observers | Purpose / key choices | Lifecycle step |
+|---|---|---|---|---|
+| `EligibilityCredential` | Issuer | Buyer | Reusable verified-investor badge; `Revoke`. Fetched (disclosed) when bidding. | 0 / 2 |
+| `ContinuationDeal` | GP (+ vehicle) | LPs, Buyer | Holds fund, CV, asset, reference NAV, **public price + fairness ref**, deadline, roster. Root for `Close`. | 1, 3 |
+| `PriceTerm` (R1) | GP + Buyer | LPs (room) | The agreed lead price (% NAV) made **public to the room**. *(R2: replace with sealed `Bid` per buyer + a clearing choice.)* | 2 |
+| `LPElection` | LP **alone** | — | `{choice: ROLL\|SELL, amountNAV}` at the set price. Sole-signatory = peer-private. | 3 |
+| `ElectionFiled` (marker) | LP | GP | Contentless flag so GP sees *that* an election is in, not *what*. | 3 |
+| `Close` (choice on `ContinuationDeal`) | GP (executor) | — | Sizes the allocation from elections at the set price; assembles the transfer legs. | 4 |
+| Token Standard **Allocation** (`splice-api-token-allocation-v1`) | per leg: sender (+ executor at execute) | counterparties | `AllocationFactory_Allocate` locks each leg; `Allocation_ExecuteTransfer` settles all legs atomically. | 5, 6 |
+| Disclosure / observer add | GP | Regulator | Post-close: add Regulator as observer to a scoped result for the fairness window. | 7 |
+
+**Privacy invariants (must hold in the contract design):**
+- `LPElection` signatory is the LP only → no other LP (and not the GP) is a stakeholder → peer-private by construction.
+- Reference price lives on `ContinuationDeal`/`PriceTerm` with the room as observers → public to participants, as intended.
+- The synchronizer never sees contents (Canton guarantee); the GP sees the computed allocation at `Close` to execute.
+- Settlement is one atomic `Allocation_ExecuteTransfer` across all legs — no partial close.
+
+> **Build note:** R1 may compute the allocation off-ledger and settle on-ledger (simpler), or do it all in the `Close` choice. See §5 open question 2. Either way the settlement legs run through the Token Standard allocation flow.
