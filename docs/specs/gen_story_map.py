@@ -131,28 +131,29 @@ rect(LBLX, R2_BAND_Y, LBLW, R2_BAND_H, "#ffd8a8", "#e8590c", "RELEASE 2\nReal & 
 rect(LBLX, R3_BAND_Y, LBLW, R3_BAND_H, "#eebefa", "#9c36b5", "RELEASE 3\nNetwork / platform\n(enhances R1)", 12)
 
 # ---- backbone activities ----
-backbone = ["1. Set up the deal room", "2. Bring participants in", "3. Decide: stay or cash out",
-            "4. Make a private offer", "5. Work out who gets what", "6. Approve my part",
+backbone = ["1. Set up the deal room", "2. Bring participants in", "3. Price the deal",
+            "4. Decide: roll or sell", "5. Work out who gets what", "6. Approve my part",
             "7. Close — all at once", "8. Prove it was fair", "9. Do the next deal faster"]
 for x, t in zip(COLS, backbone):
     rect(x, Y_BB, W, H_BB, "#ced4da", "#343a40", t, 15)
 
 # ---- R1 cards (actor, task), stacked per activity ----
 R1 = {
-    0: [("ADVISOR", "Create the room; name fund, vehicle, asset & terms")],
+    0: [("ADVISOR", "Create the room; name fund, vehicle, asset & reference NAV")],
     1: [("ADVISOR", "Invite the LPs & buyer to the room"),
         ("BUYER", "Get verified once — reusable eligibility")],
-    2: [("STAY", "Privately choose to ROLL — sealed from others"),
-        ("LEAVE", "Privately choose to EXIT — sealed from others")],
-    3: [("BUYER", "Submit amount & price — sealed from sellers")],
-    4: [("SYS", "Compute allocation from sealed inputs"),
+    2: [("BUYER", "Commit a price (% of NAV) for the exiting interest"),
+        ("ADVISOR", "Fairness opinion validates; price disclosed to the room")],
+    3: [("STAY", "Privately ROLL at the set price — sealed from other LPs"),
+        ("LEAVE", "Privately SELL at the set price — sealed from other LPs")],
+    4: [("SYS", "Size the allocation from the elections at the set price"),
         ("ADVISOR", "Review the computed close")],
     5: [("BUYER", "Approve the cash leg"),
         ("STAY", "LP / vehicle approve units & asset legs")],
     6: [("ADVISOR", "Trigger the close — one click"),
         ("SYS", "All legs settle together; each sees only its own")],
     7: [("OVERSIGHT", "Open the scoped, after-the-fact fairness view")],
-    8: [("BUYER", "Reuse verification → offer in one click (deal #2)")],
+    8: [("BUYER", "Reuse verification → bid in one click (deal #2)")],
 }
 for i, cards in R1.items():
     for j, (actor, task) in enumerate(cards):
@@ -162,9 +163,9 @@ for i, cards in R1.items():
 R2 = {
     0: ("ADVISOR", "Set an election deadline; invite many LPs & buyers"),
     1: ("SYS", "Self-serve logins & per-party dashboards"),
-    2: ("STAY", "Split roll / exit; amend before the deadline"),
-    3: ("BUYER", "Blocked if unverified; many buyers bid blind"),
-    4: ("SYS", "Pro-rata across many; preview before close"),
+    2: ("BUYER", "Sealed-bid auction — many buyers bid blind to each other"),
+    3: ("STAY", "Split roll / sell; amend before deadline; default = sell"),
+    4: ("SYS", "Pro-rata + lead backstop if oversubscribed; preview"),
     5: ("SYS", "Cancel or withdraw a leg before close"),
     6: ("ADVISOR", "Force a leg to fail → nothing moves (atomicity)"),
     7: ("OVERSIGHT", "Structured fairness report"),
