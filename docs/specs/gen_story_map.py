@@ -40,12 +40,12 @@ def rect(x, y, w, h, fill, stroke, text=None, fontSize=14, opacity=100,
             "containerId": cid, "originalText": text, "lineHeight": 1.25, "baseline": fontSize,
         })
 
-def text(x, y, s, fontSize=16, color="#1e1e1e", fontFamily=2):
+def text(x, y, s, fontSize=16, color="#1e1e1e", fontFamily=2, opacity=100):
     elements.append({
         "id": rid(), "type": "text", "x": x, "y": y,
         "width": len(s) * fontSize * 0.55, "height": fontSize * 1.25, "angle": 0,
         "strokeColor": color, "backgroundColor": "transparent", "fillStyle": "solid",
-        "strokeWidth": 1.5, "strokeStyle": "solid", "roughness": 1, "opacity": 100,
+        "strokeWidth": 1.5, "strokeStyle": "solid", "roughness": 1, "opacity": opacity,
         "groupIds": [], "frameId": None, "roundness": None, "seed": nonce(),
         "versionNonce": nonce(), "version": 1, "isDeleted": False, "boundElements": [],
         "updated": 1, "link": None, "locked": False, "text": s, "fontSize": fontSize,
@@ -64,12 +64,12 @@ rect(20, 476, 2270, 104, "#eebefa", "#9c36b5", opacity=18, dashed=True, roundnes
 # --- titles / legend ---
 text(20, 18, "Continuum — User Story Map", 30, "#1e1e1e", 7)
 text(22, 58, "GP-led continuation deals · product story map (Jeff Patton) · narrative left→right, releases top→bottom", 15, "#868e96")
-text(20, 104, "Personas:", 14)
-rect(110, 92, 200, 38, "#a5d8ff", "#1971c2", "Advisor / Organizer", 13)
-rect(326, 92, 200, 38, "#b2f2bb", "#2f9e44", "Investor — Staying", 13)
-rect(542, 92, 200, 38, "#ffd8a8", "#e8590c", "Investor — Leaving", 13)
-rect(758, 92, 200, 38, "#eebefa", "#9c36b5", "Buyer", 13)
-rect(974, 92, 220, 38, "#99e9f2", "#0c8599", "Oversight / Regulator", 13)
+text(20, 90, "Personas:", 14)
+rect(110, 78, 200, 38, "#a5d8ff", "#1971c2", "Advisor / Organizer", 13)
+rect(326, 78, 200, 38, "#b2f2bb", "#2f9e44", "Investor — Staying", 13)
+rect(542, 78, 200, 38, "#ffd8a8", "#e8590c", "Investor — Leaving", 13)
+rect(758, 78, 200, 38, "#eebefa", "#9c36b5", "Buyer", 13)
+rect(974, 78, 220, 38, "#99e9f2", "#0c8599", "Oversight / Regulator", 13)
 
 # --- left row labels ---
 rect(28, 150, 196, 80, "#dee2e6", "#495057", "ACTIVITIES (backbone) — what users do, in order", 13)
@@ -107,6 +107,10 @@ r3 = {0: "Reuse a past deal as a template", 1: "Verified buyer reused across org
       7: "Cross-organization disclosure", 8: "Bid into many deals; new deal types (tenders, buybacks)"}
 for i, t in r3.items():
     rect(cols[i], 486, 210, 84, "#f3d9fa", "#9c36b5", t, 14)
+
+# --- R3 note filling the empty span ---
+text(980, 508, "Future deal types & cross-organization features\nbuild on the same closing engine",
+     16, "#9c36b5", fontFamily=5, opacity=65)
 
 scene = {
     "type": "excalidraw", "version": 2, "source": "continuum-story-map-generator",
