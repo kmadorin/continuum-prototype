@@ -108,7 +108,11 @@ Stories tagged `[R1]` / `[R2]` / `[R3]`. Stories below the R1 line are still bui
 
 ### Backbone (left → right narrative)
 
-`0. Onboard & Set Up → 1. Create Closing Room → 2. Elect → 3. Commit → 4. Compute Close → 5. Approve Own Legs → 6. Atomic Settle → 7. Disclose to Regulator → 8. Flywheel (Deal #2)`
+`0. Onboard & Set Up → 1. Create Closing Room → 2. Price the Deal → 3. Elect (LPs) → 4. Compute Close → 5. Approve Own Legs → 6. Atomic Settle → 7. Disclose to Regulator → 8. Flywheel (Deal #2)`
+
+> **Sequence note (grounded in ILPA / Hogan Lovells / Skadden):** in a real GP-led continuation deal the **price is discovered and set by the buy side BEFORE LPs elect.** LPs then choose roll vs sell *against the already-fixed, fairness-validated price* — they accept or decline a set deal, they don't bid. Default if an LP does nothing = **sell**; LPs are never forced to roll. So **Price the Deal (2) precedes Elect (3).**
+>
+> **Privacy framing (corrected):** the price is **public to the room** (disclosed with the fairness opinion) — the selling LP *must* see it to decide. What is private is **each LP's roll/sell election, sealed from *other LPs*** (peer privacy); the advisor sees *that* an election is in, not *what*. The buyer-price-secrecy story is the **R2 sealed-bid auction** (multiple buyers blind to *each other*), not seller-blind-to-price.
 
 ---
 
@@ -131,26 +135,25 @@ Stories tagged `[R1]` / `[R2]` / `[R3]`. Stories below the R1 line are still bui
 - `[R2]` As the **GP/Advisor**, I invite multiple LPs and multiple buyers, so the close reflects a real syndicate.
 - `[R3]` As the **GP/Advisor**, I clone a prior deal template, so repeat closes start in one click.
 
-### 2. Elect (LPs)
+### 2. Price the Deal (buy side)
 
-- `[R1]` As a **Rolling LP**, I submit a sealed `LPElection` (roll + amount), signatory me alone, so no other LP or the operator sees my choice.
-- `[R1]` As an **Exiting LP**, I submit a sealed `LPElection` (exit + amount), so I get cash without revealing my decision to peers.
-- `[R1]` As the **GP/Advisor**, I see *that* an election is in (a non-revealing signal), not its contents, so I can track readiness without leaking.
-- `[R2]` As an **LP**, I can submit a split election (part roll / part exit).
-- `[R2]` As an **LP**, I can amend/withdraw my election before the deadline.
+- `[R1]` As the **Secondary Buyer (lead)**, I commit a price (% of NAV) for the exiting interest, referencing my `EligibilityCredential`, so the deal has a price to elect against.
+- `[R1]` As the **GP/Advisor**, I obtain a fairness opinion validating the price and **disclose the price to the room**, so LPs can decide against a fair, known number.
+- `[R2]` As multiple **Buyers**, we submit **sealed bids blind to one another**; the advisor runs the auction and the clearing bid sets the price (this is the buyer-price-privacy story).
+- `[R2]` As a **Buyer**, my bid is rejected if my credential is missing/expired, so only eligible buyers participate.
 
-### 3. Commit (Buyers)
+### 3. Elect (LPs — at the set price)
 
-- `[R1]` As the **Secondary Buyer**, I submit a sealed `BuyerCommitment` (amount + price) referencing my `EligibilityCredential`, so my price is hidden from exiting LPs until close.
-- `[R1]` As the **GP/Advisor**, I see *that* a commitment is in, not the price, so the book stays confidential.
-- `[R2]` As a **Buyer**, my commitment is rejected if my credential is missing/expired, so only eligible buyers participate.
-- `[R2]` As multiple **Buyers**, we each commit blind to one another (competitive book).
+- `[R1]` As a **Rolling LP**, I privately choose to **ROLL at the set price** (sealed `LPElection`, signatory me alone), so no *other LP* sees my decision.
+- `[R1]` As an **Exiting LP**, I privately choose to **SELL at the set price**, so I take liquidity without revealing my decision to peers.
+- `[R1]` As the **GP/Advisor**, I see *that* an election is in (a non-revealing signal), not its contents.
+- `[R2]` As an **LP**, I can split roll/sell and amend before the deadline; if I do nothing the **default is sell**; I am never forced to roll.
 
 ### 4. Compute Close
 
-- `[R1]` As the **GP/Advisor (executor)**, I compute the closing allocation from the sealed inputs (who gets cash, who gets units, asset→vehicle) via a choice that reads disclosed inputs, so the book resolves into concrete legs.
+- `[R1]` As the **GP/Advisor (executor)**, I size the closing allocation from the elections at the set price (who gets cash, who gets units, asset→vehicle), so the book resolves into concrete legs.
 - `[R1]` As the **engine**, I assemble the transfer legs and authorization requirements, so each party will approve only its own obligation.
-- `[R2]` As the **GP/Advisor**, I run pro-rata allocation across multiple LPs/buyers and oversubscription rules.
+- `[R2]` As the **GP/Advisor**, I run pro-rata allocation with **lead/syndicate backstop** if sell-demand exceeds buyer capacity (deal never forces a roll).
 - `[R2]` As the **GP/Advisor**, I preview the computed close before triggering settlement.
 
 ### 5. Approve Own Legs (Allocate)
@@ -189,15 +192,15 @@ Stories tagged `[R1]` / `[R2]` / `[R3]`. Stories below the R1 line are still bui
 The thinnest end-to-end thread, ~3 minutes, 5 browser tabs (one profile per persona):
 
 1. **Setup (seeded):** 5 parties, instruments, balances, Buyer credential — all from one Daml Script.
-2. **Create room:** GP creates the deal; LPs + Buyer see the shell.
-3. **Sealed elections:** Rolling LP rolls, Exiting LP exits — cut between panes, neither sees the other's.
-4. **Blind commitment:** Buyer commits a price; Exiting LP's pane shows it redacted.
-5. **Compute + allocate:** GP computes the close; each party locks its leg.
+2. **Create room:** GP creates the deal (fund, vehicle, asset, reference NAV); LPs + Buyer see the shell.
+3. **Price the deal:** the lead Buyer commits a price (% of NAV); a fairness opinion validates it; the price is **disclosed to the room**. (R1 = single lead, negotiated price. The sealed-bid multi-buyer auction is R2.)
+4. **Sealed elections at the set price:** Rolling LP rolls, Exiting LP sells — *at the known price* — cut between panes; **neither LP sees the other's election** (peer privacy), and the advisor sees only *that* each elected.
+5. **Compute + allocate:** GP sizes the close from the elections at the set price; each party locks its leg.
 6. **Atomic close:** GP fires one settlement → cash→Exiting LP, units→Rolling LP + Buyer, asset→Vehicle; every pane updates from one transaction.
 7. **Regulator window:** Regulator pane gains a scoped post-close verification view.
-8. **Flywheel:** Deal #2 — Buyer reuses credential, commits in one click.
+8. **Flywheel:** Deal #2 — Buyer reuses credential, bids in one click.
 
-**Wow line:** *"Every leg settled together, no LP saw another's hand, the cash was a real stablecoin, and the regulator can verify — all in one private, atomic transaction."*
+**Wow line:** *"Every leg settled together, no LP saw another's election, the cash was a real stablecoin, and the regulator can verify — all in one private, atomic transaction."*
 
 ---
 
