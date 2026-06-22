@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuum — Confidential Closing Room (Prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="wordmark">Continuum<span class="dot">.</span></span>
+  <span class="deal-badge">Deal <b id="deal-no">01</b></span>
+  <span class="spacer"></span>
+  <span class="view-label">Viewing as</span>
+  <label class="vh" for="persona-select">Active persona</label>
+  <select class="persona" id="persona-select" aria-label="Viewing as persona">
+    <option value="advisor">Advisor / Organizer</option>
+    <option value="staying">Investor — Staying</option>
+    <option value="leaving">Investor — Leaving</option>
+    <option value="buyer">Secondary Buyer</option>
+    <option value="oversight">Oversight — LPAC</option>
+  </select>
+  <button class="btn ghost" id="reset-btn" type="button">Reset demo</button>
+</header>
+
+<nav class="stepper" id="stepper" aria-label="Deal lifecycle"></nav>
+
+<main id="main" aria-live="polite"></main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<p class="sim-note">Simulation — no Canton, no wallets, no network. State is in-memory.</p>
+
+<script src="app.js"></script>
+</body>
+</html>
