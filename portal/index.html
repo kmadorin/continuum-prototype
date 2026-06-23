@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuum — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="wordmark">Continuum<span class="dot">.</span></span>
+  <span class="deal-badge">Confidential closing room</span>
+  <span class="spacer"></span>
+  <span class="view-label">Demo build · no real accounts</span>
+</header>
+
+<main class="portal-wrap">
+  <div class="portal-lede">
+    <span class="eyebrow accent">Sign in</span>
+    <h1>Run a GP-led continuation deal, end to end.</h1>
+    <p>Continuum runs continuation closes as a single confidential workspace — a sealed-bid buyer auction sets the price, investors elect privately, and every leg settles at once or not at all. Each seat sees only its own part. Pick a seat to enter the live deal. No password; this is a walkthrough.</p>
+  </div>
+
+  <p class="section-label">Choose an account</p>
+  <div class="accounts">
+    <button class="account wide" type="button" data-role="advisor">
+      <div class="acc-top">
+        <span class="acc-avatar" aria-hidden="true">DW</span>
+        <div>
+          <div class="acc-name">Dana Whitfield · Whitfield Advisory</div>
+          <div class="acc-role">Advisor / Organizer — runs the deal</div>
+        </div>
+      </div>
+      <div class="acc-org">Runs the sealed-bid auction, sets the clearing price, computes the allocation, and fires the atomic close.</div>
+      <span class="acc-enter">Enter as organizer</span>
+    </button>
+
+    <button class="account" type="button" data-role="staying">
+      <div class="acc-top">
+        <span class="acc-avatar" aria-hidden="true">HP</span>
+        <div>
+          <div class="acc-name">Hawthorn Pension</div>
+          <div class="acc-role">Investor — Rolling</div>
+        </div>
+      </div>
+      <div class="acc-org">One of 8 LPs. Rolls into the new vehicle at the clearing price — privately, unseen by peers.</div>
+      <span class="acc-enter">Enter as rolling LP</span>
+    </button>
+
+    <button class="account" type="button" data-role="leaving">
+      <div class="acc-top">
+        <span class="acc-avatar" aria-hidden="true">CF</span>
+        <div>
+          <div class="acc-name">Calder Family Office</div>
+          <div class="acc-role">Investor — Exiting</div>
+        </div>
+      </div>
+      <div class="acc-org">Sells at the clearing price for cash — privately, unseen by other LPs.</div>
+      <span class="acc-enter">Enter as exiting LP</span>
+    </button>
+
+    <button class="account" type="button" data-role="buyer">
+      <div class="acc-top">
+        <span class="acc-avatar" aria-hidden="true">NB</span>
+        <div>
+          <div class="acc-name">Northbeam Secondaries</div>
+          <div class="acc-role">Secondary Buyer</div>
+        </div>
+      </div>
+      <div class="acc-org">One of 4 buyers. Files a sealed bid blind to the others; reuses one verified credential across deals.</div>
+      <span class="acc-enter">Enter as buyer</span>
+    </button>
+
+    <button class="account" type="button" data-role="oversight">
+      <div class="acc-top">
+        <span class="acc-avatar" aria-hidden="true">LP</span>
+        <div>
+          <div class="acc-name">LPAC / Regulator</div>
+          <div class="acc-role">Oversight — LPAC</div>
+        </div>
+      </div>
+      <div class="acc-org">Sees nothing pre-close; gets a scoped fairness view once it settles.</div>
+      <span class="acc-enter">Enter as oversight</span>
+    </button>
+  </div>
+
+  <div class="portal-foot">
+    <span class="note">Tip — open several seats in separate tabs to watch the same close from every side.</span>
+  </div>
+</main>
+
+<p class="sim-note">Simulation — no Canton, no wallets, no network. State is in-memory.</p>
+
+<script>
+  "use strict";
+  // Minimal login: record the chosen seat and route to that role's workspace.
+  document.querySelectorAll(".account").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var role = b.getAttribute("data-role");
+      try { sessionStorage.setItem("continuum.session.role", role); } catch (e) {}
+      location.href = role + ".html#/";
+    });
+  });
+</script>
+</body>
+</html>
