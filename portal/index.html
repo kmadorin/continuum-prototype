@@ -21,8 +21,8 @@
 <main class="portal-wrap">
   <div class="portal-lede">
     <span class="eyebrow accent">Sign in</span>
-    <h1>One continuation close, five seats at the table.</h1>
-    <p>Continuum runs GP-led continuation deals as a single confidential close — each party sees only its own part, and the whole transaction settles at once or not at all. Pick a seat to enter the live deal. No password; this is a walkthrough.</p>
+    <h1>Run a GP-led continuation deal, end to end.</h1>
+    <p>Continuum runs continuation closes as a single confidential workspace — a sealed-bid buyer auction sets the price, investors elect privately, and every leg settles at once or not at all. Each seat sees only its own part. Pick a seat to enter the live deal. No password; this is a walkthrough.</p>
   </div>
 
   <p class="section-label">Choose an account</p>
@@ -32,10 +32,10 @@
         <span class="acc-avatar" aria-hidden="true">DW</span>
         <div>
           <div class="acc-name">Dana Whitfield · Whitfield Advisory</div>
-          <div class="acc-role">Advisor / Organizer — runs the close</div>
+          <div class="acc-role">Advisor / Organizer — runs the deal</div>
         </div>
       </div>
-      <div class="acc-org">Opens the room, prices with the buyer, computes the allocation, and fires the atomic close.</div>
+      <div class="acc-org">Runs the sealed-bid auction, sets the clearing price, computes the allocation, and fires the atomic close.</div>
       <span class="acc-enter">Enter as organizer</span>
     </button>
 
@@ -44,10 +44,10 @@
         <span class="acc-avatar" aria-hidden="true">HP</span>
         <div>
           <div class="acc-name">Hawthorn Pension</div>
-          <div class="acc-role">Investor — Staying</div>
+          <div class="acc-role">Investor — Rolling</div>
         </div>
       </div>
-      <div class="acc-org">Rolls its position into the new vehicle at the set price.</div>
+      <div class="acc-org">One of 8 LPs. Rolls into the new vehicle at the clearing price — privately, unseen by peers.</div>
       <span class="acc-enter">Enter as rolling LP</span>
     </button>
 
@@ -56,10 +56,10 @@
         <span class="acc-avatar" aria-hidden="true">CF</span>
         <div>
           <div class="acc-name">Calder Family Office</div>
-          <div class="acc-role">Investor — Leaving</div>
+          <div class="acc-role">Investor — Exiting</div>
         </div>
       </div>
-      <div class="acc-org">Cashes out at the set price — privately, unseen by other LPs.</div>
+      <div class="acc-org">Sells at the clearing price for cash — privately, unseen by other LPs.</div>
       <span class="acc-enter">Enter as exiting LP</span>
     </button>
 
@@ -71,7 +71,7 @@
           <div class="acc-role">Secondary Buyer</div>
         </div>
       </div>
-      <div class="acc-org">Commits the price as a % of NAV; reuses one verified credential across deals.</div>
+      <div class="acc-org">One of 4 buyers. Files a sealed bid blind to the others; reuses one verified credential across deals.</div>
       <span class="acc-enter">Enter as buyer</span>
     </button>
 
@@ -102,7 +102,7 @@
     b.addEventListener("click", function () {
       var role = b.getAttribute("data-role");
       try { sessionStorage.setItem("continuum.session.role", role); } catch (e) {}
-      location.href = role + ".html#/deal/D-001";
+      location.href = role + ".html#/";
     });
   });
 </script>

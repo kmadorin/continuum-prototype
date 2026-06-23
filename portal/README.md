@@ -1,93 +1,88 @@
-# Continuum Portal — role-split prototype
+# Continuum Portal — continuation-deal workspace (R1 + R2 prototype)
 
-A multi-page UX prototype of one **GP-led continuation-fund close**, split into a
-real product: a portal/login landing plus one page per role. Five parties run a
-single confidential close — each sees only its own part, and the whole transaction
-settles **all at once or not at all**.
+A static, front-end-only prototype of the software a fund advisor and their counterparties
+would log into to run a **GP-led continuation deal end to end** — a sealed-bid buyer auction,
+multiple LPs electing privately, allocation with a syndicate backstop, per-leg approvals, and
+an atomic close. Object-centric IA: you navigate by *things* (deals, tasks, participants,
+documents), not by lifecycle step.
 
-This is a **simulation**. No Canton, no backend, no wallets, no real crypto, no
-network calls. Every ledger/settlement behaviour is plain in-memory JavaScript +
-`localStorage`. It is the role-split successor to the single-page `../prototype/`,
-which is kept untouched as the reference.
+> **Simulation only.** No Canton, no Daml, no wallets, no backend, no network. All ledger /
+> auction / settlement behaviour is in-memory JavaScript synced across tabs via
+> `localStorage` + `BroadcastChannel`. No real crypto or money moves.
 
 ## Run it
 
-No build step. Either:
-
 ```bash
-# from this portal/ directory
-python3 -m http.server 8000
-# then open http://localhost:8000/
+cd portal
+python3 -m http.server 8765
+# open http://localhost:8765/index.html
 ```
 
-…or just open `portal/index.html` directly in a browser (`file://` works too — the
-code uses plain `<script>` globals, not ES modules, so it runs without a server).
+Or just open `portal/index.html` in a browser. Pick a seat on the sign-in screen. Open several
+seats in **separate tabs** to watch the same deal from every side — they stay live-synced, and
+the atomic close animates across all of them.
 
-For the full effect, open several roles in separate tabs (use each card on the
-login screen, or the **Demo · jump to role** switcher in the top bar). They share
-one live deal — fire the close in the advisor tab and every tab animates together.
+A **Reset demo** control (top bar) returns everything to the start.
 
-## What's simulated vs. real
+## What's simulated vs real
 
 | Real | Simulated |
 |---|---|
-| The UI, the flow, the privacy/redaction model, the atomic-close behaviour | The ledger, settlement, cash (USDC), units, KYC credential |
-| Cross-tab live sync (`localStorage` + `BroadcastChannel`) | "Other parties" — all five seats run on your one machine |
-| Hash routing, dashboards, per-role workspaces | Authentication — login is one click, no password |
+| The UI, IA, role-scoped projections, and privacy model | The ledger, auction clearing, and settlement (plain JS) |
+| The financial math — every figure derives from seed NAVs and **ties out** (units issued = asset NAV in; cash in = cash out) | "USDC", "atomic settlement", credential verification — labels on in-memory state |
+| Live cross-tab sync (localStorage + BroadcastChannel) | "T+0", settlement IDs, downloadable confirmations |
+
+## Roles & what each sees
+
+| Seat | Sections | Sees |
+|---|---|---|
+| **Advisor / Organizer** (Dana Whitfield) | all | full bid book (after opening); LP elections only as **"filed"** markers, never contents; full register; runs the auction, computes, settles |
+| **Secondary Buyer** (Northbeam) | Overview · Participants · Bids · Allocation · Settlement · Documents · Audit | its **own** sealed bid + (post-clearing) the clearing price; never other buyers' bids |
+| **Investor — Rolling** (Hawthorn Pension) | Overview · Participants · Elections · Allocation · Settlement · Documents · Audit | own election + position; clearing price; peers' elections **redacted** |
+| **Investor — Exiting** (Calder Family Office) | same as rolling | own election + position; clearing price; peers redacted |
+| **Oversight — LPAC** | locked pre-close → Overview · Participants · Allocation · Settlement · Documents · Audit | nothing live pre-close; scoped fairness view + attestations post-close |
+
+Redaction renders consistently as striped `•••• sealed` cells with a "you can't see this" line —
+never conveyed by colour alone.
+
+## The deal sections (sub-nav, scoped per role)
+
+`Overview · Participants · Bids/Pricing · Elections · Allocation · Settlement · Documents · Audit`.
+The lifecycle stage is a **status pill + progress meter** in the deal header — never the navigation.
+
+- **Participants** — investor register (LP · type · committed · NAV · ownership % · election status) + buyer roster.
+- **Bids/Pricing** — the sealed-bid auction. Buyers bid blind; the advisor opens the book; the
+  best qualifying bid sets the disclosed **clearing/lead price**; a syndicate backstops overflow.
+- **Elections** — LPs roll / sell / split at the clearing price; amend until the deadline;
+  unfiled = default sell; peer-private.
+- **Allocation** — sized from elections; pro-rata + syndicate backstop if oversubscribed; legs preview; tie-out.
+- **Settlement** — per-leg approvals → one atomic close (or a forced-failure that rolls everything back) → receipt.
+- **Audit** — timestamped activity log; fairness attestations for oversight post-close.
 
 ## File map
 
 ```
 portal/
-  index.html            portal / login — five persona account cards
-  advisor.html   advisor.js     Advisor / Organizer — runs the close
-  staying.html   staying.js     Investor — Staying (rolling LP)
-  leaving.html   leaving.js     Investor — Leaving (exiting LP)
-  buyer.html     buyer.js       Secondary Buyer
-  oversight.html oversight.js   Oversight — LPAC
+  index.html            sign-in (pick a seat)
+  advisor.html  staying.html  leaving.html  buyer.html  oversight.html
+                        thin role shells — each loads the shared modules and calls CT.app.run(role)
   shared/
-    state.js     deal engine: seed data, 8-stage machine, elections, compute,
-                 atomic close + forced-failure rollback, flywheel, reset. No DOM.
-    sync.js      the only module touching storage — localStorage + BroadcastChannel.
-    shell.js     shared chrome (topbar, identity, demo switcher, progress rail,
-                 redaction, close animation) + CT.ui component builders.
-    page.js      per-role page runner: login guard, routing, dashboard scaffold,
-                 re-render on cross-tab changes, close-animation trigger.
-    styles.css   design tokens + components (lifted from ../prototype/styles.css,
-                 extended for login / dashboard / workspace).
-  README.md      this file
-  demo-script.md ~3-minute click-through
-  media/         screenshots + war-room GIF
+    sync.js             persistence only: localStorage + BroadcastChannel cross-tab sync
+    state.js            the deal engine — seed data (2 deals, 8 LPs, 4 buyers), stage machine,
+                        sealed-bid auction → clearing/lead + syndicate, multi-LP elections,
+                        allocation compute (ties out), atomic close + forced-failure, flywheel
+    app.js              the whole front-end: object-centric shell (sidebar, deal header,
+                        section sub-nav), task queue, dense tables, all sections, per-role
+                        projection, wiring, atomic-close animation
+    styles.css          design tokens + components (dark institutional, one cyan accent)
+    selftest.js         node-only engine test: `node portal/shared/selftest.js` (not loaded by the browser)
+  README.md  demo-script.md  BUILD_NOTES.md
 ```
 
-### Module boundaries
+## Seed data (Meridian CV I — the hero deal)
 
-`sync.js` is the only thing that persists. `state.js` is a pure deal engine on top
-of it — read the deal, dispatch a role action, subscribe to changes — with no DOM.
-`shell.js` + `page.js` are presentation only. Each `<role>.js` renders just its own
-dashboard + workspace. A role file can change without touching the engine; the
-engine can change without touching role UI.
-
-## Per-role page model
-
-Each role page has two hash-routed views:
-
-- **Dashboard** (`#/`) — service home. One active deal, a status chip, and an
-  **Action required** badge when this role is the one holding up the close.
-- **Workspace** (`#/deal/D-001`) — left **progress rail** (8 stages, current
-  highlighted); centre = this role's current action front-and-centre; other parties'
-  sealed inputs render **redacted** (`•••• submitted`).
-
-## The 8 stages
-
-`setup → invite → price → elect → compute → approve → close → settled`
-
-The buy side prices **first** (publicly, fairness-validated); LPs then elect roll vs
-sell against that set price. Election privacy is **LP-vs-LP** — the organizer sees
-*that* an LP decided, never *what*. The close is atomic: one action settles all four
-legs, or a forced failure rolls everything back. After settlement the advisor can
-grant the LPAC a scoped fairness window and start the next deal — where the returning
-buyer reuses its verified credential in one click (the flywheel).
-
-Global **Reset demo** (top bar, every page) restores the seed and broadcasts to all
-tabs.
+Reference NAV **$52.0M** @ $1.00/unit. 8 LPs, 4 buyers.
+- **Auction:** Northbeam 96% (lead) · Cedar Park 95% · Vantage 94% · Kestrel passed. Clearing **96%**, Cedar Park syndicates the overflow at the clearing price.
+- **Elections:** sell demand **$20.4M**, roll **$31.6M** (= $52.0M). Buyers fund $20.4M (lead $16M + syndicate $4.4M) → cash **$19.584M USDC**.
+- **Tie-out:** units issued **52.0M** = asset NAV in **$52.0M**; cash in = cash out.
+- **Flywheel:** deal 2 (Brightwater CV I) reuses Northbeam's verified credential — bid in one click.
