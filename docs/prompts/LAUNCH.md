@@ -38,3 +38,19 @@ That brief is self-contained and points to the spec, story map, pitch design, an
 - **Alternative (reusable):** convert `design/system-prompt.md` into an output style at `.claude/output-styles/continuum-design.md` (add YAML frontmatter `name`, `description`, `keep-coding-instructions: true`) and select it via `/config`. Good if you'll reuse it across sessions; the flag approach is fine for a one-off build.
 - **Linking the prior design chat:** the spec + story map already capture its output. For raw "why" context, that session is `2520b370-d71d-4073-ac20-10015f94badd` (transcript: `~/.claude/projects/-Users-kirillmadorin-Projects-hackathons-canton/2520b370-d71d-4073-ac20-10015f94badd.jsonl`). Resume only works from the `/canton` dir, not `/continuum`.
 - Claude for Chrome can also be toggled mid-session with `/chrome`, or defaulted via `.claude/settings.json` → `{"chromeEnabled": true}` (raises context usage).
+
+## Building the role-split Portal instead
+
+To build the multi-page, one-page-per-role version, use the portal launcher and brief:
+
+```bash
+./start-portal.sh
+```
+
+Then in the new session, send:
+
+```
+Read docs/prompts/PORTAL_BRIEF.md and execute it.
+```
+
+Same design system + skills; the brief reuses the existing `prototype/` logic and tokens and builds into `portal/`. (Note: the project root is `/Users/kirillmadorin/Projects/hackathons/canton/continuum-prototype` — earlier references to `/continuum` are stale.)
