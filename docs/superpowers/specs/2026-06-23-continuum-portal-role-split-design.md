@@ -1,7 +1,29 @@
 # Continuum Portal — Role-Split Prototype (Design)
 
 Date: 2026-06-23
-Status: Approved design → ready for implementation plan
+Status: Approved design → first portal built, then re-scoped (see Update below)
+
+## Update (2026-06-23) — re-scope after first build
+
+The first portal build (in `portal/`) shipped but read like the spec rendered as
+HTML, not a real service. After a PM review (live browse + research), the scope
+expanded. The authoritative build instructions are now
+**`docs/prompts/PORTAL_BRIEF.md`** (rewritten). Key changes that supersede the
+sections below:
+
+- **Real-service IA, not lifecycle-as-navigation.** Object-centric sidebar +
+  per-deal section sub-nav (Overview · Participants · Bids/Pricing · Elections ·
+  Allocation · Settlement · Documents · Audit). Lifecycle is a status pill, not the
+  nav. No teaching lede, no "YOUR MOVE" coaching, no blank waiting cards.
+- **Full process, R1 + R2** (not single-deal R1). Includes the **sealed-bid buyer
+  auction** (multiple buyers bid blind → clearing price), **multiple LPs** electing
+  privately (split/amend/default-sell), pro-rata + lead backstop, preview, and
+  cancel/withdraw a leg before close. These R2 stories already exist in the spec
+  (`docs/specs/2026-06-21-continuum-story-map-design.md` §3) and story map.
+- **Moderate seed-data density:** 1 hero deal (+ flywheel deal #2), ~8 LPs, 3-4
+  bidding buyers, a documents index, and an activity/audit feed.
+- **Evolve `portal/` in place:** keep `shared/sync.js`, the `styles.css` tokens, and
+  the financial engine; replace the navigation + all role views; expand the data.
 
 ## Goal
 
