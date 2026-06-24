@@ -52,7 +52,7 @@ assert(Math.abs(C.rollDemand() - 31.6) < 1e-6, "roll demand 31.6");
 assert(Math.abs(C.sellDemand() + C.rollDemand() - 52.0) < 1e-6, "sell+roll = fund NAV 52.0");
 S.actions.closeElectionsAndCompute();
 console.log("   syndicate after compute", S.get().syndicateIds, "buyerCap", C.buyerCapacity());
-assert(S.get().syndicateIds.length >= 1, "syndicate engaged to backstop overflow");
+assert(S.get().syndicateIds.length >= 1, "syndicate engaged to fill overflow");
 assert(C.oversubscribed() === false, "syndicate covers — not oversubscribed");
 assert(S.get().stage === "allocation", "computed -> allocation");
 const legs = S.legs();

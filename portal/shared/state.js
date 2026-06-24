@@ -1,14 +1,16 @@
 /* Continuum Portal — shared/state.js
  * ---------------------------------------------------------------------------
  * The deal engine. NO DOM in this file. Owns the seed datasets (2 deals, ~8 LPs,
- * 3-4 buyers), the stage machine, the sealed-bid AUCTION (multi-buyer → clearing/
- * lead price + syndicate backstop), multi-LP elections (roll/sell/split, amend,
- * default=sell, peer-private), allocation compute (pro-rata + backstop, ties out),
- * the atomic close (+ forced-failure rollback), the audit log, the flywheel, reset.
+ * 3-4 buyers), the stage machine, the sealed-bid auction (multi-buyer → advisor-
+ * selected lead price; syndicate fills overflow), multi-LP elections (roll/status-
+ * quo/sell/split, amend, default=sell, peer-private), the LPAC pre-close consent
+ * gate, allocation compute (pro-rata + syndicate fill, ties out), the atomic close
+ * (+ forced-failure rollback), decline-to-proceed, the audit log, the flywheel, reset.
  *
- * Stages: setup → bidding → cleared → elections → allocation → approvals
- *         → settlement(transient) → settled. Buyers price FIRST via sealed bids;
- * the best qualifying bid sets the disclosed clearing price; LPs then elect.
+ * Stages: setup → bidding → leadSelected → lpacConsent → elections → allocation
+ *         → approvals → settlement(transient) → settled (+ terminal `declined`).
+ * Buyers price FIRST via sealed bids; the advisor selects a lead whose bid sets the
+ * disclosed price; the LPAC consents (pre-close gate); LPs then elect.
  *
  * Interface (window.CT.state):
  *   get()                 -> shared deal state
@@ -463,7 +465,8 @@ CT.state = (function () {
       const ranked = clearingCandidate();
       if (!ranked.length) return;
       const id = payload && payload.buyerId;
-      const lead = ranked.find((r) => r.id === id) || ranked[0];
+      const lead = ranked.find((r) => r.id === id);
+      if (!lead) return; // advisor must pick a filed, in-range bid; honor the argument strictly
       shared.bidsOpen = true;
       shared.leadBuyerId = lead.id;
       shared.clearingPrice = lead.price;
@@ -512,7 +515,7 @@ CT.state = (function () {
       if (shared.stage !== "elections") return;
       shared.electionsClosed = true;
       log("advisor", `Elections closed · default-sell applied to any unfiled LP`);
-      recomputeSyndicate(); // finalize backstop against final sell demand
+      recomputeSyndicate(); // finalize syndicate fill against final sell demand
       computeAllocation();
       seedApprovals();
       shared.stage = "allocation";
