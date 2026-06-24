@@ -497,13 +497,14 @@ CT.state = (function () {
     },
     submitElection(payload) {
       const id = payload.lpId; const me = lp(id);
-      const choice = payload.choice; // roll | sell | split
-      let rollNav = 0, sellNav = 0;
+      const choice = payload.choice; // roll | status-quo | sell | split
+      let rollNav = 0, sellNav = 0, terms = "new";
       if (choice === "roll") rollNav = me.nav;
+      else if (choice === "status-quo") { rollNav = me.nav; terms = "existing"; }
       else if (choice === "sell") sellNav = me.nav;
       else { rollNav = Math.max(0, Math.min(numOr(payload.rollNav, 0), me.nav)); sellNav = +(me.nav - rollNav).toFixed(2); }
       const amended = !!shared.elections[id];
-      shared.elections[id] = { choice, rollNav, sellNav, ts: Date.now() };
+      shared.elections[id] = { choice, rollNav, sellNav, terms, ts: Date.now() };
       log(me.name, amended ? "Election amended (sealed)" : "Election filed (sealed)");
       commit();
     },
