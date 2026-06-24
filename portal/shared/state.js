@@ -379,7 +379,7 @@ CT.state = (function () {
       const passed = bid && bid.passed;
       let status = "Awaiting";
       if (passed) status = "Passed";
-      else if (bid) status = shared.bidsOpen ? (b.id === shared.leadBuyerId ? "Lead" : (shared.syndicateIds.includes(b.id) ? "Syndicate" : "Outbid")) : "Bid in";
+      else if (bid) status = shared.bidsOpen ? (b.id === shared.leadBuyerId ? "Lead" : (shared.syndicateIds.includes(b.id) ? "Syndicate" : "Outbid")) : "Finalist";
       return {
         id: b.id, name: b.name, org: b.org, desk: b.desk, persona: b.persona || null,
         verified: !!shared.buyerVerified[b.id],

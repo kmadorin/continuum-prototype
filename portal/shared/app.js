@@ -477,28 +477,32 @@ CT.app = (function () {
     const s = S.get(), d = S.deal();
     const open = s.bidsOpen;
     const rows = S.bidBook().map((b) => {
-      let price = "—", cap = "—", st;
+      let price = "—", cap = "—", st, action = "";
       if (b.passed) { st = `<span class="chip sealed">Passed</span>`; }
       else if (!b.filed) { st = `<span class="chip pending">Awaiting</span>`; }
-      else if (!open) { price = `<span class="cell-sealed"><span class="bars" aria-hidden="true"></span>sealed</span>`; cap = `<span class="cell-sealed">sealed</span>`; st = `<span class="chip ok">Bid filed</span>`; }
+      else if (!open) {
+        price = `<b class="mono">${pct(b.price)}</b>`; cap = fmtM(b.capacity);
+        st = `<span class="chip ok">Finalist</span>`;
+        if (s.stage === "bidding") action = `<button class="btn" data-act="selectLead" data-buyer="${esc(b.id)}">Select as lead</button>`;
+      }
       else { price = `<b class="mono">${pct(b.price)}</b>`; cap = fmtM(b.capacity); st = b.lead ? `<span class="chip ok">Lead</span>` : (b.syndicate ? `<span class="chip ok">Syndicate</span>` : `<span class="chip sealed">Outbid</span>`); }
       return `<tr><td class="nm">${esc(b.name)}<span class="sub">${esc(b.desk)}</span></td>
-        <td class="num">${price}</td><td class="num">${cap}</td><td>${st}</td></tr>`;
+        <td class="num">${price}</td><td class="num">${cap}</td><td>${st}</td><td style="text-align:right">${action}</td></tr>`;
     }).join("");
     const filed = C.bidsFiled();
     let foot = "";
     if (s.stage === "setup") foot = `<div class="panel-foot"><button class="btn" data-act="openAuction">Open auction to buyers</button><span class="hint">Invites the buyer set to file sealed bids.</span></div>`;
-    else if (s.stage === "bidding") foot = `<div class="panel-foot"><button class="btn" data-act="openBook" ${filed ? "" : "disabled"}>Open sealed bid book</button><span class="hint">${filed} of ${d.buyers.length} bids in · opening reveals all and sets the clearing price.</span></div>`;
-    else if (open) foot = `<div class="panel-note">Book opened · clearing price <b class="mono" style="color:var(--accent)">${pct(s.clearingPrice)}</b> set by ${esc(S.buyer(s.leadBuyerId).name)} (highest qualifying bid)${s.syndicateIds.length ? ` · syndicate: ${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}` : ""}. Disclosed to the room.</div>`;
+    else if (s.stage === "bidding") foot = `<div class="panel-note">${filed} of ${d.buyers.length} bids in · finalists are blind to one another. Select a lead — the lead sets the price for the room.</div>`;
+    else if (open) foot = `<div class="panel-note">Lead selected · <b class="mono" style="color:var(--accent)">${pct(s.clearingPrice)}</b> set by ${esc(S.buyer(s.leadBuyerId).name)} (advisor-selected lead)${s.syndicateIds.length ? ` · syndicate at the lead price: ${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}` : ""}. Disclosed to the room.</div>`;
     return `<div class="section-stack">
       <div class="panel">
-        <div class="panel-head"><h2>Sealed bid book</h2><span class="ph-meta">${open ? "Opened" : "Sealed"} · ${filed}/${d.buyers.length} filed</span></div>
+        <div class="panel-head"><h2>Sealed bid book</h2><span class="ph-meta">${open ? "Lead selected" : "Sealed"} · ${filed}/${d.buyers.length} filed</span></div>
         <div class="panel-body flush"><table class="data">
-          <thead><tr><th>Buyer</th><th class="num">Bid (% NAV)</th><th class="num">Capacity</th><th>Status</th></tr></thead>
+          <thead><tr><th>Buyer</th><th class="num">Bid (% NAV)</th><th class="num">Capacity</th><th>Status</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>
         ${foot}
       </div>
-      ${open ? clearingPanel() : `<div class="panel"><div class="panel-head"><h2>Fairness</h2></div><div class="panel-body"><p class="hint" style="margin:0">Bids stay sealed from each other and from LPs until you open the book. The best qualifying bid within the ${pct(d.fairLow)}–${pct(d.fairHigh)} fairness range becomes the disclosed clearing price.</p></div></div>`}
+      ${open ? clearingPanel() : `<div class="panel"><div class="panel-head"><h2>How pricing works</h2></div><div class="panel-body"><p class="hint" style="margin:0">Buyers bid sealed, blind to one another. The advisor selects a lead from the qualifying bids within the ${pct(d.fairLow)}–${pct(d.fairHigh)} fairness range; the lead sets the price for the room and a syndicate joins at that price.</p></div></div>`}
     </div>`;
   }
 
@@ -508,9 +512,10 @@ CT.app = (function () {
       <dt>Clearing price</dt><dd><span class="figure">${pct(s.clearingPrice)}</span> of NAV · $${s.clearingPrice.toFixed(2)} per $1.00 NAV</dd>
       <dt>Lead buyer</dt><dd>${esc(S.buyer(s.leadBuyerId).name)} · capacity ${fmtM(C.leadCapacity())}</dd>
       <dt>Syndicate</dt><dd>${s.syndicateIds.length ? s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ") + ` · +${fmtM(C.syndicateCapacity())} at clearing price` : "none — lead covers demand"}</dd>
-      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· validates ${pct(s.clearingPrice)} within ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
+      <dt>Lead terms</dt><dd>${esc(d.leadTerms.mgmtFee)} mgmt · ${esc(d.leadTerms.carry)} carry · GP commit ${esc(d.gpCommit)}</dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· on file · range ${pct(d.fairLow)}–${pct(d.fairHigh)} · supports the LPAC decision</span></dd>
     </dl>`;
-    return `<div class="panel"><div class="panel-head"><h2>Clearing price · disclosed to the room</h2><span class="ph-meta"><span class="chip ok">Fairness-validated</span></span></div>
+    return `<div class="panel"><div class="panel-head"><h2>Lead price · disclosed to the room</h2><span class="ph-meta"><span class="chip ok">On file</span></span></div>
       <div class="panel-body">${body}</div></div>`;
   }
 
@@ -871,7 +876,7 @@ CT.app = (function () {
     const act = el.getAttribute("data-act");
     switch (act) {
       case "openAuction": S.actions.openAuction(); toast("Auction opened to buyers."); break;
-      case "openBook": S.actions.openBook(); toast("Bid book opened — clearing price disclosed."); break;
+      case "selectLead": S.actions.selectLead({ buyerId: el.getAttribute("data-buyer") }); toast("Lead selected — price set for the room."); break;
       case "submitBid": {
         const d = S.deal();
         const price = parseFloat(root.querySelector("#bp").value);
