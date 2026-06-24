@@ -40,21 +40,24 @@ A **Reset demo** control (top bar) returns everything to the start.
 | **Secondary Buyer** (Northbeam) | Overview · Participants · Bids · Allocation · Settlement · Documents · Audit | its **own** sealed bid + (post-clearing) the clearing price; never other buyers' bids |
 | **Investor — Rolling** (Hawthorn Pension) | Overview · Participants · Elections · Allocation · Settlement · Documents · Audit | own election + position; clearing price; peers' elections **redacted** |
 | **Investor — Exiting** (Calder Family Office) | same as rolling | own election + position; clearing price; peers redacted |
-| **Oversight — LPAC** | locked pre-close → Overview · Participants · Allocation · Settlement · Documents · Audit | nothing live pre-close; scoped fairness view + attestations post-close |
+| **Oversight — LPAC** | Overview · LPAC consent (during the gate) → + Participants · Allocation · Settlement · Documents · Audit post-close | reviews the conflict + fairness package and **consents pre-close** (gates elections + settlement); scoped fairness view + attestations post-close |
 
 Redaction renders consistently as striped `•••• sealed` cells with a "you can't see this" line —
 never conveyed by colour alone.
 
 ## The deal sections (sub-nav, scoped per role)
 
-`Overview · Participants · Bids/Pricing · Elections · Allocation · Settlement · Documents · Audit`.
+`Overview · Participants · Bids/Pricing · LPAC consent · Elections · Allocation · Settlement · Documents · Audit`.
 The lifecycle stage is a **status pill + progress meter** in the deal header — never the navigation.
 
 - **Participants** — investor register (LP · type · committed · NAV · ownership % · election status) + buyer roster.
-- **Bids/Pricing** — the sealed-bid auction. Buyers bid blind; the advisor opens the book; the
-  best qualifying bid sets the disclosed **clearing/lead price**; a syndicate backstops overflow.
-- **Elections** — LPs roll / sell / split at the clearing price; amend until the deadline;
-  unfiled = default sell; peer-private.
+- **Bids/Pricing** — the sealed-bid auction. Buyers bid blind; the advisor **selects a lead** from
+  the qualifying bids; the lead sets the disclosed **lead price** for the room; a syndicate fills
+  overflow at the lead price. Finalists are blind to one another.
+- **LPAC consent** — pre-close gate: the LPAC reviews the conflict + fairness + terms package and
+  **consents** (≥10 business-day review) before elections open and before settlement can run.
+- **Elections** — LPs roll / status-quo (unchanged terms) / sell / split at the lead price, after the
+  LPAC consent gate; amend within the ≥30-day window; unfiled = default sell; peer-private.
 - **Allocation** — sized from elections; pro-rata + syndicate backstop if oversubscribed; legs preview; tie-out.
 - **Settlement** — per-leg approvals → one atomic close (or a forced-failure that rolls everything back) → receipt.
 - **Audit** — timestamped activity log; fairness attestations for oversight post-close.

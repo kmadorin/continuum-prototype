@@ -1,14 +1,16 @@
 /* Continuum Portal — shared/state.js
  * ---------------------------------------------------------------------------
  * The deal engine. NO DOM in this file. Owns the seed datasets (2 deals, ~8 LPs,
- * 3-4 buyers), the stage machine, the sealed-bid AUCTION (multi-buyer → clearing/
- * lead price + syndicate backstop), multi-LP elections (roll/sell/split, amend,
- * default=sell, peer-private), allocation compute (pro-rata + backstop, ties out),
- * the atomic close (+ forced-failure rollback), the audit log, the flywheel, reset.
+ * 3-4 buyers), the stage machine, the sealed-bid auction (multi-buyer → advisor-
+ * selected lead price; syndicate fills overflow), multi-LP elections (roll/status-
+ * quo/sell/split, amend, default=sell, peer-private), the LPAC pre-close consent
+ * gate, allocation compute (pro-rata + syndicate fill, ties out), the atomic close
+ * (+ forced-failure rollback), decline-to-proceed, the audit log, the flywheel, reset.
  *
- * Stages: setup → bidding → cleared → elections → allocation → approvals
- *         → settlement(transient) → settled. Buyers price FIRST via sealed bids;
- * the best qualifying bid sets the disclosed clearing price; LPs then elect.
+ * Stages: setup → bidding → leadSelected → lpacConsent → elections → allocation
+ *         → approvals → settlement(transient) → settled (+ terminal `declined`).
+ * Buyers price FIRST via sealed bids; the advisor selects a lead whose bid sets the
+ * disclosed price; the LPAC consents (pre-close gate); LPs then elect.
  *
  * Interface (window.CT.state):
  *   get()                 -> shared deal state
@@ -35,6 +37,7 @@ CT.state = (function () {
       navAsOf: "31 Mar 2026", fundNav: 52.0, navPerUnit: 1.0,
       fairLow: 0.92, fairHigh: 0.99, fairnessProvider: "Houlihan Lokey",
       gpCommit: "2.0% of CV", bidDeadline: "05 Jul 2026", electionDeadline: "12 Jul 2026",
+      leadTerms: { mgmtFee: "1.5%", carry: "10% over 8% pref" },
       lps: [
         { id: "lp1", name: "Hawthorn Pension",          type: "Public pension · QP",      committed: 15.0, nav: 9.4, persona: "staying" },
         { id: "lp2", name: "Calder Family Office",       type: "Single-family office · QP", committed: 8.0,  nav: 5.0, persona: "leaving" },
@@ -75,6 +78,7 @@ CT.state = (function () {
       navAsOf: "31 Mar 2026", fundNav: 38.0, navPerUnit: 1.0,
       fairLow: 0.93, fairHigh: 0.99, fairnessProvider: "Lazard",
       gpCommit: "2.5% of CV", bidDeadline: "07 Aug 2026", electionDeadline: "14 Aug 2026",
+      leadTerms: { mgmtFee: "1.25%", carry: "12.5% over 8% pref" },
       lps: [
         { id: "lp1", name: "Irongate Endowment",      type: "Endowment · QP",      committed: 12.0, nav: 7.2, persona: "staying" },
         { id: "lp2", name: "Sefton Trust",            type: "Private trust · QP",  committed: 5.0,  nav: 3.0, persona: "leaving" },
@@ -118,29 +122,31 @@ CT.state = (function () {
   const ROLE_ORDER = ["advisor", "staying", "leaving", "buyer", "oversight"];
 
   // stage machine + progress meter
-  const STAGES = ["setup", "bidding", "cleared", "elections", "allocation", "approvals", "settlement", "settled"];
+  const STAGES = ["setup", "bidding", "leadSelected", "lpacConsent", "elections", "allocation", "approvals", "settlement", "settled"];
   const STAGE_META = {
-    setup:      { label: "Setup",       pill: "Setup" },
-    bidding:    { label: "Auction open",pill: "Bidding" },
-    cleared:    { label: "Price cleared",pill: "Cleared" },
-    elections:  { label: "Elections open", pill: "Elections" },
-    allocation: { label: "Allocation",  pill: "Allocation" },
-    approvals:  { label: "Approvals",   pill: "Approvals" },
-    settlement: { label: "Settling",    pill: "Settling" },
-    settled:    { label: "Settled",     pill: "Settled" },
+    setup:        { label: "Setup",          pill: "Setup" },
+    bidding:      { label: "Auction open",   pill: "Bidding" },
+    leadSelected: { label: "Lead selected",  pill: "Lead set" },
+    lpacConsent:  { label: "LPAC review",    pill: "Consent" },
+    elections:    { label: "Elections open", pill: "Elections" },
+    allocation:   { label: "Allocation",     pill: "Allocation" },
+    approvals:    { label: "Approvals",      pill: "Approvals" },
+    settlement:   { label: "Settling",       pill: "Settling" },
+    settled:      { label: "Settled",        pill: "Settled" },
+    declined:     { label: "Declined to proceed", pill: "Declined" },
   };
-  const SECTIONS = ["overview", "participants", "bids", "elections", "allocation", "settlement", "documents", "audit"];
+  const SECTIONS = ["overview", "participants", "bids", "consent", "elections", "allocation", "settlement", "documents", "audit"];
   const SECTION_LABEL = {
     overview: "Overview", participants: "Participants", bids: "Bids / Pricing",
-    elections: "Elections", allocation: "Allocation", settlement: "Settlement",
-    documents: "Documents", audit: "Audit",
+    consent: "LPAC consent", elections: "Elections", allocation: "Allocation",
+    settlement: "Settlement", documents: "Documents", audit: "Audit",
   };
 
   const CLOSE_MS = { step: 120, get settleAt() { return 0; } };
 
   // ============================================================ state core
   const numOr = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
-  function validState(s) { return s && typeof s === "object" && DEALS[s.dealNo] && typeof s.stage === "string" && s.v === 5; }
+  function validState(s) { return s && typeof s === "object" && DEALS[s.dealNo] && typeof s.stage === "string" && s.v === 6; }
 
   function freshState(dealNo) {
     const d = DEALS[dealNo];
@@ -152,12 +158,14 @@ CT.state = (function () {
     const buyerVerified = {};
     d.buyers.forEach((b) => { buyerVerified[b.id] = dealNo > 1 && b.id === LEAD_PERSONA_BUYER ? true : b.id !== LEAD_PERSONA_BUYER; });
     return {
-      v: 5, dealNo, stage: "setup",
+      v: 6, dealNo, stage: "setup",
       bids, bidsOpen: false,
-      clearingPrice: null, leadBuyerId: null, syndicateIds: [], fairnessValidated: false,
+      clearingPrice: null, leadBuyerId: null, syndicateIds: [],
       elections, electionsClosed: false,
+      lpacConsent: { granted: false, recusals: [], ts: null },
       allocation: null, approvals: {},
       closed: false, closedAt: null, failedAttempt: false, closingFail: false,
+      declined: false,
       oversightGranted: false, buyerVerified,
       audit: [
         ev(-6, "advisor", `Closing room opened for ${d.vehicleShort}`),
@@ -257,7 +265,7 @@ CT.state = (function () {
     unitsIssued, assetNavIn, buyerFundedNav, electionFor, electionsFiledCount, oversubscribed: () => sellDemand() > buyerCapacity() + 1e-6,
   };
 
-  // syndicate = next-best bidders (after lead, in rank order) pulled in AT the
+  // syndicate = next-best bidders (after lead, in rank order) that FILL overflow AT the
   // clearing price until lead+syndicate capacity covers sell demand. Recomputed
   // when demand changes (provisional at clearing, final at allocation).
   function recomputeSyndicate() {
@@ -373,7 +381,7 @@ CT.state = (function () {
       const passed = bid && bid.passed;
       let status = "Awaiting";
       if (passed) status = "Passed";
-      else if (bid) status = shared.bidsOpen ? (b.id === shared.leadBuyerId ? "Lead" : (shared.syndicateIds.includes(b.id) ? "Syndicate" : "Outbid")) : "Bid in";
+      else if (bid) status = shared.bidsOpen ? (b.id === shared.leadBuyerId ? "Lead" : (shared.syndicateIds.includes(b.id) ? "Syndicate" : "Outbid")) : "Finalist";
       return {
         id: b.id, name: b.name, org: b.org, desk: b.desk, persona: b.persona || null,
         verified: !!shared.buyerVerified[b.id],
@@ -407,7 +415,9 @@ CT.state = (function () {
         if (bidsFiled() < bidsExpected() - deal().buyers.filter((b)=>b.seeded&&b.seeded.passed).length) t.push({ title: `Awaiting bids — ${bidsFiled()} of ${bidsExpected()} in`, section: "bids", muted: true });
         t.push({ title: "Open the sealed bid book & set the clearing price", section: "bids", cta: "Open book" });
       }
-      if (s.stage === "cleared") t.push({ title: "Open elections to LPs at the clearing price", section: "elections", cta: "Open elections" });
+      if (s.stage === "leadSelected") t.push({ title: "Send the conflict + fairness package to LPAC", section: "consent", cta: "Send to LPAC" });
+      if (s.stage === "lpacConsent" && !s.lpacConsent.granted) t.push({ title: "Awaiting LPAC consent (≥10 business days)", section: "consent", muted: true });
+      if (s.stage === "lpacConsent" && s.lpacConsent.granted) t.push({ title: "Open elections to LPs at the lead price", section: "elections", cta: "Open elections" });
       if (s.stage === "elections") {
         t.push({ title: `Elections — ${electionsFiledCount()} of ${deal().lps.length} filed`, section: "elections", muted: true });
         t.push({ title: "Close elections & compute the allocation", section: "allocation", cta: "Compute allocation" });
@@ -431,6 +441,9 @@ CT.state = (function () {
       if (s.stage === "elections" && s.elections[e.id]) t.push({ title: "Amend your election (open until deadline)", section: "elections", muted: true });
       if (s.stage === "approvals") { const k = approvalKeyFor(role); if (s.approvals && k in s.approvals && !s.approvals[k]) t.push({ title: "Authorize your leg", section: "settlement", cta: "Authorize" }); }
     }
+    if (role === "oversight") {
+      if (s.stage === "lpacConsent" && !s.lpacConsent.granted) t.push({ title: "Review the conflict + fairness package & record consent", section: "consent", cta: "Review & consent" });
+    }
     return t;
   }
   function needsYou(role) { return tasksFor(role).filter((t) => t.cta).length; }
@@ -447,31 +460,54 @@ CT.state = (function () {
       log(buyer(id).name, "Sealed bid filed");
       commit();
     },
-    openBook() {
+    selectLead(payload) {
       if (shared.stage !== "bidding" && shared.stage !== "setup") return;
       const ranked = clearingCandidate();
       if (!ranked.length) return;
+      const id = payload && payload.buyerId;
+      const lead = ranked.find((r) => r.id === id);
+      if (!lead) return; // advisor must pick a filed, in-range bid; honor the argument strictly
       shared.bidsOpen = true;
-      shared.leadBuyerId = ranked[0].id;
-      shared.clearingPrice = ranked[0].price;
-      shared.fairnessValidated = true;
+      shared.leadBuyerId = lead.id;
+      shared.clearingPrice = lead.price;
       recomputeSyndicate(); // provisional, on current demand; finalized at allocation
-      shared.stage = "cleared";
-      log("advisor", `Bid book opened · clearing price ${pct(shared.clearingPrice)} · lead ${buyer(shared.leadBuyerId).name}`);
-      if (shared.syndicateIds.length) log("advisor", `Syndicate engaged at clearing price: ${shared.syndicateIds.map((i) => buyer(i).name).join(", ")}`);
-      log("advisor", `Fairness opinion validates ${pct(shared.clearingPrice)} within ${pct(deal().fairLow)}–${pct(deal().fairHigh)}`);
+      shared.stage = "leadSelected";
+      log("advisor", `Advisor selected lead — ${buyer(shared.leadBuyerId).name} · price ${pct(shared.clearingPrice)} · finalists were blind to one another`);
+      if (shared.syndicateIds.length) log("advisor", `Syndicate admitted at the lead price: ${shared.syndicateIds.map((i) => buyer(i).name).join(", ")}`);
+      log("advisor", `Fairness opinion on file (${deal().fairnessProvider}, ${pct(deal().fairLow)}–${pct(deal().fairHigh)}) — supports LPAC review`);
       commit();
     },
-    openElections() { if (shared.stage === "cleared") { shared.stage = "elections"; log("advisor", "Elections opened to LPs at the clearing price"); commit(); } },
+    openLpacReview() {
+      if (shared.stage === "leadSelected") {
+        shared.stage = "lpacConsent";
+        log("advisor", "Conflict + fairness + terms package sent to LPAC · ≥10 business-day review");
+        commit();
+      }
+    },
+    recordConsent(payload) {
+      if (shared.stage !== "lpacConsent") return;
+      shared.lpacConsent = { granted: true, recusals: (payload && payload.recusals) || [], ts: Date.now() };
+      const note = shared.lpacConsent.recusals.length ? ` · ${shared.lpacConsent.recusals.length} member(s) recused` : "";
+      log("LPAC", `LPAC consented to the transaction · conflicts reviewed/waived${note}`);
+      commit();
+    },
+    openElections() {
+      if (shared.stage === "lpacConsent" && shared.lpacConsent.granted) {
+        shared.stage = "elections";
+        log("advisor", "Elections opened to LPs at the lead price");
+        commit();
+      }
+    },
     submitElection(payload) {
       const id = payload.lpId; const me = lp(id);
-      const choice = payload.choice; // roll | sell | split
-      let rollNav = 0, sellNav = 0;
+      const choice = payload.choice; // roll | status-quo | sell | split
+      let rollNav = 0, sellNav = 0, terms = "new";
       if (choice === "roll") rollNav = me.nav;
+      else if (choice === "status-quo") { rollNav = me.nav; terms = "existing"; }
       else if (choice === "sell") sellNav = me.nav;
       else { rollNav = Math.max(0, Math.min(numOr(payload.rollNav, 0), me.nav)); sellNav = +(me.nav - rollNav).toFixed(2); }
       const amended = !!shared.elections[id];
-      shared.elections[id] = { choice, rollNav, sellNav, ts: Date.now() };
+      shared.elections[id] = { choice, rollNav, sellNav, terms, ts: Date.now() };
       log(me.name, amended ? "Election amended (sealed)" : "Election filed (sealed)");
       commit();
     },
@@ -479,7 +515,7 @@ CT.state = (function () {
       if (shared.stage !== "elections") return;
       shared.electionsClosed = true;
       log("advisor", `Elections closed · default-sell applied to any unfiled LP`);
-      recomputeSyndicate(); // finalize backstop against final sell demand
+      recomputeSyndicate(); // finalize syndicate fill against final sell demand
       computeAllocation();
       seedApprovals();
       shared.stage = "allocation";
@@ -497,6 +533,12 @@ CT.state = (function () {
       commit();
     },
     cancelApproval(payload) { const key = payload.key; if (key in shared.approvals) { shared.approvals[key] = false; log("advisor", "A leg authorization was withdrawn"); commit(); } },
+    declineToProceed() {
+      if (!["leadSelected", "lpacConsent", "elections", "allocation", "approvals"].includes(shared.stage)) return;
+      shared.stage = "declined"; shared.declined = true;
+      log("advisor", "Advisor declined to proceed (broken-deal) — pricing/terms unacceptable · nothing moved");
+      commit();
+    },
     grantOversight() { shared.oversightGranted = true; commit(); },
     retryClose() { shared.stage = "approvals"; shared.failedAttempt = false; shared.closingFail = false; commit(); },
     startNextDeal() {

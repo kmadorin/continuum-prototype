@@ -35,7 +35,7 @@ CT.app = (function () {
   function sectionsFor(role) {
     if (role === "advisor") return M.SECTIONS.slice();
     if (role === "buyer") return ["overview", "participants", "bids", "allocation", "settlement", "documents", "audit"];
-    if (role === "oversight") return ["overview", "participants", "allocation", "settlement", "documents", "audit"];
+    if (role === "oversight") return ["overview", "participants", "consent", "allocation", "settlement", "documents", "audit"];
     return ["overview", "participants", "elections", "allocation", "settlement", "documents", "audit"]; // LP
   }
   const isLP = (role) => P[role].entity.kind === "lp";
@@ -46,7 +46,9 @@ CT.app = (function () {
   function locked(role, section) {
     if (role !== "oversight") return false;
     if (S.get().closed) return false;
-    return section !== "overview";
+    if (section === "overview") return false;
+    if (section === "consent" && S.get().stage === "lpacConsent") return false;
+    return true;
   }
 
   // ========================================================== chrome
@@ -298,6 +300,7 @@ CT.app = (function () {
       case "overview": return secOverview();
       case "participants": return secParticipants();
       case "bids": return secBids();
+      case "consent": return secConsent();
       case "elections": return secElections();
       case "allocation": return secAllocation();
       case "settlement": return secSettlement();
@@ -325,7 +328,7 @@ CT.app = (function () {
       ${position}
       <div class="metrics">
         <div class="mc"><span class="m-lab">Reference NAV</span><span class="m-val accent">${fmtM(d.fundNav)}</span><span class="m-note">${d.lps.length} LPs @ $${d.navPerUnit.toFixed(2)}/unit</span></div>
-        <div class="mc"><span class="m-lab">Clearing price</span><span class="m-val ${s.clearingPrice ? "accent" : ""}">${s.clearingPrice ? pct(s.clearingPrice) : "—"}</span><span class="m-note">${s.clearingPrice ? "fairness-validated" : "auction in progress"}</span></div>
+        <div class="mc"><span class="m-lab">Lead price</span><span class="m-val ${s.clearingPrice ? "accent" : ""}">${s.clearingPrice ? pct(s.clearingPrice) : "—"}</span><span class="m-note">${s.clearingPrice ? "advisor-selected lead" : "auction in progress"}</span></div>
         <div class="mc"><span class="m-lab">Fairness range</span><span class="m-val">${pct(d.fairLow)}–${pct(d.fairHigh)}</span><span class="m-note">${esc(d.fairnessProvider)}</span></div>
         <div class="mc"><span class="m-lab">Deadlines</span><span class="m-val" style="font-size:14px">${esc(d.bidDeadline)}</span><span class="m-note">elect by ${esc(d.electionDeadline)}</span></div>
       </div>
@@ -340,7 +343,7 @@ CT.app = (function () {
       <dt>Asset</dt><dd>${esc(d.asset)}</dd>
       <dt>Reference NAV</dt><dd><span class="figure">${fmtM(d.fundNav)}</span> as of ${esc(d.navAsOf)}</dd>
       <dt>Clearing price</dt><dd>${s.clearingPrice ? `<span class="figure">${pct(s.clearingPrice)}</span> of NAV · lead ${esc(S.buyer(s.leadBuyerId).name)}` : `<span class="cell-sealed">set by sealed-bid auction</span>`}</dd>
-      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· validates ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· on file · supports the LPAC decision · range ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
       <dt>GP commitment</dt><dd>${esc(d.gpCommit)} <span class="mute mono" style="font-size:12px">· conflict disclosed to LPAC</span></dd>
       <dt>Election deadline</dt><dd>${esc(d.electionDeadline)}</dd>
     </dl>`;
@@ -365,6 +368,7 @@ CT.app = (function () {
     return panel("Your position · " + esc(l.name), body, null, esc(l.type));
   }
   function electionSummary(e) {
+    if (e.choice === "status-quo") return `Status-quo <span class="figure">${fmtM(e.rollNav)}</span> NAV <span class="mute mono" style="font-size:12px">(unchanged terms)</span>`;
     if (e.choice === "roll") return `Roll <span class="figure">${fmtM(e.rollNav)}</span> NAV`;
     if (e.choice === "sell") return `Sell <span class="figure">${fmtM(e.sellNav)}</span> NAV${e.byDefault ? ` <span class="mute mono" style="font-size:12px">(default)</span>` : ""}`;
     return `Split · roll <span class="figure">${fmtM(e.rollNav)}</span> / sell <span class="figure">${fmtM(e.sellNav)}</span>`;
@@ -477,28 +481,32 @@ CT.app = (function () {
     const s = S.get(), d = S.deal();
     const open = s.bidsOpen;
     const rows = S.bidBook().map((b) => {
-      let price = "—", cap = "—", st;
+      let price = "—", cap = "—", st, action = "";
       if (b.passed) { st = `<span class="chip sealed">Passed</span>`; }
       else if (!b.filed) { st = `<span class="chip pending">Awaiting</span>`; }
-      else if (!open) { price = `<span class="cell-sealed"><span class="bars" aria-hidden="true"></span>sealed</span>`; cap = `<span class="cell-sealed">sealed</span>`; st = `<span class="chip ok">Bid filed</span>`; }
+      else if (!open) {
+        price = `<b class="mono">${pct(b.price)}</b>`; cap = fmtM(b.capacity);
+        st = `<span class="chip ok">Finalist</span>`;
+        if (s.stage === "bidding") action = `<button class="btn" data-act="selectLead" data-buyer="${esc(b.id)}">Select as lead</button>`;
+      }
       else { price = `<b class="mono">${pct(b.price)}</b>`; cap = fmtM(b.capacity); st = b.lead ? `<span class="chip ok">Lead</span>` : (b.syndicate ? `<span class="chip ok">Syndicate</span>` : `<span class="chip sealed">Outbid</span>`); }
       return `<tr><td class="nm">${esc(b.name)}<span class="sub">${esc(b.desk)}</span></td>
-        <td class="num">${price}</td><td class="num">${cap}</td><td>${st}</td></tr>`;
+        <td class="num">${price}</td><td class="num">${cap}</td><td>${st}</td><td style="text-align:right">${action}</td></tr>`;
     }).join("");
     const filed = C.bidsFiled();
     let foot = "";
     if (s.stage === "setup") foot = `<div class="panel-foot"><button class="btn" data-act="openAuction">Open auction to buyers</button><span class="hint">Invites the buyer set to file sealed bids.</span></div>`;
-    else if (s.stage === "bidding") foot = `<div class="panel-foot"><button class="btn" data-act="openBook" ${filed ? "" : "disabled"}>Open sealed bid book</button><span class="hint">${filed} of ${d.buyers.length} bids in · opening reveals all and sets the clearing price.</span></div>`;
-    else if (open) foot = `<div class="panel-note">Book opened · clearing price <b class="mono" style="color:var(--accent)">${pct(s.clearingPrice)}</b> set by ${esc(S.buyer(s.leadBuyerId).name)} (highest qualifying bid)${s.syndicateIds.length ? ` · syndicate: ${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}` : ""}. Disclosed to the room.</div>`;
+    else if (s.stage === "bidding") foot = `<div class="panel-note">${filed} of ${d.buyers.length} bids in · finalists are blind to one another. Select a lead — the lead sets the price for the room.</div>`;
+    else if (open) foot = `<div class="panel-note">Lead selected · <b class="mono" style="color:var(--accent)">${pct(s.clearingPrice)}</b> set by ${esc(S.buyer(s.leadBuyerId).name)} (advisor-selected lead)${s.syndicateIds.length ? ` · syndicate at the lead price: ${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}` : ""}. Disclosed to the room.</div>`;
     return `<div class="section-stack">
       <div class="panel">
-        <div class="panel-head"><h2>Sealed bid book</h2><span class="ph-meta">${open ? "Opened" : "Sealed"} · ${filed}/${d.buyers.length} filed</span></div>
+        <div class="panel-head"><h2>Sealed bid book</h2><span class="ph-meta">${open ? "Lead selected" : "Sealed"} · ${filed}/${d.buyers.length} filed</span></div>
         <div class="panel-body flush"><table class="data">
-          <thead><tr><th>Buyer</th><th class="num">Bid (% NAV)</th><th class="num">Capacity</th><th>Status</th></tr></thead>
+          <thead><tr><th>Buyer</th><th class="num">Bid (% NAV)</th><th class="num">Capacity</th><th>Status</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>
         ${foot}
       </div>
-      ${open ? clearingPanel() : `<div class="panel"><div class="panel-head"><h2>Fairness</h2></div><div class="panel-body"><p class="hint" style="margin:0">Bids stay sealed from each other and from LPs until you open the book. The best qualifying bid within the ${pct(d.fairLow)}–${pct(d.fairHigh)} fairness range becomes the disclosed clearing price.</p></div></div>`}
+      ${open ? clearingPanel() : `<div class="panel"><div class="panel-head"><h2>How pricing works</h2></div><div class="panel-body"><p class="hint" style="margin:0">Buyers bid sealed, blind to one another. The advisor selects a lead from the qualifying bids within the ${pct(d.fairLow)}–${pct(d.fairHigh)} fairness range; the lead sets the price for the room and a syndicate joins at that price.</p></div></div>`}
     </div>`;
   }
 
@@ -508,9 +516,10 @@ CT.app = (function () {
       <dt>Clearing price</dt><dd><span class="figure">${pct(s.clearingPrice)}</span> of NAV · $${s.clearingPrice.toFixed(2)} per $1.00 NAV</dd>
       <dt>Lead buyer</dt><dd>${esc(S.buyer(s.leadBuyerId).name)} · capacity ${fmtM(C.leadCapacity())}</dd>
       <dt>Syndicate</dt><dd>${s.syndicateIds.length ? s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ") + ` · +${fmtM(C.syndicateCapacity())} at clearing price` : "none — lead covers demand"}</dd>
-      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· validates ${pct(s.clearingPrice)} within ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
+      <dt>Lead terms</dt><dd>${esc(d.leadTerms.mgmtFee)} mgmt · ${esc(d.leadTerms.carry)} carry · GP commit ${esc(d.gpCommit)}</dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· on file · range ${pct(d.fairLow)}–${pct(d.fairHigh)} · supports the LPAC decision</span></dd>
     </dl>`;
-    return `<div class="panel"><div class="panel-head"><h2>Clearing price · disclosed to the room</h2><span class="ph-meta"><span class="chip ok">Fairness-validated</span></span></div>
+    return `<div class="panel"><div class="panel-head"><h2>Lead price · disclosed to the room</h2><span class="ph-meta"><span class="chip ok">On file</span></span></div>
       <div class="panel-body">${body}</div></div>`;
   }
 
@@ -548,6 +557,32 @@ CT.app = (function () {
     </div>`;
   }
 
+  // ========================================================== LPAC CONSENT
+  function secConsent() {
+    const s = S.get(), d = S.deal();
+    const pkg = `<dl class="kv">
+      <dt>Lead buyer</dt><dd>${s.leadBuyerId ? esc(S.buyer(s.leadBuyerId).name) + " · price " + pct(s.clearingPrice) : `<span class="cell-sealed">lead not selected</span>`}</dd>
+      <dt>Lead terms</dt><dd>${esc(d.leadTerms.mgmtFee)} mgmt · ${esc(d.leadTerms.carry)} carry · GP commit ${esc(d.gpCommit)}</dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} · range ${pct(d.fairLow)}–${pct(d.fairHigh)} <span class="mute mono" style="font-size:12px">· supporting document, not a price validator</span></dd>
+      <dt>Conflict disclosure</dt><dd>GP sits on both sides — rolls ${esc(d.gpCommit)} into ${esc(d.vehicleShort)}</dd>
+    </dl>`;
+    const granted = s.lpacConsent.granted;
+    if (ROLE === "oversight") {
+      if (granted) return `<div class="section-stack">${panel("LPAC consent", pkg, null, `<span class="chip ok">Consented</span>`)}</div>`;
+      const foot = s.stage === "lpacConsent"
+        ? `<div class="panel-foot"><label class="fail-toggle"><input type="checkbox" id="recuse"> A member is conflicted — recuse</label><button class="btn" data-act="recordConsent">Record LPAC consent</button><span class="hint">≥10 business-day review. Consent gates LP elections; settlement cannot run without it.</span></div>`
+        : `<div class="panel-note">The package opens for review once the advisor sends it.</div>`;
+      return `<div class="section-stack"><div class="panel"><div class="panel-head"><h2>Conflict + fairness package</h2><span class="ph-meta">Pre-close gate</span></div><div class="panel-body">${pkg}</div>${foot}</div></div>`;
+    }
+    // advisor view
+    let foot = "";
+    if (s.stage === "leadSelected") foot = `<div class="panel-foot"><button class="btn" data-act="openLpacReview">Send package to LPAC</button><span class="hint">Conflict disclosure + fairness opinion + lead terms · ≥10 business-day review.</span></div>`;
+    else if (s.stage === "lpacConsent" && !granted) foot = `<div class="panel-note">Awaiting LPAC consent — elections cannot open until consent is recorded.</div>`;
+    else if (granted) foot = `<div class="panel-note"><span class="chip ok">Consented</span> LPAC has consented${s.lpacConsent.recusals.length ? ` · ${s.lpacConsent.recusals.length} recusal(s)` : ""}. You can open elections.</div>`;
+    else foot = `<div class="panel-note">The LPAC gate runs after a lead is selected.</div>`;
+    return `<div class="section-stack"><div class="panel"><div class="panel-head"><h2>LPAC consent · pre-close gate</h2></div><div class="panel-body">${pkg}</div>${foot}</div></div>`;
+  }
+
   // ========================================================== ELECTIONS
   function secElections() {
     if (ROLE === "advisor") return advisorElections();
@@ -567,7 +602,8 @@ CT.app = (function () {
     }).join("");
     const filed = C.electionsFiledCount();
     let foot = "";
-    if (s.stage === "cleared") foot = `<div class="panel-foot"><button class="btn" data-act="openElections">Open elections to LPs</button><span class="hint">LPs elect roll or sell at the ${pct(s.clearingPrice)} clearing price.</span></div>`;
+    if (s.stage === "leadSelected" || (s.stage === "lpacConsent" && !s.lpacConsent.granted)) foot = `<div class="panel-note">Elections open after LPAC consents (pre-close gate).</div>`;
+    else if (s.stage === "lpacConsent" && s.lpacConsent.granted) foot = `<div class="panel-foot"><button class="btn" data-act="openElections">Open elections to LPs</button><span class="hint">LPs elect roll / status-quo / sell at the ${pct(s.clearingPrice)} lead price · ≥30-day window.</span></div>`;
     else if (s.stage === "elections") foot = `<div class="panel-foot"><button class="btn" data-act="compute">Close elections & compute allocation</button><span class="hint">${filed} of ${d.lps.length} filed · unfiled LPs default to sell.</span></div>`;
     else foot = `<div class="panel-note">Elections closed · ${filed} of ${d.lps.length} filed.</div>`;
     return `<div class="section-stack">
@@ -582,7 +618,7 @@ CT.app = (function () {
 
   function lpElections(id) {
     const s = S.get(), l = S.lp(id), d = S.deal(), e = s.elections[id];
-    if (s.stage === "setup" || s.stage === "bidding" || s.stage === "cleared") {
+    if (s.stage === "setup" || s.stage === "bidding" || s.stage === "leadSelected" || s.stage === "lpacConsent") {
       return `<div class="section-stack">${panel("Elections", `<p class="hint" style="margin:0">Elections open once the auction clears and the advisor releases the clearing price. ${s.clearingPrice ? `Clearing price ${pct(s.clearingPrice)} — opening shortly.` : "Auction still in progress."}</p>`)}${lpPeerElections(id)}</div>`;
     }
     const draftRoll = e ? e.rollNav : l.nav;
@@ -590,8 +626,9 @@ CT.app = (function () {
     const open = s.stage === "elections";
     const form = open ? `<div class="panel"><div class="panel-head"><h2>${e ? "Amend your election" : "File your election"}</h2><span class="ph-meta">at ${pct(s.clearingPrice)} clearing price</span></div>
       <div class="panel-body">
-        <div class="choice-row" id="elchoice" style="margin-bottom:16px">
-          <button class="choice" type="button" data-choice="roll" aria-pressed="${choice === "roll"}"><span class="ct">Roll over</span><span class="cd">Keep ${fmtM(l.nav)} NAV in ${esc(d.vehicleShort)}</span></button>
+        <div class="choice-row" id="elchoice" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+          <button class="choice" type="button" data-choice="roll" aria-pressed="${choice === "roll"}"><span class="ct">Roll over</span><span class="cd">Keep ${fmtM(l.nav)} NAV in ${esc(d.vehicleShort)} · new terms</span></button>
+          <button class="choice" type="button" data-choice="status-quo" aria-pressed="${choice === "status-quo"}"><span class="ct">Status-quo</span><span class="cd">Stay invested on unchanged terms — no carry crystallization</span></button>
           <button class="choice" type="button" data-choice="sell" aria-pressed="${choice === "sell"}"><span class="ct">Sell</span><span class="cd">Cash out ${fmtM(l.nav)} at ${pct(s.clearingPrice)}</span></button>
         </div>
         <div class="choice-row" style="grid-template-columns:1fr;margin-bottom:16px">
@@ -602,7 +639,7 @@ CT.app = (function () {
           <div class="input-group"><span class="prefix">$</span><input class="input" id="rollamt" type="number" step="0.1" min="0" max="${l.nav}" value="${draftRoll.toFixed(1)}"><span class="suffix">M of ${fmtM(l.nav)}</span></div>
         </div>
       </div>
-      <div class="panel-foot"><button class="btn" data-act="submitElection">${e ? "Amend election" : "File election"}</button><span class="hint">Private from other LPs. Amend until ${esc(d.electionDeadline)}. No choice by then defaults to sell.</span></div></div>` : "";
+      <div class="panel-foot"><button class="btn" data-act="submitElection">${e ? "Amend election" : "File election"}</button><span class="hint">Private from other LPs. Election window ≥30 calendar days — amend until ${esc(d.electionDeadline)}. No choice defaults to sell; you are never forced to roll.</span></div></div>` : "";
     const filed = e ? panel("Your filed election", `<dl class="kv"><dt>Choice</dt><dd>${electionSummary(e)}</dd><dt>At clearing price</dt><dd><span class="figure">${pct(s.clearingPrice)}</span> of NAV</dd>${e.sellNav > 0 ? `<dt>Cash you'll receive</dt><dd><span class="figure">${fmtM(+(e.sellNav * s.clearingPrice).toFixed(3))}</span> USDC</dd>` : ""}${e.rollNav > 0 ? `<dt>Units you'll hold</dt><dd><span class="figure">${fmtUnits(e.rollNav / d.navPerUnit)}</span> in ${esc(d.vehicleShort)}</dd>` : ""}</dl>`, null, `<span class="chip ok">Filed</span>`) : "";
     return `<div class="section-stack">${form}${e && open ? filed : (e ? filed : "")}${lpPeerElections(id)}</div>`;
   }
@@ -631,7 +668,7 @@ CT.app = (function () {
     if (ROLE === "advisor") stack.push(allocationSummary());
     stack.push(legsTable(showAll ? S.legs() : myLegs, showAll));
     if (showAll) stack.push(tieOutCallout());
-    if (ROLE === "advisor" && s.stage === "allocation") stack.push(`<div class="panel"><div class="panel-foot"><button class="btn" data-act="sendForApproval">Send for per-leg approval</button><span class="hint">Each party then authorizes only its own leg before the atomic close.</span></div></div>`);
+    if (ROLE === "advisor" && s.stage === "allocation") stack.push(`<div class="panel"><div class="panel-foot"><button class="btn" data-act="sendForApproval">Send for per-leg approval</button><button class="btn ghost" data-act="decline">Decline to proceed</button><span class="hint">Each party then authorizes only its own leg before the atomic close — or decline if pricing/terms are unacceptable.</span></div></div>`);
     return `<div class="section-stack">${stack.join("")}</div>`;
   }
 
@@ -646,7 +683,7 @@ CT.app = (function () {
     ];
     const backstop = over
       ? `<div class="panel-note" style="color:var(--warn)">Sell demand exceeds buyer capacity — each seller filled <b>pro-rata</b> at ${pct(C.fillRatio())} of their order; the remainder rolls forward.</div>`
-      : (s.syndicateIds.length ? `<div class="panel-note">Sell demand above the lead's ${fmtM(C.leadCapacity())} is backstopped by the syndicate (${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}) at the clearing price.</div>` : "");
+      : (s.syndicateIds.length ? `<div class="panel-note">Sell demand above the lead's ${fmtM(C.leadCapacity())} is filled by the syndicate (${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}) at the lead price — the lead sets the price, not the allocation.</div>` : "");
     return `<div class="panel"><div class="panel-head"><h2>Allocation · sized at ${pct(s.clearingPrice)}</h2></div>
       <div class="metrics" style="border:0">${cells.map((c) => `<div class="mc"><span class="m-lab">${c[0]}</span><span class="m-val ${c[3]}">${c[1]}</span><span class="m-note">${c[2]}</span></div>`).join("")}</div>
       ${backstop}</div>`;
@@ -673,10 +710,18 @@ CT.app = (function () {
   // ========================================================== SETTLEMENT
   function secSettlement() {
     const s = S.get();
+    if (s.stage === "declined") return declinedView();
     if (s.closed || (s.stage === "settled" && s.failedAttempt)) return settlementResult();
     if (s.stage === "settlement") return settlingView();
     if (s.stage !== "approvals") return panel("Settlement", `<p class="hint" style="margin:0">Settlement opens after the allocation is sent for approval.</p>`);
     return approvalsView();
+  }
+
+  function declinedView() {
+    return `<div class="section-stack">
+      <div class="panel"><div class="panel-head" style="background:var(--fail-soft)"><h2 style="color:var(--fail)">Declined to proceed</h2></div>
+        <div class="panel-body"><p style="margin:0">The advisor declined to proceed (broken-deal) — the price or terms were unacceptable. <b>Nothing moved</b>: no cash, no units, no asset. A real GP can walk away rather than transact at an unfair price (dual-track outcome).</p></div></div>
+      ${activityPanel(50)}</div>`;
   }
 
   function approvalsView() {
@@ -696,6 +741,7 @@ CT.app = (function () {
       foot = `<div class="panel-foot">
         <button class="btn big" data-act="settle" ${S.allApproved() ? "" : "disabled"}>Settle atomically</button>
         <label class="fail-toggle"><input type="checkbox" id="failtoggle"> Force a leg to fail (test rollback)</label>
+        <button class="btn ghost" data-act="decline">Decline to proceed</button>
         <span class="hint">${S.allApproved() ? "All legs authorized — one action moves everything, or nothing." : `${pending} approval(s) outstanding.`}</span></div>`;
     }
     return `<div class="section-stack">
@@ -801,7 +847,8 @@ CT.app = (function () {
     const s = S.get(), d = S.deal();
     return `<div class="panel"><div class="panel-head"><h2>Fairness attestations</h2><span class="ph-meta"><span class="chip ok">Verified post-close</span></span></div>
       <div class="panel-body flush"><ul class="attest">
-        <li><span class="ck" aria-hidden="true"></span><div>Price set by sealed-bid auction before any election<small>Clearing ${pct(s.clearingPrice)} = best qualifying bid · within ${pct(d.fairLow)}–${pct(d.fairHigh)} · ${esc(d.fairnessProvider)} opinion on file</small></div></li>
+        <li><span class="ck" aria-hidden="true"></span><div>Lead selected from sealed competitive bids before any election<small>Lead price ${pct(s.clearingPrice)} set by ${esc(S.buyer(s.leadBuyerId).name)} · finalists blind to one another · ${esc(d.fairnessProvider)} fairness opinion on file (supporting)</small></div></li>
+        <li><span class="ck" aria-hidden="true"></span><div>LPAC consented pre-close (gate)<small>Conflict disclosed + fairness reviewed · consent recorded before elections and settlement${s.lpacConsent.recusals.length ? ` · ${s.lpacConsent.recusals.length} recusal(s)` : ""}</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>Buyers bid blind to one another<small>${d.buyers.length} buyers · each saw only its own bid until the book opened</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>Each LP's election stayed private from other LPs<small>${d.lps.length} LPs elected peer-private; advisor saw only "filed" markers</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>GP conflict disclosed<small>GP rolls ${esc(d.gpCommit)} into ${esc(d.vehicleShort)} · disclosed to the LPAC</small></div></li>
@@ -871,7 +918,13 @@ CT.app = (function () {
     const act = el.getAttribute("data-act");
     switch (act) {
       case "openAuction": S.actions.openAuction(); toast("Auction opened to buyers."); break;
-      case "openBook": S.actions.openBook(); toast("Bid book opened — clearing price disclosed."); break;
+      case "selectLead": S.actions.selectLead({ buyerId: el.getAttribute("data-buyer") }); toast("Lead selected — price set for the room."); break;
+      case "openLpacReview": S.actions.openLpacReview(); toast("Package sent to LPAC for consent."); break;
+      case "recordConsent": {
+        const recuse = !!(root.querySelector("#recuse") && root.querySelector("#recuse").checked);
+        S.actions.recordConsent({ recusals: recuse ? ["conflicted-member"] : [] });
+        toast("LPAC consent recorded — elections can open."); break;
+      }
       case "submitBid": {
         const d = S.deal();
         const price = parseFloat(root.querySelector("#bp").value);
@@ -902,6 +955,7 @@ CT.app = (function () {
         S.fireClose(fail); toast(fail ? "Forcing a leg to fail…" : "Settling atomically…", fail ? "fail" : ""); break;
       }
       case "retry": S.actions.retryClose(); toast("Ready to retry the close."); break;
+      case "decline": S.actions.declineToProceed(); toast("Declined to proceed — nothing moved."); location.hash = "#/" + DEAL_HASH() + "/settlement"; break;
       case "download": toast("Confirmation downloaded (simulated)."); break;
       case "doc": toast("Opening " + el.getAttribute("data-doc") + " (simulated)."); break;
     }
