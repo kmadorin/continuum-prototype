@@ -8,7 +8,7 @@ Patton method:
   - Multi-actor steps get one card PER actor, stacked in the column.
   - Every activity has an R1 task -> R1 is a complete, demoable product.
 """
-import json, random, string
+import json, random, string, os
 
 def rid(n=16):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
@@ -30,7 +30,7 @@ P = {
 # ---- layout ----
 W = 230
 PITCH = 262
-COLS = [250 + i * PITCH for i in range(9)]
+COLS = [250 + i * PITCH for i in range(10)]
 RIGHT = COLS[-1] + W
 BAND_W = RIGHT - 20 + 24
 LBLX, LBLW = 24, 214
@@ -132,8 +132,9 @@ rect(LBLX, R3_BAND_Y, LBLW, R3_BAND_H, "#eebefa", "#9c36b5", "RELEASE 3\nNetwork
 
 # ---- backbone activities ----
 backbone = ["1. Set up the deal room", "2. Bring participants in", "3. Price the deal",
-            "4. Decide: roll or sell", "5. Work out who gets what", "6. Approve my part",
-            "7. Close — all at once", "8. Prove it was fair", "9. Do the next deal faster"]
+            "4. LPAC consents (pre-close gate)", "5. Decide: roll or sell",
+            "6. Work out who gets what", "7. Approve my part", "8. Close — all at once",
+            "9. Prove it was fair", "10. Do the next deal faster"]
 for x, t in zip(COLS, backbone):
     rect(x, Y_BB, W, H_BB, "#ced4da", "#343a40", t, 15)
 
@@ -142,18 +143,19 @@ R1 = {
     0: [("ADVISOR", "Create the room; name fund, vehicle, asset & reference NAV")],
     1: [("ADVISOR", "Invite the LPs & buyer to the room"),
         ("BUYER", "Get verified once — reusable eligibility")],
-    2: [("BUYER", "Commit a price (% of NAV) for the exiting interest"),
-        ("ADVISOR", "Fairness opinion validates; price disclosed to the room")],
-    3: [("STAY", "Privately ROLL at the set price — sealed from other LPs"),
-        ("LEAVE", "Privately SELL at the set price — sealed from other LPs")],
-    4: [("SYS", "Size the allocation from the elections at the set price"),
+    2: [("BUYER", "Sealed priced bid to win lead — blind to other finalists"),
+        ("ADVISOR", "Select the lead; lead sets the price; syndicate joins at lead price; fairness opinion on file (supports LPAC)")],
+    3: [("OVERSIGHT", "Review conflict + fairness + terms package; consent (>=10 biz days) — gates elections; recuse if conflicted")],
+    4: [("STAY", "Privately ROLL or STATUS-QUO (unchanged terms) at the set price"),
+        ("LEAVE", "Privately SELL — default if nothing filed; >=30-day window; never forced to roll")],
+    5: [("SYS", "Size the allocation from the elections at the set price"),
         ("ADVISOR", "Review the computed close")],
-    5: [("BUYER", "Approve the cash leg"),
+    6: [("BUYER", "Approve the cash leg"),
         ("STAY", "LP / vehicle approve units & asset legs")],
-    6: [("ADVISOR", "Trigger the close — one click"),
+    7: [("ADVISOR", "Trigger the close — one click"),
         ("SYS", "All legs settle together; each sees only its own")],
-    7: [("OVERSIGHT", "Open the scoped, after-the-fact fairness view")],
-    8: [("BUYER", "Reuse verification → bid in one click (deal #2)")],
+    8: [("OVERSIGHT", "Open the scoped, after-the-fact fairness view")],
+    9: [("BUYER", "Reuse verification → bid in one click (deal #2)")],
 }
 for i, cards in R1.items():
     for j, (actor, task) in enumerate(cards):
@@ -163,12 +165,13 @@ for i, cards in R1.items():
 R2 = {
     0: ("ADVISOR", "Set an election deadline; invite many LPs & buyers"),
     1: ("SYS", "Self-serve logins & per-party dashboards"),
-    2: ("BUYER", "Sealed-bid auction — many buyers bid blind to each other"),
-    3: ("STAY", "Split roll / sell; amend before deadline; default = sell"),
-    4: ("SYS", "Pro-rata + lead backstop if oversubscribed; preview"),
-    5: ("SYS", "Cancel or withdraw a leg before close"),
-    6: ("ADVISOR", "Force a leg to fail → nothing moves (atomicity)"),
-    7: ("OVERSIGHT", "Structured fairness report"),
+    2: ("BUYER", "Sealed-bid auction — finalists blind; advisor selects lead; syndicate at lead price"),
+    3: ("OVERSIGHT", "Conflicted LPAC member recuses; >=10 biz-day review window"),
+    4: ("STAY", "Split roll / status-quo / sell; amend before deadline; default = sell"),
+    5: ("SYS", "Pro-rata + syndicate fills overflow at lead price; preview"),
+    6: ("ADVISOR", "Decline to proceed (broken-deal); or cancel a leg before close"),
+    7: ("ADVISOR", "Force a leg to fail → nothing moves (atomicity)"),
+    8: ("OVERSIGHT", "Structured fairness report"),
 }
 for i, (actor, task) in R2.items():
     card(COLS[i], Y_R2, actor, task)
@@ -177,8 +180,8 @@ for i, (actor, task) in R2.items():
 R3 = {
     0: ("ADVISOR", "Reuse a past deal as a template"),
     1: ("BUYER", "Verified buyer reused across organizers"),
-    7: ("OVERSIGHT", "Cross-organization disclosure"),
-    8: ("SYS", "Bid into many deals; new deal types (tenders, buybacks)"),
+    8: ("OVERSIGHT", "Cross-organization disclosure"),
+    9: ("SYS", "Bid into many deals; new deal types (tenders, buybacks)"),
 }
 for i, (actor, task) in R3.items():
     card(COLS[i], Y_R3, actor, task)
@@ -189,7 +192,7 @@ scene = {
     "appState": {"gridSize": 20, "viewBackgroundColor": "#ffffff"},
     "files": {},
 }
-out = "/Users/kirillmadorin/Projects/hackathons/canton/continuum/docs/specs/continuum-user-story-map.excalidraw"
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "continuum-user-story-map.excalidraw")
 with open(out, "w") as f:
     json.dump(scene, f, indent=2, ensure_ascii=False)
 print(f"wrote {out}  ({len(elements)} elements)")
