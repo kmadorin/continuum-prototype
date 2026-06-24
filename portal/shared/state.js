@@ -413,7 +413,9 @@ CT.state = (function () {
         if (bidsFiled() < bidsExpected() - deal().buyers.filter((b)=>b.seeded&&b.seeded.passed).length) t.push({ title: `Awaiting bids — ${bidsFiled()} of ${bidsExpected()} in`, section: "bids", muted: true });
         t.push({ title: "Open the sealed bid book & set the clearing price", section: "bids", cta: "Open book" });
       }
-      if (s.stage === "leadSelected") t.push({ title: "Open elections to LPs at the clearing price", section: "elections", cta: "Open elections" });
+      if (s.stage === "leadSelected") t.push({ title: "Send the conflict + fairness package to LPAC", section: "consent", cta: "Send to LPAC" });
+      if (s.stage === "lpacConsent" && !s.lpacConsent.granted) t.push({ title: "Awaiting LPAC consent (≥10 business days)", section: "consent", muted: true });
+      if (s.stage === "lpacConsent" && s.lpacConsent.granted) t.push({ title: "Open elections to LPs at the lead price", section: "elections", cta: "Open elections" });
       if (s.stage === "elections") {
         t.push({ title: `Elections — ${electionsFiledCount()} of ${deal().lps.length} filed`, section: "elections", muted: true });
         t.push({ title: "Close elections & compute the allocation", section: "allocation", cta: "Compute allocation" });
@@ -436,6 +438,9 @@ CT.state = (function () {
       if (s.stage === "elections" && !s.elections[e.id]) t.push({ title: "File your election — roll or sell", section: "elections", cta: "File election" });
       if (s.stage === "elections" && s.elections[e.id]) t.push({ title: "Amend your election (open until deadline)", section: "elections", muted: true });
       if (s.stage === "approvals") { const k = approvalKeyFor(role); if (s.approvals && k in s.approvals && !s.approvals[k]) t.push({ title: "Authorize your leg", section: "settlement", cta: "Authorize" }); }
+    }
+    if (role === "oversight") {
+      if (s.stage === "lpacConsent" && !s.lpacConsent.granted) t.push({ title: "Review the conflict + fairness package & record consent", section: "consent", cta: "Review & consent" });
     }
     return t;
   }
@@ -469,7 +474,27 @@ CT.state = (function () {
       log("advisor", `Fairness opinion on file (${deal().fairnessProvider}, ${pct(deal().fairLow)}–${pct(deal().fairHigh)}) — supports LPAC review`);
       commit();
     },
-    openElections() { if (shared.stage === "leadSelected") { shared.stage = "elections"; log("advisor", "Elections opened to LPs at the clearing price"); commit(); } },
+    openLpacReview() {
+      if (shared.stage === "leadSelected") {
+        shared.stage = "lpacConsent";
+        log("advisor", "Conflict + fairness + terms package sent to LPAC · ≥10 business-day review");
+        commit();
+      }
+    },
+    recordConsent(payload) {
+      if (shared.stage !== "lpacConsent") return;
+      shared.lpacConsent = { granted: true, recusals: (payload && payload.recusals) || [], ts: Date.now() };
+      const note = shared.lpacConsent.recusals.length ? ` · ${shared.lpacConsent.recusals.length} member(s) recused` : "";
+      log("LPAC", `LPAC consented to the transaction · conflicts reviewed/waived${note}`);
+      commit();
+    },
+    openElections() {
+      if (shared.stage === "lpacConsent" && shared.lpacConsent.granted) {
+        shared.stage = "elections";
+        log("advisor", "Elections opened to LPs at the lead price");
+        commit();
+      }
+    },
     submitElection(payload) {
       const id = payload.lpId; const me = lp(id);
       const choice = payload.choice; // roll | sell | split
