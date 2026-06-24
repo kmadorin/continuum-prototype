@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Generate continuum-user-story-map.excalidraw (Excalidraw schema v2).
 
-NOTE (2026-06-24): the committed continuum-user-story-map.excalidraw is now
-authored/maintained via the excalidraw MCP (native bound labels that wrap
-cleanly in the MCP canvas). This script is kept as the layout reference /
-fallback; re-running it OVERWRITES the MCP-authored file with a generated one.
-Prefer editing the map through the excalidraw MCP.
+NOTE (2026-06-24): THIS SCRIPT is the canonical source for the .excalidraw —
+it emits proper bound-text elements (containerId), which render and wrap
+correctly in real Excalidraw / excalidraw.com. Do NOT export the map from the
+excalidraw MCP `export_scene` / `export_to_excalidraw_url`: that path drops the
+bound labels (the MCP keeps card text in an internal `label` field it does not
+serialize), producing boxes with no text. Edit content here and re-run.
 
 Patton method:
   - Backbone = activities, left->right = sequence (the deal, step by step).
