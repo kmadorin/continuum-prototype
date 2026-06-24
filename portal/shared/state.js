@@ -453,18 +453,20 @@ CT.state = (function () {
       log(buyer(id).name, "Sealed bid filed");
       commit();
     },
-    openBook() {
+    selectLead(payload) {
       if (shared.stage !== "bidding" && shared.stage !== "setup") return;
       const ranked = clearingCandidate();
       if (!ranked.length) return;
+      const id = payload && payload.buyerId;
+      const lead = ranked.find((r) => r.id === id) || ranked[0];
       shared.bidsOpen = true;
-      shared.leadBuyerId = ranked[0].id;
-      shared.clearingPrice = ranked[0].price;
+      shared.leadBuyerId = lead.id;
+      shared.clearingPrice = lead.price;
       recomputeSyndicate(); // provisional, on current demand; finalized at allocation
       shared.stage = "leadSelected";
-      log("advisor", `Bid book opened · clearing price ${pct(shared.clearingPrice)} · lead ${buyer(shared.leadBuyerId).name}`);
-      if (shared.syndicateIds.length) log("advisor", `Syndicate engaged at clearing price: ${shared.syndicateIds.map((i) => buyer(i).name).join(", ")}`);
-      log("advisor", `Fairness opinion validates ${pct(shared.clearingPrice)} within ${pct(deal().fairLow)}–${pct(deal().fairHigh)}`);
+      log("advisor", `Advisor selected lead — ${buyer(shared.leadBuyerId).name} · price ${pct(shared.clearingPrice)} · finalists were blind to one another`);
+      if (shared.syndicateIds.length) log("advisor", `Syndicate admitted at the lead price: ${shared.syndicateIds.map((i) => buyer(i).name).join(", ")}`);
+      log("advisor", `Fairness opinion on file (${deal().fairnessProvider}, ${pct(deal().fairLow)}–${pct(deal().fairHigh)}) — supports LPAC review`);
       commit();
     },
     openElections() { if (shared.stage === "leadSelected") { shared.stage = "elections"; log("advisor", "Elections opened to LPs at the clearing price"); commit(); } },
