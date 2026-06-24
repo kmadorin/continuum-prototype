@@ -263,7 +263,7 @@ CT.state = (function () {
     unitsIssued, assetNavIn, buyerFundedNav, electionFor, electionsFiledCount, oversubscribed: () => sellDemand() > buyerCapacity() + 1e-6,
   };
 
-  // syndicate = next-best bidders (after lead, in rank order) pulled in AT the
+  // syndicate = next-best bidders (after lead, in rank order) that FILL overflow AT the
   // clearing price until lead+syndicate capacity covers sell demand. Recomputed
   // when demand changes (provisional at clearing, final at allocation).
   function recomputeSyndicate() {
@@ -530,6 +530,12 @@ CT.state = (function () {
       commit();
     },
     cancelApproval(payload) { const key = payload.key; if (key in shared.approvals) { shared.approvals[key] = false; log("advisor", "A leg authorization was withdrawn"); commit(); } },
+    declineToProceed() {
+      if (!["leadSelected", "lpacConsent", "elections", "allocation", "approvals"].includes(shared.stage)) return;
+      shared.stage = "declined"; shared.declined = true;
+      log("advisor", "Advisor declined to proceed (broken-deal) — pricing/terms unacceptable · nothing moved");
+      commit();
+    },
     grantOversight() { shared.oversightGranted = true; commit(); },
     retryClose() { shared.stage = "approvals"; shared.failedAttempt = false; shared.closingFail = false; commit(); },
     startNextDeal() {
