@@ -368,6 +368,7 @@ CT.app = (function () {
     return panel("Your position · " + esc(l.name), body, null, esc(l.type));
   }
   function electionSummary(e) {
+    if (e.choice === "status-quo") return `Status-quo <span class="figure">${fmtM(e.rollNav)}</span> NAV <span class="mute mono" style="font-size:12px">(unchanged terms)</span>`;
     if (e.choice === "roll") return `Roll <span class="figure">${fmtM(e.rollNav)}</span> NAV`;
     if (e.choice === "sell") return `Sell <span class="figure">${fmtM(e.sellNav)}</span> NAV${e.byDefault ? ` <span class="mute mono" style="font-size:12px">(default)</span>` : ""}`;
     return `Split · roll <span class="figure">${fmtM(e.rollNav)}</span> / sell <span class="figure">${fmtM(e.sellNav)}</span>`;
@@ -601,7 +602,8 @@ CT.app = (function () {
     }).join("");
     const filed = C.electionsFiledCount();
     let foot = "";
-    if (s.stage === "cleared") foot = `<div class="panel-foot"><button class="btn" data-act="openElections">Open elections to LPs</button><span class="hint">LPs elect roll or sell at the ${pct(s.clearingPrice)} clearing price.</span></div>`;
+    if (s.stage === "leadSelected" || (s.stage === "lpacConsent" && !s.lpacConsent.granted)) foot = `<div class="panel-note">Elections open after LPAC consents (pre-close gate).</div>`;
+    else if (s.stage === "lpacConsent" && s.lpacConsent.granted) foot = `<div class="panel-foot"><button class="btn" data-act="openElections">Open elections to LPs</button><span class="hint">LPs elect roll / status-quo / sell at the ${pct(s.clearingPrice)} lead price · ≥30-day window.</span></div>`;
     else if (s.stage === "elections") foot = `<div class="panel-foot"><button class="btn" data-act="compute">Close elections & compute allocation</button><span class="hint">${filed} of ${d.lps.length} filed · unfiled LPs default to sell.</span></div>`;
     else foot = `<div class="panel-note">Elections closed · ${filed} of ${d.lps.length} filed.</div>`;
     return `<div class="section-stack">
@@ -616,7 +618,7 @@ CT.app = (function () {
 
   function lpElections(id) {
     const s = S.get(), l = S.lp(id), d = S.deal(), e = s.elections[id];
-    if (s.stage === "setup" || s.stage === "bidding" || s.stage === "cleared") {
+    if (s.stage === "setup" || s.stage === "bidding" || s.stage === "leadSelected" || s.stage === "lpacConsent") {
       return `<div class="section-stack">${panel("Elections", `<p class="hint" style="margin:0">Elections open once the auction clears and the advisor releases the clearing price. ${s.clearingPrice ? `Clearing price ${pct(s.clearingPrice)} — opening shortly.` : "Auction still in progress."}</p>`)}${lpPeerElections(id)}</div>`;
     }
     const draftRoll = e ? e.rollNav : l.nav;
@@ -624,8 +626,9 @@ CT.app = (function () {
     const open = s.stage === "elections";
     const form = open ? `<div class="panel"><div class="panel-head"><h2>${e ? "Amend your election" : "File your election"}</h2><span class="ph-meta">at ${pct(s.clearingPrice)} clearing price</span></div>
       <div class="panel-body">
-        <div class="choice-row" id="elchoice" style="margin-bottom:16px">
-          <button class="choice" type="button" data-choice="roll" aria-pressed="${choice === "roll"}"><span class="ct">Roll over</span><span class="cd">Keep ${fmtM(l.nav)} NAV in ${esc(d.vehicleShort)}</span></button>
+        <div class="choice-row" id="elchoice" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+          <button class="choice" type="button" data-choice="roll" aria-pressed="${choice === "roll"}"><span class="ct">Roll over</span><span class="cd">Keep ${fmtM(l.nav)} NAV in ${esc(d.vehicleShort)} · new terms</span></button>
+          <button class="choice" type="button" data-choice="status-quo" aria-pressed="${choice === "status-quo"}"><span class="ct">Status-quo</span><span class="cd">Stay invested on unchanged terms — no carry crystallization</span></button>
           <button class="choice" type="button" data-choice="sell" aria-pressed="${choice === "sell"}"><span class="ct">Sell</span><span class="cd">Cash out ${fmtM(l.nav)} at ${pct(s.clearingPrice)}</span></button>
         </div>
         <div class="choice-row" style="grid-template-columns:1fr;margin-bottom:16px">
@@ -636,7 +639,7 @@ CT.app = (function () {
           <div class="input-group"><span class="prefix">$</span><input class="input" id="rollamt" type="number" step="0.1" min="0" max="${l.nav}" value="${draftRoll.toFixed(1)}"><span class="suffix">M of ${fmtM(l.nav)}</span></div>
         </div>
       </div>
-      <div class="panel-foot"><button class="btn" data-act="submitElection">${e ? "Amend election" : "File election"}</button><span class="hint">Private from other LPs. Amend until ${esc(d.electionDeadline)}. No choice by then defaults to sell.</span></div></div>` : "";
+      <div class="panel-foot"><button class="btn" data-act="submitElection">${e ? "Amend election" : "File election"}</button><span class="hint">Private from other LPs. Election window ≥30 calendar days — amend until ${esc(d.electionDeadline)}. No choice defaults to sell; you are never forced to roll.</span></div></div>` : "";
     const filed = e ? panel("Your filed election", `<dl class="kv"><dt>Choice</dt><dd>${electionSummary(e)}</dd><dt>At clearing price</dt><dd><span class="figure">${pct(s.clearingPrice)}</span> of NAV</dd>${e.sellNav > 0 ? `<dt>Cash you'll receive</dt><dd><span class="figure">${fmtM(+(e.sellNav * s.clearingPrice).toFixed(3))}</span> USDC</dd>` : ""}${e.rollNav > 0 ? `<dt>Units you'll hold</dt><dd><span class="figure">${fmtUnits(e.rollNav / d.navPerUnit)}</span> in ${esc(d.vehicleShort)}</dd>` : ""}</dl>`, null, `<span class="chip ok">Filed</span>`) : "";
     return `<div class="section-stack">${form}${e && open ? filed : (e ? filed : "")}${lpPeerElections(id)}</div>`;
   }
