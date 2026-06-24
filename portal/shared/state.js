@@ -35,6 +35,7 @@ CT.state = (function () {
       navAsOf: "31 Mar 2026", fundNav: 52.0, navPerUnit: 1.0,
       fairLow: 0.92, fairHigh: 0.99, fairnessProvider: "Houlihan Lokey",
       gpCommit: "2.0% of CV", bidDeadline: "05 Jul 2026", electionDeadline: "12 Jul 2026",
+      leadTerms: { mgmtFee: "1.5%", carry: "10% over 8% pref" },
       lps: [
         { id: "lp1", name: "Hawthorn Pension",          type: "Public pension · QP",      committed: 15.0, nav: 9.4, persona: "staying" },
         { id: "lp2", name: "Calder Family Office",       type: "Single-family office · QP", committed: 8.0,  nav: 5.0, persona: "leaving" },
@@ -75,6 +76,7 @@ CT.state = (function () {
       navAsOf: "31 Mar 2026", fundNav: 38.0, navPerUnit: 1.0,
       fairLow: 0.93, fairHigh: 0.99, fairnessProvider: "Lazard",
       gpCommit: "2.5% of CV", bidDeadline: "07 Aug 2026", electionDeadline: "14 Aug 2026",
+      leadTerms: { mgmtFee: "1.25%", carry: "12.5% over 8% pref" },
       lps: [
         { id: "lp1", name: "Irongate Endowment",      type: "Endowment · QP",      committed: 12.0, nav: 7.2, persona: "staying" },
         { id: "lp2", name: "Sefton Trust",            type: "Private trust · QP",  committed: 5.0,  nav: 3.0, persona: "leaving" },
@@ -118,29 +120,31 @@ CT.state = (function () {
   const ROLE_ORDER = ["advisor", "staying", "leaving", "buyer", "oversight"];
 
   // stage machine + progress meter
-  const STAGES = ["setup", "bidding", "cleared", "elections", "allocation", "approvals", "settlement", "settled"];
+  const STAGES = ["setup", "bidding", "leadSelected", "lpacConsent", "elections", "allocation", "approvals", "settlement", "settled"];
   const STAGE_META = {
-    setup:      { label: "Setup",       pill: "Setup" },
-    bidding:    { label: "Auction open",pill: "Bidding" },
-    cleared:    { label: "Price cleared",pill: "Cleared" },
-    elections:  { label: "Elections open", pill: "Elections" },
-    allocation: { label: "Allocation",  pill: "Allocation" },
-    approvals:  { label: "Approvals",   pill: "Approvals" },
-    settlement: { label: "Settling",    pill: "Settling" },
-    settled:    { label: "Settled",     pill: "Settled" },
+    setup:        { label: "Setup",          pill: "Setup" },
+    bidding:      { label: "Auction open",   pill: "Bidding" },
+    leadSelected: { label: "Lead selected",  pill: "Lead set" },
+    lpacConsent:  { label: "LPAC review",    pill: "Consent" },
+    elections:    { label: "Elections open", pill: "Elections" },
+    allocation:   { label: "Allocation",     pill: "Allocation" },
+    approvals:    { label: "Approvals",      pill: "Approvals" },
+    settlement:   { label: "Settling",       pill: "Settling" },
+    settled:      { label: "Settled",        pill: "Settled" },
+    declined:     { label: "Declined to proceed", pill: "Declined" },
   };
-  const SECTIONS = ["overview", "participants", "bids", "elections", "allocation", "settlement", "documents", "audit"];
+  const SECTIONS = ["overview", "participants", "bids", "consent", "elections", "allocation", "settlement", "documents", "audit"];
   const SECTION_LABEL = {
     overview: "Overview", participants: "Participants", bids: "Bids / Pricing",
-    elections: "Elections", allocation: "Allocation", settlement: "Settlement",
-    documents: "Documents", audit: "Audit",
+    consent: "LPAC consent", elections: "Elections", allocation: "Allocation",
+    settlement: "Settlement", documents: "Documents", audit: "Audit",
   };
 
   const CLOSE_MS = { step: 120, get settleAt() { return 0; } };
 
   // ============================================================ state core
   const numOr = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
-  function validState(s) { return s && typeof s === "object" && DEALS[s.dealNo] && typeof s.stage === "string" && s.v === 5; }
+  function validState(s) { return s && typeof s === "object" && DEALS[s.dealNo] && typeof s.stage === "string" && s.v === 6; }
 
   function freshState(dealNo) {
     const d = DEALS[dealNo];
@@ -152,12 +156,14 @@ CT.state = (function () {
     const buyerVerified = {};
     d.buyers.forEach((b) => { buyerVerified[b.id] = dealNo > 1 && b.id === LEAD_PERSONA_BUYER ? true : b.id !== LEAD_PERSONA_BUYER; });
     return {
-      v: 5, dealNo, stage: "setup",
+      v: 6, dealNo, stage: "setup",
       bids, bidsOpen: false,
-      clearingPrice: null, leadBuyerId: null, syndicateIds: [], fairnessValidated: false,
+      clearingPrice: null, leadBuyerId: null, syndicateIds: [],
       elections, electionsClosed: false,
+      lpacConsent: { granted: false, recusals: [], ts: null },
       allocation: null, approvals: {},
       closed: false, closedAt: null, failedAttempt: false, closingFail: false,
+      declined: false,
       oversightGranted: false, buyerVerified,
       audit: [
         ev(-6, "advisor", `Closing room opened for ${d.vehicleShort}`),
@@ -407,7 +413,7 @@ CT.state = (function () {
         if (bidsFiled() < bidsExpected() - deal().buyers.filter((b)=>b.seeded&&b.seeded.passed).length) t.push({ title: `Awaiting bids — ${bidsFiled()} of ${bidsExpected()} in`, section: "bids", muted: true });
         t.push({ title: "Open the sealed bid book & set the clearing price", section: "bids", cta: "Open book" });
       }
-      if (s.stage === "cleared") t.push({ title: "Open elections to LPs at the clearing price", section: "elections", cta: "Open elections" });
+      if (s.stage === "leadSelected") t.push({ title: "Open elections to LPs at the clearing price", section: "elections", cta: "Open elections" });
       if (s.stage === "elections") {
         t.push({ title: `Elections — ${electionsFiledCount()} of ${deal().lps.length} filed`, section: "elections", muted: true });
         t.push({ title: "Close elections & compute the allocation", section: "allocation", cta: "Compute allocation" });
@@ -454,15 +460,14 @@ CT.state = (function () {
       shared.bidsOpen = true;
       shared.leadBuyerId = ranked[0].id;
       shared.clearingPrice = ranked[0].price;
-      shared.fairnessValidated = true;
       recomputeSyndicate(); // provisional, on current demand; finalized at allocation
-      shared.stage = "cleared";
+      shared.stage = "leadSelected";
       log("advisor", `Bid book opened · clearing price ${pct(shared.clearingPrice)} · lead ${buyer(shared.leadBuyerId).name}`);
       if (shared.syndicateIds.length) log("advisor", `Syndicate engaged at clearing price: ${shared.syndicateIds.map((i) => buyer(i).name).join(", ")}`);
       log("advisor", `Fairness opinion validates ${pct(shared.clearingPrice)} within ${pct(deal().fairLow)}–${pct(deal().fairHigh)}`);
       commit();
     },
-    openElections() { if (shared.stage === "cleared") { shared.stage = "elections"; log("advisor", "Elections opened to LPs at the clearing price"); commit(); } },
+    openElections() { if (shared.stage === "leadSelected") { shared.stage = "elections"; log("advisor", "Elections opened to LPs at the clearing price"); commit(); } },
     submitElection(payload) {
       const id = payload.lpId; const me = lp(id);
       const choice = payload.choice; // roll | sell | split
