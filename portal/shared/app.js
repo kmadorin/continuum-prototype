@@ -35,7 +35,7 @@ CT.app = (function () {
   function sectionsFor(role) {
     if (role === "advisor") return M.SECTIONS.slice();
     if (role === "buyer") return ["overview", "participants", "bids", "allocation", "settlement", "documents", "audit"];
-    if (role === "oversight") return ["overview", "participants", "allocation", "settlement", "documents", "audit"];
+    if (role === "oversight") return ["overview", "participants", "consent", "allocation", "settlement", "documents", "audit"];
     return ["overview", "participants", "elections", "allocation", "settlement", "documents", "audit"]; // LP
   }
   const isLP = (role) => P[role].entity.kind === "lp";
@@ -46,7 +46,9 @@ CT.app = (function () {
   function locked(role, section) {
     if (role !== "oversight") return false;
     if (S.get().closed) return false;
-    return section !== "overview";
+    if (section === "overview") return false;
+    if (section === "consent" && S.get().stage === "lpacConsent") return false;
+    return true;
   }
 
   // ========================================================== chrome
@@ -298,6 +300,7 @@ CT.app = (function () {
       case "overview": return secOverview();
       case "participants": return secParticipants();
       case "bids": return secBids();
+      case "consent": return secConsent();
       case "elections": return secElections();
       case "allocation": return secAllocation();
       case "settlement": return secSettlement();
@@ -551,6 +554,32 @@ CT.app = (function () {
         <div class="panel-body"><div class="sealed-row"><span class="lbl">${S.deal().buyers.length - 1} competing bids</span><span class="bars" style="display:inline-block;width:120px;height:12px;background:repeating-linear-gradient(135deg,var(--border-hi),var(--border-hi) 3px,transparent 3px,transparent 6px)"></span><span class="seal-note">•••• sealed</span></div>
         <span class="cant-see" style="margin-top:10px;display:block">You can't see other buyers' bids — and they can't see yours.</span></div></div>
     </div>`;
+  }
+
+  // ========================================================== LPAC CONSENT
+  function secConsent() {
+    const s = S.get(), d = S.deal();
+    const pkg = `<dl class="kv">
+      <dt>Lead buyer</dt><dd>${s.leadBuyerId ? esc(S.buyer(s.leadBuyerId).name) + " · price " + pct(s.clearingPrice) : `<span class="cell-sealed">lead not selected</span>`}</dd>
+      <dt>Lead terms</dt><dd>${esc(d.leadTerms.mgmtFee)} mgmt · ${esc(d.leadTerms.carry)} carry · GP commit ${esc(d.gpCommit)}</dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} · range ${pct(d.fairLow)}–${pct(d.fairHigh)} <span class="mute mono" style="font-size:12px">· supporting document, not a price validator</span></dd>
+      <dt>Conflict disclosure</dt><dd>GP sits on both sides — rolls ${esc(d.gpCommit)} into ${esc(d.vehicleShort)}</dd>
+    </dl>`;
+    const granted = s.lpacConsent.granted;
+    if (ROLE === "oversight") {
+      if (granted) return `<div class="section-stack">${panel("LPAC consent", pkg, null, `<span class="chip ok">Consented</span>`)}</div>`;
+      const foot = s.stage === "lpacConsent"
+        ? `<div class="panel-foot"><label class="fail-toggle"><input type="checkbox" id="recuse"> A member is conflicted — recuse</label><button class="btn" data-act="recordConsent">Record LPAC consent</button><span class="hint">≥10 business-day review. Consent gates LP elections; settlement cannot run without it.</span></div>`
+        : `<div class="panel-note">The package opens for review once the advisor sends it.</div>`;
+      return `<div class="section-stack"><div class="panel"><div class="panel-head"><h2>Conflict + fairness package</h2><span class="ph-meta">Pre-close gate</span></div><div class="panel-body">${pkg}</div>${foot}</div></div>`;
+    }
+    // advisor view
+    let foot = "";
+    if (s.stage === "leadSelected") foot = `<div class="panel-foot"><button class="btn" data-act="openLpacReview">Send package to LPAC</button><span class="hint">Conflict disclosure + fairness opinion + lead terms · ≥10 business-day review.</span></div>`;
+    else if (s.stage === "lpacConsent" && !granted) foot = `<div class="panel-note">Awaiting LPAC consent — elections cannot open until consent is recorded.</div>`;
+    else if (granted) foot = `<div class="panel-note"><span class="chip ok">Consented</span> LPAC has consented${s.lpacConsent.recusals.length ? ` · ${s.lpacConsent.recusals.length} recusal(s)` : ""}. You can open elections.</div>`;
+    else foot = `<div class="panel-note">The LPAC gate runs after a lead is selected.</div>`;
+    return `<div class="section-stack"><div class="panel"><div class="panel-head"><h2>LPAC consent · pre-close gate</h2></div><div class="panel-body">${pkg}</div>${foot}</div></div>`;
   }
 
   // ========================================================== ELECTIONS
@@ -877,6 +906,12 @@ CT.app = (function () {
     switch (act) {
       case "openAuction": S.actions.openAuction(); toast("Auction opened to buyers."); break;
       case "selectLead": S.actions.selectLead({ buyerId: el.getAttribute("data-buyer") }); toast("Lead selected — price set for the room."); break;
+      case "openLpacReview": S.actions.openLpacReview(); toast("Package sent to LPAC for consent."); break;
+      case "recordConsent": {
+        const recuse = !!(root.querySelector("#recuse") && root.querySelector("#recuse").checked);
+        S.actions.recordConsent({ recusals: recuse ? ["conflicted-member"] : [] });
+        toast("LPAC consent recorded — elections can open."); break;
+      }
       case "submitBid": {
         const d = S.deal();
         const price = parseFloat(root.querySelector("#bp").value);
