@@ -34,6 +34,11 @@ assert(S.get().stage === "elections", "elections open after LPAC consent");
 // hero LPs file: staying splits roll 8.0 / sell 1.4 ; leaving sells all 5.0
 S.actions.submitElection({ lpId: "lp1", choice: "split", rollNav: 8.0 });
 S.actions.submitElection({ lpId: "lp2", choice: "sell" });
+// status-quo on a background LP (lp7 seeded roll 6.5) — same NAV math, terms flag set
+S.actions.submitElection({ lpId: "lp7", choice: "status-quo" });
+assert(S.get().elections.lp7.choice === "status-quo", "lp7 elects status-quo");
+assert(S.get().elections.lp7.terms === "existing", "status-quo carries existing-terms flag");
+assert(Math.abs(S.get().elections.lp7.rollNav - 6.5) === 0, "status-quo rollNav = full NAV 6.5");
 assert(Math.abs(C.sellDemand() - 20.4) < 1e-6, "sell demand 20.4 after hero elections");
 assert(Math.abs(C.rollDemand() - 31.6) < 1e-6, "roll demand 31.6");
 assert(Math.abs(C.sellDemand() + C.rollDemand() - 52.0) < 1e-6, "sell+roll = fund NAV 52.0");
