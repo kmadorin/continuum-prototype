@@ -328,7 +328,7 @@ CT.app = (function () {
       ${position}
       <div class="metrics">
         <div class="mc"><span class="m-lab">Reference NAV</span><span class="m-val accent">${fmtM(d.fundNav)}</span><span class="m-note">${d.lps.length} LPs @ $${d.navPerUnit.toFixed(2)}/unit</span></div>
-        <div class="mc"><span class="m-lab">Clearing price</span><span class="m-val ${s.clearingPrice ? "accent" : ""}">${s.clearingPrice ? pct(s.clearingPrice) : "—"}</span><span class="m-note">${s.clearingPrice ? "fairness-validated" : "auction in progress"}</span></div>
+        <div class="mc"><span class="m-lab">Lead price</span><span class="m-val ${s.clearingPrice ? "accent" : ""}">${s.clearingPrice ? pct(s.clearingPrice) : "—"}</span><span class="m-note">${s.clearingPrice ? "advisor-selected lead" : "auction in progress"}</span></div>
         <div class="mc"><span class="m-lab">Fairness range</span><span class="m-val">${pct(d.fairLow)}–${pct(d.fairHigh)}</span><span class="m-note">${esc(d.fairnessProvider)}</span></div>
         <div class="mc"><span class="m-lab">Deadlines</span><span class="m-val" style="font-size:14px">${esc(d.bidDeadline)}</span><span class="m-note">elect by ${esc(d.electionDeadline)}</span></div>
       </div>
@@ -343,7 +343,7 @@ CT.app = (function () {
       <dt>Asset</dt><dd>${esc(d.asset)}</dd>
       <dt>Reference NAV</dt><dd><span class="figure">${fmtM(d.fundNav)}</span> as of ${esc(d.navAsOf)}</dd>
       <dt>Clearing price</dt><dd>${s.clearingPrice ? `<span class="figure">${pct(s.clearingPrice)}</span> of NAV · lead ${esc(S.buyer(s.leadBuyerId).name)}` : `<span class="cell-sealed">set by sealed-bid auction</span>`}</dd>
-      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· validates ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
+      <dt>Fairness opinion</dt><dd>${esc(d.fairnessProvider)} <span class="mute mono" style="font-size:12px">· on file · supports the LPAC decision · range ${pct(d.fairLow)}–${pct(d.fairHigh)}</span></dd>
       <dt>GP commitment</dt><dd>${esc(d.gpCommit)} <span class="mute mono" style="font-size:12px">· conflict disclosed to LPAC</span></dd>
       <dt>Election deadline</dt><dd>${esc(d.electionDeadline)}</dd>
     </dl>`;
@@ -668,7 +668,7 @@ CT.app = (function () {
     if (ROLE === "advisor") stack.push(allocationSummary());
     stack.push(legsTable(showAll ? S.legs() : myLegs, showAll));
     if (showAll) stack.push(tieOutCallout());
-    if (ROLE === "advisor" && s.stage === "allocation") stack.push(`<div class="panel"><div class="panel-foot"><button class="btn" data-act="sendForApproval">Send for per-leg approval</button><span class="hint">Each party then authorizes only its own leg before the atomic close.</span></div></div>`);
+    if (ROLE === "advisor" && s.stage === "allocation") stack.push(`<div class="panel"><div class="panel-foot"><button class="btn" data-act="sendForApproval">Send for per-leg approval</button><button class="btn ghost" data-act="decline">Decline to proceed</button><span class="hint">Each party then authorizes only its own leg before the atomic close — or decline if pricing/terms are unacceptable.</span></div></div>`);
     return `<div class="section-stack">${stack.join("")}</div>`;
   }
 
@@ -683,7 +683,7 @@ CT.app = (function () {
     ];
     const backstop = over
       ? `<div class="panel-note" style="color:var(--warn)">Sell demand exceeds buyer capacity — each seller filled <b>pro-rata</b> at ${pct(C.fillRatio())} of their order; the remainder rolls forward.</div>`
-      : (s.syndicateIds.length ? `<div class="panel-note">Sell demand above the lead's ${fmtM(C.leadCapacity())} is backstopped by the syndicate (${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}) at the clearing price.</div>` : "");
+      : (s.syndicateIds.length ? `<div class="panel-note">Sell demand above the lead's ${fmtM(C.leadCapacity())} is filled by the syndicate (${s.syndicateIds.map((i) => esc(S.buyer(i).name)).join(", ")}) at the lead price — the lead sets the price, not the allocation.</div>` : "");
     return `<div class="panel"><div class="panel-head"><h2>Allocation · sized at ${pct(s.clearingPrice)}</h2></div>
       <div class="metrics" style="border:0">${cells.map((c) => `<div class="mc"><span class="m-lab">${c[0]}</span><span class="m-val ${c[3]}">${c[1]}</span><span class="m-note">${c[2]}</span></div>`).join("")}</div>
       ${backstop}</div>`;
@@ -710,10 +710,18 @@ CT.app = (function () {
   // ========================================================== SETTLEMENT
   function secSettlement() {
     const s = S.get();
+    if (s.stage === "declined") return declinedView();
     if (s.closed || (s.stage === "settled" && s.failedAttempt)) return settlementResult();
     if (s.stage === "settlement") return settlingView();
     if (s.stage !== "approvals") return panel("Settlement", `<p class="hint" style="margin:0">Settlement opens after the allocation is sent for approval.</p>`);
     return approvalsView();
+  }
+
+  function declinedView() {
+    return `<div class="section-stack">
+      <div class="panel"><div class="panel-head" style="background:var(--fail-soft)"><h2 style="color:var(--fail)">Declined to proceed</h2></div>
+        <div class="panel-body"><p style="margin:0">The advisor declined to proceed (broken-deal) — the price or terms were unacceptable. <b>Nothing moved</b>: no cash, no units, no asset. A real GP can walk away rather than transact at an unfair price (dual-track outcome).</p></div></div>
+      ${activityPanel(50)}</div>`;
   }
 
   function approvalsView() {
@@ -733,6 +741,7 @@ CT.app = (function () {
       foot = `<div class="panel-foot">
         <button class="btn big" data-act="settle" ${S.allApproved() ? "" : "disabled"}>Settle atomically</button>
         <label class="fail-toggle"><input type="checkbox" id="failtoggle"> Force a leg to fail (test rollback)</label>
+        <button class="btn ghost" data-act="decline">Decline to proceed</button>
         <span class="hint">${S.allApproved() ? "All legs authorized — one action moves everything, or nothing." : `${pending} approval(s) outstanding.`}</span></div>`;
     }
     return `<div class="section-stack">
@@ -838,7 +847,8 @@ CT.app = (function () {
     const s = S.get(), d = S.deal();
     return `<div class="panel"><div class="panel-head"><h2>Fairness attestations</h2><span class="ph-meta"><span class="chip ok">Verified post-close</span></span></div>
       <div class="panel-body flush"><ul class="attest">
-        <li><span class="ck" aria-hidden="true"></span><div>Price set by sealed-bid auction before any election<small>Clearing ${pct(s.clearingPrice)} = best qualifying bid · within ${pct(d.fairLow)}–${pct(d.fairHigh)} · ${esc(d.fairnessProvider)} opinion on file</small></div></li>
+        <li><span class="ck" aria-hidden="true"></span><div>Lead selected from sealed competitive bids before any election<small>Lead price ${pct(s.clearingPrice)} set by ${esc(S.buyer(s.leadBuyerId).name)} · finalists blind to one another · ${esc(d.fairnessProvider)} fairness opinion on file (supporting)</small></div></li>
+        <li><span class="ck" aria-hidden="true"></span><div>LPAC consented pre-close (gate)<small>Conflict disclosed + fairness reviewed · consent recorded before elections and settlement${s.lpacConsent.recusals.length ? ` · ${s.lpacConsent.recusals.length} recusal(s)` : ""}</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>Buyers bid blind to one another<small>${d.buyers.length} buyers · each saw only its own bid until the book opened</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>Each LP's election stayed private from other LPs<small>${d.lps.length} LPs elected peer-private; advisor saw only "filed" markers</small></div></li>
         <li><span class="ck" aria-hidden="true"></span><div>GP conflict disclosed<small>GP rolls ${esc(d.gpCommit)} into ${esc(d.vehicleShort)} · disclosed to the LPAC</small></div></li>
@@ -945,6 +955,7 @@ CT.app = (function () {
         S.fireClose(fail); toast(fail ? "Forcing a leg to fail…" : "Settling atomically…", fail ? "fail" : ""); break;
       }
       case "retry": S.actions.retryClose(); toast("Ready to retry the close."); break;
+      case "decline": S.actions.declineToProceed(); toast("Declined to proceed — nothing moved."); location.hash = "#/" + DEAL_HASH() + "/settlement"; break;
       case "download": toast("Confirmation downloaded (simulated)."); break;
       case "doc": toast("Opening " + el.getAttribute("data-doc") + " (simulated)."); break;
     }
