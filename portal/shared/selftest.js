@@ -11,6 +11,14 @@ const S = window.CT.state, C = S.calc, F = S.fmt;
 function assert(c, m) { if (!c) { console.error("FAIL:", m); process.exitCode = 1; } else console.log("ok  ", m); }
 
 S.actions.reset();
+// --- decline-to-proceed path (self-contained) ---
+S.actions.openAuction();
+S.actions.submitBid({ buyerId: "b1", price: 0.96, capacity: 16.0 });
+S.actions.selectLead({ buyerId: "b1" });
+S.actions.declineToProceed();
+assert(S.get().stage === "declined", "advisor can decline to proceed (broken-deal)");
+S.actions.reset();
+// --- main happy path below ---
 assert(S.get().stage === "setup", "starts at setup");
 S.actions.openAuction();
 assert(S.get().stage === "bidding", "opens auction");
