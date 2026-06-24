@@ -18,7 +18,7 @@ assert(S.get().stage === "bidding", "opens auction");
 S.actions.submitBid({ buyerId: "b1", price: 0.96, capacity: 16.0 });
 assert(C.bidsFiled() === 3, "3 bids filed (b1,b2,b3; b4 passed)");
 S.actions.openBook();
-assert(S.get().stage === "cleared", "book opened -> cleared");
+assert(S.get().stage === "leadSelected", "book opened -> leadSelected");
 assert(S.get().clearingPrice === 0.96, "clearing price 0.96 (b1 highest)");
 assert(S.get().leadBuyerId === "b1", "lead = b1 Northbeam");
 console.log("   sellDemand(pre-hero)", C.sellDemand(), "buyerCap", C.buyerCapacity(), "syndicate", S.get().syndicateIds);
