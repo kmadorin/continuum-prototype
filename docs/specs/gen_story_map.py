@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Generate continuum-user-story-map.excalidraw (Excalidraw schema v2).
 
+NOTE (2026-06-24): the committed continuum-user-story-map.excalidraw is now
+authored/maintained via the excalidraw MCP (native bound labels that wrap
+cleanly in the MCP canvas). This script is kept as the layout reference /
+fallback; re-running it OVERWRITES the MCP-authored file with a generated one.
+Prefer editing the map through the excalidraw MCP.
+
 Patton method:
   - Backbone = activities, left->right = sequence (the deal, step by step).
   - Release = horizontal band (vertical position).  R1 walking skeleton on top.
@@ -8,7 +14,12 @@ Patton method:
   - Multi-actor steps get one card PER actor, stacked in the column.
   - Every activity has an R1 task -> R1 is a complete, demoable product.
 """
-import json, random, string, os
+import json, random, string, os, textwrap
+
+def wrap(s, width):
+    # pre-wrap with explicit newlines so text renders multi-line in any
+    # renderer (the excalidraw MCP import drops bound-text auto-wrap).
+    return "\n".join(textwrap.fill(line, width=width) for line in s.split("\n"))
 
 def rid(n=16):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
@@ -99,7 +110,7 @@ def arrow(x, y, w, color="#868e96"):
 
 def card(x, y, actor, task):
     fill, stroke = P[actor]
-    rect(x, y, W, CH, fill, stroke, f"{actor.replace('_',' ')}\n{task}", fontSize=12)
+    rect(x, y, W, CH, fill, stroke, f"{actor.replace('_',' ')}\n{wrap(task, 32)}", fontSize=12)
 
 # ---- band backgrounds ----
 rect(20, 140, BAND_W, 110, "#f1f3f5", "#adb5bd", opacity=40, roundness=False)
@@ -136,7 +147,7 @@ backbone = ["1. Set up the deal room", "2. Bring participants in", "3. Price the
             "6. Work out who gets what", "7. Approve my part", "8. Close — all at once",
             "9. Prove it was fair", "10. Do the next deal faster"]
 for x, t in zip(COLS, backbone):
-    rect(x, Y_BB, W, H_BB, "#ced4da", "#343a40", t, 15)
+    rect(x, Y_BB, W, H_BB, "#ced4da", "#343a40", wrap(t, 24), 15)
 
 # ---- R1 cards (actor, task), stacked per activity ----
 R1 = {
