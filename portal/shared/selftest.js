@@ -17,7 +17,7 @@ assert(S.get().stage === "bidding", "opens auction");
 // hero buyer bids
 S.actions.submitBid({ buyerId: "b1", price: 0.96, capacity: 16.0 });
 assert(C.bidsFiled() === 3, "3 bids filed (b1,b2,b3; b4 passed)");
-S.actions.openBook();
+S.actions.selectLead({ buyerId: "b1" });
 assert(S.get().stage === "leadSelected", "book opened -> leadSelected");
 assert(S.get().clearingPrice === 0.96, "clearing price 0.96 (b1 highest)");
 assert(S.get().leadBuyerId === "b1", "lead = b1 Northbeam");
