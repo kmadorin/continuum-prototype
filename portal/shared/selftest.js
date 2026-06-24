@@ -23,7 +23,14 @@ assert(S.get().clearingPrice === 0.96, "clearing price 0.96 (b1 highest)");
 assert(S.get().leadBuyerId === "b1", "lead = b1 Northbeam");
 console.log("   sellDemand(pre-hero)", C.sellDemand(), "buyerCap", C.buyerCapacity(), "syndicate", S.get().syndicateIds);
 assert(Math.abs(C.sellDemand() - 14.0) < 1e-6, "background sell demand 14.0 before hero elections");
+S.actions.openLpacReview();
+assert(S.get().stage === "lpacConsent", "lead -> lpacConsent (LPAC gate)");
 S.actions.openElections();
+assert(S.get().stage === "lpacConsent", "elections blocked until LPAC consents");
+S.actions.recordConsent({});
+assert(S.get().lpacConsent.granted === true, "LPAC consent recorded");
+S.actions.openElections();
+assert(S.get().stage === "elections", "elections open after LPAC consent");
 // hero LPs file: staying splits roll 8.0 / sell 1.4 ; leaving sells all 5.0
 S.actions.submitElection({ lpId: "lp1", choice: "split", rollNav: 8.0 });
 S.actions.submitElection({ lpId: "lp2", choice: "sell" });
