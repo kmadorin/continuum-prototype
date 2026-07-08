@@ -58,14 +58,21 @@ assert(S.get().stage === "allocation", "computed -> allocation");
 const legs = S.legs();
 console.log("   legs:", legs.length);
 const cashOut = legs.filter(l=>l.kind==="cash").reduce((s,l)=>s+l.amount,0);
-const unitsToBuyers = legs.filter(l=>l.kind==="units" && l.sub.includes("purchased")).reduce((s,l)=>s+l.amount,0);
-const unitsToLps = legs.filter(l=>l.kind==="units" && l.sub.includes("rolled")).reduce((s,l)=>s+l.amount,0);
+const unitsToBuyers = legs.filter(l=>l.kind==="units" && l.parties.some(p=>p && p.buyer)).reduce((s,l)=>s+l.amount,0);
+const unitsToLps = legs.filter(l=>l.kind==="units" && l.parties.some(p=>p && p.lp)).reduce((s,l)=>s+l.amount,0);
 const asset = legs.find(l=>l.kind==="asset");
-console.log("   cashOut", cashOut.toFixed(3), "buyerUnits", unitsToBuyers.toFixed(2), "rollUnits", unitsToLps.toFixed(2), "asset", asset.amount);
+console.log("   cashOut", cashOut.toFixed(3), "buyerUnits", unitsToBuyers.toFixed(3), "rollUnits", unitsToLps.toFixed(3), "asset", asset.amount);
 assert(Math.abs(cashOut - C.cashTotal()) < 0.01, "cash legs sum = cashTotal "+C.cashTotal());
 assert(Math.abs(C.cashTotal() - 20.4*0.96) < 0.01, "cashTotal = 20.4 * 0.96 = 19.584");
-assert(Math.abs(C.unitsIssued() - C.assetNavIn()) < 1e-6, "units issued = asset NAV in (tie-out)");
-assert(Math.abs(C.unitsIssued() - 52.0) < 1e-6, "units issued 52.0");
+// Roll-at-deal-price economics (Fable-validated): units are minted only against real contribution.
+assert(Math.abs(unitsToLps - 31.6*0.96) < 0.01, "rolling LP units = 31.6 NAV × 0.96 = 30.336 (roll at deal price, not par)");
+assert(Math.abs(unitsToBuyers - 20.4*0.96) < 0.01, "buyer units = 20.4 NAV × 0.96 = 19.584 (units for cash contributed)");
+assert(Math.abs(C.unitsIssued() - C.assetNavIn()) < 1e-6, "units issued = asset booked at cost (tie-out)");
+assert(Math.abs(C.unitsIssued() - 49.92) < 0.01, "total units issued 49.92M @ $1.00/unit");
+assert(Math.abs(C.assetNavIn() - 49.92) < 0.01, "asset booked at cost 52.0 × 0.96 = 49.92");
+// Value conservation: cash-in == cash-out; no unbacked units; exiting haircut == buyer discount.
+assert(Math.abs((unitsToLps + unitsToBuyers) - C.assetNavIn()) < 0.01, "every unit backed by $1 of contribution (roll netted + buyer cash = asset cost)");
+assert(Math.abs((20.4 - C.cashTotal()) - 0.816) < 0.01, "exiting LP haircut = 20.4 − 19.584 = 0.816 = buyer day-one discount");
 S.actions.sendForApproval();
 assert(S.get().stage === "approvals", "sent for approval");
 // approve hero parties

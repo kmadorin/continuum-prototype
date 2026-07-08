@@ -242,10 +242,14 @@ CT.state = (function () {
   function fillRatio() { const s = sellDemand(); return s > 0 ? Math.min(1, buyerCapacity() / s) : 1; }
   function lpFilledSell(id) { const e = electionFor(id); return e ? +(e.sellNav * fillRatio()).toFixed(4) : 0; }
   function cashTotal() { return +(filledSellNav() * (clearingPrice() || 0)).toFixed(3); }
-  function rollUnitsTotal() { return +(rollDemand() / deal().navPerUnit).toFixed(2); }
-  function buyerUnitsTotal() { return +(filledSellNav() / deal().navPerUnit).toFixed(2); }
-  function unitsIssued() { return +(rollUnitsTotal() + buyerUnitsTotal()).toFixed(2); }
-  function assetNavIn() { return +(rollDemand() + filledSellNav()).toFixed(2); }
+  // Rolling LPs roll AT THE DEAL PRICE (not par): units = rolled NAV × clearing / $1.
+  // Buyers likewise get units for the cash they actually contribute (NAV × clearing).
+  // This keeps every unit backed by $1.00 of contribution (cash or netted roll).
+  function rollUnitsTotal() { return +(rollDemand() * (clearingPrice() || 0) / deal().navPerUnit).toFixed(3); }
+  function buyerUnitsTotal() { return +(filledSellNav() * (clearingPrice() || 0) / deal().navPerUnit).toFixed(3); }
+  function unitsIssued() { return +(rollUnitsTotal() + buyerUnitsTotal()).toFixed(3); }
+  // Asset booked at COST = clearing × (roll + sold) NAV. Ties out to units issued at $1/unit.
+  function assetNavIn() { return +((rollDemand() + filledSellNav()) * (clearingPrice() || 0)).toFixed(3); }
 
   // how much of filled sell each buyer funds (lead first, then syndicate pro-rata)
   function buyerFundedNav(id) {
@@ -304,8 +308,9 @@ CT.state = (function () {
       const e = electionFor(l.id);
       const roll = e ? e.rollNav : 0;
       if (roll > 0.0001) {
-        legs.push({ n: ++n, kind: "units", from: d.vehicleShort, to: l.name, amount: +(roll / d.navPerUnit).toFixed(2),
-          label: fmtUnits(roll / d.navPerUnit), sub: `${d.vehicleShort} → ${l.name} · ${fmtM(roll)} NAV rolled`,
+        const units = +(roll * price / d.navPerUnit).toFixed(3);
+        legs.push({ n: ++n, kind: "units", from: d.vehicleShort, to: l.name, amount: units,
+          label: fmtUnits(units), sub: `${d.vehicleShort} → ${l.name} · ${fmtM(roll)} NAV rolled × ${pct(price)}`,
           parties: ["advisor", { lp: l.id }] });
       }
     });
@@ -313,14 +318,16 @@ CT.state = (function () {
     d.buyers.forEach((b) => {
       const funded = buyerFundedNav(b.id);
       if (funded > 0.0001) {
-        legs.push({ n: ++n, kind: "units", from: d.vehicleShort, to: b.name, amount: +(funded / d.navPerUnit).toFixed(2),
-          label: fmtUnits(funded / d.navPerUnit), sub: `${d.vehicleShort} → ${b.name} · ${fmtM(funded)} NAV purchased${b.id === shared.leadBuyerId ? " (lead)" : " (syndicate)"}`,
+        const units = +(funded * price / d.navPerUnit).toFixed(3);
+        legs.push({ n: ++n, kind: "units", from: d.vehicleShort, to: b.name, amount: units,
+          label: fmtUnits(units), sub: `${d.vehicleShort} → ${b.name} · ${fmtM(funded)} NAV × ${pct(price)}${b.id === shared.leadBuyerId ? " (lead)" : " (syndicate)"}`,
           parties: ["advisor", { buyer: b.id }] });
       }
     });
     // asset transfer
+    const refNav = +(rollDemand() + filledSellNav()).toFixed(2);
     legs.push({ n: ++n, kind: "asset", from: d.fund, to: d.vehicleShort, amount: assetNavIn(),
-      label: `${d.assetShort}`, sub: `${d.fund} → ${d.vehicleShort} · ${fmtM(assetNavIn())} NAV`,
+      label: `${d.assetShort}`, sub: `${d.fund} → ${d.vehicleShort} · refNAV ${fmtM(refNav)} × ${pct(price)} = ${fmtM(assetNavIn())} cost`,
       parties: ["advisor"] });
     shared.allocation = { legs, ts: Date.now() };
   }
