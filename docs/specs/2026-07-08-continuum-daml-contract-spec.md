@@ -4,6 +4,8 @@
 > Scope: the on-ledger design that runs on Canton **devnet** and is driven by the per-role portal via the JSON Ledger API v2.
 > Method: architecture by the executor (Opus), domain economics validated by a Fable continuation-fund/tokenization advisor, grounded on the local `cf-docs` Canton docs + ILPA guidance.
 
+> **⚠️ Superseded on 5 points by the reviewed phase-1 design** (`docs/superpowers/specs/2026-07-08-continuum-daml-contracts-design.md`, authoritative for the build): (1) `OldFundInterest` is **LP+GP co-signed** (burn flows via `DealParticipation`, not GP-unilateral); (2) an independent provider-signed **`FairnessOpinion`** gates `Close` (GP does not self-attest); (3) `ContinuationDeal` has a **`Break`/`Broken`** path; (4) **`LPAC` and `Regulator` are distinct parties** and the recusal check is verified against on-ledger `BidFiled`×roster facts; (5) split-residue / decline-to-fund / revoked-credential / rounding behaviors are **pinned**, and a declared (possibly $0) **`gpCommitment`** field is added. Read the tables below with those corrections applied.
+
 ---
 
 ## 0. Decisions locked for R1

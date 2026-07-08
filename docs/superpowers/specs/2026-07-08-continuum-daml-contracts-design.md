@@ -24,12 +24,20 @@ Produce a **working set of Daml smart contracts + a business-grounded test suite
 | D2 | Sealed bids on-ledger (buyer sole signatory → peer-blind). |
 | D5 | Rolling LPs roll at the **deal price** (96%), not par. Asset booked at cost; NAV/unit = $1.00. |
 | D6 | Sealed bids/elections disclosed to the executor **only at clearing/close** (GP blind mid-window). |
-| **D7** | **Default-to-sell requires no post-deadline LP signature:** LPs pre-authorize the executor at deal-join (`DealParticipation`); instrument holdings are **registry-admin-authored** so delivery needs no live receiver signature. (From Fable rule 8.7.) |
-| D8 | LPAC consent is **recusal-aware**: a conflicted member's vote is excluded; a waiver recorded with a conflicted vote counted is rejected at the election-open gate. (Fable 8.6.) |
+| **D7** | **Default-to-sell requires no post-deadline LP signature:** LPs pre-authorize the executor at deal-join (`DealParticipation`, LP+GP co-signed); instrument holdings are **registry-admin-authored** so delivery needs no live receiver signature. (Fable 8.7.) |
+| D8 | LPAC consent is **recusal-aware, verified on-ledger**: the election-open gate derives conflicts by matching the LPAC member roster against `BidFiled` markers and rejects a consent whose `recusals` don't cover an on-ledger-detectable conflict — not trusting a self-reported field. (Fable 8.6 + review §3.1.) |
+| **D9** | **Independent fairness attestation:** a provider-signed `FairnessOpinion` (signatory `FairnessProvider`, GP observer) carries the fair range; `Close` is gated on it and asserts `clearing ∈ [low, high]`. The GP does **not** self-attest fairness. (Review §1.1.) |
+| **D10** | **Broken-deal path is on-ledger:** `ContinuationDeal` has a `Break` choice → `Broken` terminal stage; voids bids/elections, leaves the old fund intact, no re-entry. (Review §1.2.) |
+| **D11** | **LPAC ≠ Regulator:** distinct parties. `LPAC` grants the conflict waiver pre-election; `Regulator` receives only the scoped post-close `FairnessDisclosure`. Makes selective disclosure legible. (Review §3.2.) |
+| **D12** | **GP economics are declared, not hidden:** `ContinuationDeal` carries an explicit `gpCommitment` + `carryCrystallized` field (**$0 in the demo numbers**, but named), with the real carry-in-waterfall deferred to R2's 6-leg flow. Pre-empts the defining CV-conflict question. (Review §1.3, §6.2.) |
+
+**`OldFundInterest` authority (load-bearing correction):** signatory = old-fund (`GP`) **+ the LP** (co-signed). The burn at close therefore genuinely requires the LP's authority, which flows from the LP+GP-co-signed `DealParticipation` (the delegation/power-of-attorney pattern): `Close` exercises the burn+settle through each LP's `DealParticipation`, whose choice body carries LP authority with GP as controller. This turns D7 from decoration into the real answer to rule 8.7.
 
 ## Architecture
 
-Single Canton participant hosting all parties (hackathon topology). Parties: `GP` (author + executor + registries' admin hat), `RollingLP`/`ExitingLP` (×N), `Buyer` (×M, lead + syndicate), `Regulator`, `Issuer`, plus logical instrument-admin parties (`CashRegistry`, `Vehicle`, old-fund) that may share the `GP` key in MVP.
+Single Canton participant hosting all parties (hackathon topology). Parties: `GP` (author + executor + registries' admin hat), `RollingLP`/`ExitingLP` (×N), `Buyer` (×M, lead + syndicate), **`LPAC`** (grants the conflict waiver), **`Regulator`** (scoped post-close view only — distinct from LPAC, D11), **`FairnessProvider`** (signs the fairness opinion, D9), `Issuer`, plus logical instrument-admin parties (`CashRegistry`, `Vehicle`, old-fund) that may share the `GP` key in MVP.
+
+> **Single-participant honesty (demo Q&A pre-emption):** one key wears many hats (GP/executor/registry/Vehicle/old-fund). Daml authority is **party-level, not key-level**, and the privacy proofs are per-party projections — so co-location does not weaken them. State this up front; the live mid-window per-party ACS query (test 7.3) is the money shot. Multi-participant (operator-level separation) is R2.
 
 ### Project layout
 ```
@@ -61,17 +69,28 @@ The 10 templates from the contract spec §3, plus `DealParticipation`:
 
 | Template | Signatory | Observers | Key choices (controller) |
 |---|---|---|---|
-| `ContinuationDeal` | GP (+Vehicle) | room; Regulator post-close | `SubmitBid`(Buyer, nonconsuming), `SelectLead`(GP), `OpenElections`(GP), `Close`(GP) |
-| `DealParticipation` **(new)** | LP/Buyer + GP | — | created via propose-accept; grants executor standing authority to burn the party's `OldFundInterest` and settle its close leg |
-| `EligibilityCredential` | Issuer | Buyer | `Revoke`(Issuer); reused across deals (flywheel) |
+| `ContinuationDeal` | GP (+Vehicle) | room; Regulator post-close | `SubmitBid`(Buyer, nonconsuming), `SelectLead`(GP), `OpenElections`(GP), `Close`(GP), **`Break`(GP or on LPAC denial) → `Broken` stage**; carries `gpCommitment`/`carryCrystallized` (D12) |
+| `DealParticipation` **(new)** | LP/Buyer **+ GP** | — | propose-accept; the LP+GP authority that `Close` exercises to **burn the LP's co-signed `OldFundInterest` and settle its leg** without a post-deadline LP signature (D7) |
+| `FairnessOpinion` **(new, D9)** | FairnessProvider | GP | carries `[low, high]` + provider id; `Close` gated on it, asserts `clearing ∈ [low, high]` |
+| `EligibilityCredential` | Issuer | Buyer | `Revoke`(Issuer); reused across deals (flywheel); `Close` asserts each funding buyer's is unrevoked |
 | `SealedBid` | Buyer | — | `Withdraw`(Buyer); disclosed to GP at `SelectLead` |
-| `BidFiled` | Buyer | GP | contentless marker |
-| `LPACConsentRequest` / `LPACConsent` | GP / Regulator | Regulator / GP | `Grant`(Regulator, recusal-aware); gates `OpenElections` |
+| `BidFiled` | Buyer | GP | contentless marker; **also the on-ledger fact the recusal gate checks** (D8) |
+| `LPACConsentRequest` / `LPACConsent` | GP / **LPAC** | LPAC / GP | `Grant`(LPAC); gate derives conflicts from `BidFiled` × LPAC roster, rejects uncovered recusals (D8); gates `OpenElections` |
 | `LPElection` | LP (sole) | — | `Amend`(LP); disclosed to GP at `Close`; default absent = SELL |
 | `ElectionFiled` | LP | GP | contentless marker |
-| `OldFundInterest` | old-fund (GP) | LP | archived (burned) inside `Close` |
+| `OldFundInterest` | old-fund (GP) **+ LP** | — | co-signed; archived (burned) inside `Close` **via `DealParticipation`** |
 | `TransferLegRequest` *(impl `AllocationRequest`)* | GP (executor) | leg sender+receiver | senders `AllocationFactory_Allocate`; executor `Allocation_ExecuteTransfer` |
 | `SettlementReceipt` / `FairnessDisclosure` | GP | room / Regulator | post-close proof / scoped regulator window |
+
+### Pinned behaviors (Fable §1.5, §2.3 — no longer "TBD")
+
+- **Split residue:** `LPElection` `ensure rollNav + sellNav == positionNav` (both ≥0); any mismatch is rejected at submission — no silent residue.
+- **Buyer decline-to-fund at clearing:** the declining buyer's allocation is re-scaled across the remaining syndicate (rerun buyer-only pro-rata); if the gap can't be filled, `Close` fails → GP `Break`s the deal. Declining buyer pays/receives nothing.
+- **Revoked credential at funding:** `Close` asserts every funding buyer holds an unrevoked `EligibilityCredential`; a revocation between bid and funding makes `Close` fail (deal re-scales or breaks) — no silent inclusion.
+- **Rounding rule:** CV units rounded **down to whole units**, residual units assigned to the **lead buyer**; cash to the cent, residual to the **largest exiting LP**. Conservation asserts (§5) use this rule; sum-of-parts == whole exactly.
+- **Asset conservation:** the Atlas token carries economics in `meta` (`refNAV`/`price`) with `amount = 1`; invariant 8 (old fund terminal) asserts the asset holding's **existence/owner**, not its amount field.
+
+> **Tokenization framing (say it in the demo):** CV units are **register entries on a transfer agent's book** (admin = the registry/transfer agent), not bearer instruments — which is how fund LP interests actually work. No self-custody or bearer-token claim is made; the indivisible Atlas token abstracts a single portfolio-company interest re-registration.
 
 ### Instruments (our registries implement the real interfaces)
 
@@ -93,7 +112,7 @@ Three registries, each a set of admin-authored `Holding` UTXOs with `InstrumentI
 
 ## Test matrix (Fable-validated business rules)
 
-Daml Script, one suite per group. Every rule = an assertion; the 10 flagged rules get explicit positive **and** negative tests. Full enumeration (72 assertions): `docs/specs/2026-07-08-continuation-fund-test-matrix.md`. The groups and priority rules:
+Daml Script, one suite per group. **Coverage priority (Fable §5.1):** the **10 ⚠️ flagged rules + all of groups 5 (conservation) and 6 (atomicity)** are the guaranteed must-pass set for this phase, each with explicit positive **and** negative tests; non-flagged group-8 edge cases are **stretch goals**. Full enumeration (72 assertions): `docs/specs/2026-07-08-continuation-fund-test-matrix.md`. The groups and priority rules:
 
 1. **Sequencing/gating** — no lead-select before bid deadline; **LPAC consent before elections open (1.3)**; **price fixed before elections (1.5)**; ≥10-biz-day LPAC window; close needs {LPAC ✓ + elections closed + fairness attestation}; no stage double-run; LPAC denial → broken deal.
 2. **Election** — **default = SELL (2.1)**; never-forced-to-roll (`cvUnits>0 ⇒ explicit roll/split`); amend-before-deadline only; **status-quo vs roll distinct terms (2.4)**; split partitions position exactly; only LP files own election.
@@ -110,14 +129,15 @@ Daml Script, one suite per group. Every rule = an assertion; the 10 flagged rule
 
 ## Build order (blocker-first)
 
-1. **Spike:** one allocate→execute leg with the `Usdc` registry on the sandbox (de-risks the token-standard plumbing — the #1 blocker) before scaling.
-2. All 3 registries + `Seed`.
-3. `ContinuationDeal` + `EligibilityCredential` + `DealParticipation`; `SubmitBid` → `SelectLead` sets clearing.
-4. `LPElection` (+ default-to-sell) + `LPACConsent` gate (recusal-aware).
-5. `Close`: clearing math + 4-leg `Allocation` batch + `OldFundInterest` burns + invariant asserts.
-6. `SettlementReceipt` + `FairnessDisclosure`; deal-#2 flywheel (credential reuse).
-7. Full e2e on sandbox.
-8. Whole Fable test matrix green (`dpm test`).
+1. **Spike A (token plumbing, blocker #1):** one allocate→execute leg with the `Usdc` registry on the sandbox before scaling.
+2. **Spike B (privacy plumbing, promoted):** prove GP-blind-mid-window (test 7.3) via explicit disclosure of a `SealedBid`/`LPElection` to the GP only at clearing/close. If this slips, the fallback (GP-as-observer) silently deletes the headline privacy claim — so de-risk it now, not at step 5. (Review §5.3.)
+3. All 3 registries + `Seed`.
+4. `ContinuationDeal` + `FairnessOpinion` + `EligibilityCredential` + `DealParticipation`; `SubmitBid` → `SelectLead` sets clearing.
+5. `LPElection` (+ default-to-sell) + `LPACConsent` gate (on-ledger recusal check); `Break`/`Broken` path.
+6. `Close`: clearing math + rounding rule + 4-leg `Allocation` batch + `OldFundInterest` burns (via `DealParticipation`) + fairness-range + invariant asserts.
+7. `SettlementReceipt` + `FairnessDisclosure` (to `Regulator`); deal-#2 flywheel (credential reuse).
+8. Full e2e on sandbox.
+9. Test matrix green (`dpm test`) — see scope below.
 
 ## Risks
 
