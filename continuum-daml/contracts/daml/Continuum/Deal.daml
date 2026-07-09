@@ -1,0 +1,43 @@
+module Continuum.Deal where
+
+import DA.Date (date, Month(Jan))
+import DA.Time (time)
+
+data Stage = Setup | Bidding | LeadSelected | Consented | Electing | Closed | Broken
+  deriving (Eq, Show)
+
+template ContinuationDeal
+  with
+    gp               : Party
+    vehicle          : Party
+    oldFund          : Party
+    lpac             : Party
+    regulator        : Party
+    room             : [Party]        -- LPs + buyers as observers
+    fund             : Text
+    cv               : Text
+    asset            : Text
+    refNav           : Decimal
+    electionDeadline : Time
+    clearingPrice    : Optional Decimal
+    gpCommitment     : Decimal        -- declared; 0.0 in the demo
+    carryCrystallized: Decimal        -- declared; 0.0 in the demo
+    stage            : Stage
+  where
+    signatory gp, vehicle
+    observer room, regulator
+
+    choice Break : ContractId ContinuationDeal
+      with reason : Text
+      controller gp
+      do assertMsg "already terminal" (stage /= Closed && stage /= Broken)
+         create this with stage = Broken
+
+-- Reusable sample deal for tests. Per the MVP party model, gp = vehicle = oldFund.
+-- lpac/regulator are passed distinct.
+mkDeal : Party -> Party -> Party -> ContinuationDeal
+mkDeal gp lpac regulator = ContinuationDeal with
+  gp; vehicle = gp; oldFund = gp; lpac; regulator
+  room = []; fund = "Meridian Growth Fund III"; cv = "Meridian CV I"; asset = "Project Atlas"
+  refNav = 52000000.0; electionDeadline = time (date 1970 Jan 1) 0 0 0
+  clearingPrice = None; gpCommitment = 0.0; carryCrystallized = 0.0; stage = Setup

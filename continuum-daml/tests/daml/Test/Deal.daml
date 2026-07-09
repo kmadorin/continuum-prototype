@@ -1,0 +1,15 @@
+module Test.Deal where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Deal
+
+dealBreakGoesToBroken : Script ()
+dealBreakGoesToBroken = do
+  gp   <- allocateParty "GP"
+  lpac <- allocateParty "LPAC"
+  reg  <- allocateParty "Regulator"
+  deal <- submit gp do createCmd (mkDeal gp lpac reg)   -- gp signs both gp+vehicle (same party)
+  broken <- submit gp do exerciseCmd deal Break with reason = "LPAC denied"
+  Some d <- queryContractId gp broken
+  d.stage === Broken
