@@ -1,0 +1,185 @@
+module Continuum.Scenario where
+
+import Daml.Script
+import DA.List (head)
+import DA.Date (date, Month(Jun))
+import DA.TextMap qualified as TextMap
+import Continuum.Registry
+import Continuum.Deal
+import Continuum.Issuance
+import Continuum.Valuation
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
+import Continuum.Participation
+import Continuum.Document (hashOf)
+import Continuum.Settle (allocateFor, allocateForMeta)
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1 (Allocation)
+
+-- Canonical deal numbers (whole dollars). 4 rollers @7.9M = 31.6M roll;
+-- 4 exiting @5.1M = 20.4M sell (E4 is non-electing → defaults to sell);
+-- 4 buyers each fill 5.1M = 20.4M. clearing 0.96.
+clearingPctC : Decimal
+clearingPctC = 0.96
+
+rollNavEach, rollerUnitsEach, sellEach, exitCashEach, buyerFill, buyerCashEach, buyerUnitsEach : Decimal
+rollNavEach    = 7900000.0
+rollerUnitsEach = 7584000.0     -- 0.96 * 7.9M
+sellEach       = 5100000.0
+exitCashEach   = 4896000.0      -- 0.96 * 5.1M
+buyerFill      = 5100000.0
+buyerCashEach  = 4896000.0      -- 0.96 * 5.1M
+buyerUnitsEach = 4896000.0
+
+data ClosePrep = ClosePrep with
+  gp           : Party
+  buyers       : [Party]
+  rollers      : [Party]
+  exiting      : [Party]
+  dealCid      : ContractId ContinuationDeal
+  basisCid     : ContractId IssuanceBasis
+  legExecs     : [(ContractId ExecDelegation, ContractId Allocation)]
+  burns        : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
+  cashInAllocs : [ContractId Allocation]   -- buyer->gp legs (sabotage target for 7.4)
+  valHash      : Text
+
+data ClosedWorld = ClosedWorld with
+  exitingCashTotal        : Decimal
+  rollerUnitsTotal        : Decimal
+  buyerUnitsTotal         : Decimal
+  totalUnits              : Decimal
+  oldInterestsRemaining   : Int
+  unitsCarryValuationHash : Bool
+
+-- co-signed authority contracts (script has all authorities via submitMulti)
+mkExecDeleg : Party -> Party -> Script (ContractId ExecDelegation)
+mkExecDeleg gp p = submitMulti [gp, p] [] do createCmd ExecDelegation with admin = gp; party = p
+
+mkAccPart : Party -> Party -> Script (ContractId AcceptedParticipation)
+mkAccPart gp p = submitMulti [gp, p] [] do createCmd AcceptedParticipation with gp; lp = p
+
+mkInterest : Party -> Party -> Decimal -> Script (ContractId OldFundInterest)
+mkInterest gp p nav = submitMulti [gp, p] [] do createCmd OldFundInterest with oldFund = gp; lp = p; nav
+
+mintHolding : Party -> Party -> Text -> Decimal -> Script (ContractId RegistryHolding)
+mintHolding gp owner instId amount =
+  submit gp do createCmd RegistryHolding with admin = gp; owner; instId; amount; locked = False; meta_ = TextMap.empty
+
+setupPreClose : Script ClosePrep
+setupPreClose = do
+  gp    <- allocateParty "GP"
+  agent <- allocateParty "ValuationAgent"
+  fair  <- allocateParty "FairnessProvider"
+  lpac  <- allocateParty "LPAC"
+  reg   <- allocateParty "Regulator"
+  buyers  <- mapA allocateParty ["B1","B2","B3","B4"]
+  rollers <- mapA allocateParty ["R1","R2","R3","R4"]
+  exiting <- mapA allocateParty ["E1","E2","E3","E4"]   -- E4 non-electing
+  let lps = rollers <> exiting
+      valHash = hashOf "meridian valuation v1"
+      unitMeta = TextMap.fromList [("continuum/valuation-sha256", valHash)]
+  now <- getTime
+  factory <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  -- antecedent DAG for the issuance basis
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "M1"; navLow = 48000000.0; navHigh = 56000000.0
+      asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "M1"; fairLow = 0.92; fairHigh = 1.0
+      opinionDate = date 2026 Jun 30; contentHash = hashOf "f"
+  ac <- submit gp do
+    createCmd AuctionCertificate with
+      gp; dealId = "M1"; clearingPct = 0.96; leadBuyer = head buyers; bidTabulationHash = hashOf "b"
+  lc <- submit lpac do
+    createCmd LPACConsent with gp; lpac; dealId = "M1"; recusals = []; granted = True
+  psa <- submit gp do
+    createCmd PurchaseAgreement with
+      oldFund = gp; vehicle = gp; dealId = "M1"; price = 49920000.0
+      refNav = 52000000.0; clearingPct = 0.96; asOfDate = date 2026 Jun 30
+  basisCid <- submit gp do
+    createCmd IssuanceBasis with
+      gp; dealId = "M1"; reconciledNav = 52000000.0; clearingPct = 0.96; psaPrice = 49920000.0
+      reconciliation = InRangeOfAll; valuationCids = [vr]; fairnessCid = fo
+      auctionCertCid = ac; lpacConsentCid = lc; psaCid = psa
+      closeDate = date 2026 Jun 30; maxAsOfDays = 120
+  dealCid <- submit gp do createCmd (mkDeal gp lpac reg) with stage = Consented
+  -- authority contracts (co-signed, pre-close)
+  execBuyers  <- mapA (mkExecDeleg gp) buyers
+  execRollers <- mapA (mkExecDeleg gp) rollers
+  execExiting <- mapA (mkExecDeleg gp) exiting
+  accLPs      <- mapA (mkAccPart gp) lps
+  interests   <- mapA (\p -> mkInterest gp p 1000000.0) lps
+  -- PHASE 1 — mint one dedicated holding per leg and allocate it
+  -- cash-in: buyer holds cash, allocates buyer -> gp
+  cashInAllocs <- forA buyers \b -> do
+    h <- mintHolding gp b usdcId buyerCashEach
+    allocateFor gp b gp factory usdcId buyerCashEach (toInterfaceContractId @Holding h) now "cashin"
+  -- cash-out: gp holds a float per exiting LP, allocates gp -> exitingLP
+  cashOutAllocs <- forA exiting \e -> do
+    h <- mintHolding gp gp usdcId exitCashEach
+    allocateFor gp gp e factory usdcId exitCashEach (toInterfaceContractId @Holding h) now "cashout"
+  -- units to rollers: gp holds a unit parcel per roller, allocates gp -> roller (with provenance)
+  unitRollAllocs <- forA rollers \r -> do
+    h <- mintHolding gp gp unitId rollerUnitsEach
+    allocateForMeta gp gp r factory unitId rollerUnitsEach (toInterfaceContractId @Holding h) now "unitroll" unitMeta
+  -- units to buyers: gp holds a unit parcel per buyer, allocates gp -> buyer (with provenance)
+  unitBuyAllocs <- forA buyers \b -> do
+    h <- mintHolding gp gp unitId buyerUnitsEach
+    allocateForMeta gp gp b factory unitId buyerUnitsEach (toInterfaceContractId @Holding h) now "unitbuy" unitMeta
+  let legExecs =
+        zip execBuyers  cashInAllocs
+        <> zip execExiting cashOutAllocs
+        <> zip execRollers unitRollAllocs
+        <> zip execBuyers  unitBuyAllocs
+      burns = zip accLPs interests
+  pure ClosePrep with
+    gp; buyers; rollers; exiting; dealCid; basisCid; legExecs; burns; cashInAllocs; valHash
+
+-- The Close command (so callers can submit or submitMustFail it).
+runClose : ClosePrep -> Commands (ContractId ContinuationDeal)
+runClose p =
+  exerciseCmd p.dealCid Close with basisCid = p.basisCid; legExecs = p.legExecs; burns = p.burns
+
+-- Tally the post-close ACS into conservation figures.
+tally : ClosePrep -> Script ClosedWorld
+tally p = do
+  let sumOwned instId owners = do
+        hss <- mapA (query @RegistryHolding) owners
+        pure (sum [ h.amount | hs <- hss, (_, h) <- hs, h.instId == instId ])
+  exitingCashTotal <- sumOwned usdcId p.exiting
+  rollerUnitsTotal <- sumOwned unitId p.rollers
+  buyerUnitsTotal  <- sumOwned unitId p.buyers
+  -- provenance: a roller's unit holding carries the valuation hash in meta
+  rollerHs <- query @RegistryHolding (head p.rollers)
+  let carries = or [ TextMap.lookup "continuum/valuation-sha256" h.meta_ == Some p.valHash
+                   | (_, h) <- rollerHs, h.instId == unitId ]
+  remain <- mapA (query @OldFundInterest) (p.rollers <> p.exiting)
+  pure ClosedWorld with
+    exitingCashTotal
+    rollerUnitsTotal
+    buyerUnitsTotal
+    totalUnits = rollerUnitsTotal + buyerUnitsTotal
+    oldInterestsRemaining = length (concat remain)
+    unitsCarryValuationHash = carries
+
+setupAndClose : Script ClosedWorld
+setupAndClose = do
+  prep <- setupPreClose
+  _ <- submit prep.gp do runClose prep
+  tally prep
+
+-- e2e helpers (Task 9.4)
+ping : Script ()
+ping = pure ()
+
+setupCloseAndAssert : Script ()
+setupCloseAndAssert = do
+  w <- setupAndClose
+  assert (w.exitingCashTotal == 19584000.0)
+  assert (w.rollerUnitsTotal == 30336000.0)
+  assert (w.buyerUnitsTotal == 19584000.0)
+  assert (w.totalUnits == 49920000.0)
+  assert (w.oldInterestsRemaining == 0)
+  assert w.unitsCarryValuationHash

@@ -1,0 +1,20 @@
+module Test.CloseChoice where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.List (head)
+import Continuum.Scenario
+import Continuum.Registry (RegistryHolding, usdcId)
+import Continuum.Participation (OldFundInterest)
+
+closeExecutesAllLegs : Script ()
+closeExecutesAllLegs = do
+  prep <- setupPreClose
+  _ <- submit prep.gp do runClose prep
+  -- an exiting LP received its cash
+  let e1 = head prep.exiting
+  eHs <- query @RegistryHolding e1
+  [ h.amount | (_, h) <- eHs, h.instId == usdcId ] === [4896000.0]
+  -- its old-fund interest was burned
+  remain <- query @OldFundInterest e1
+  remain === []

@@ -2,6 +2,11 @@ module Continuum.Deal where
 
 import DA.Date (date, Month(Jan))
 import DA.Time (time)
+import DA.Foldable (forA_)
+import Continuum.Issuance (IssuanceBasis, ValidateIssuance(..))
+import Continuum.Participation (AcceptedParticipation, BurnFor(..), OldFundInterest)
+import Continuum.Registry (ExecDelegation, ExecFor(..))
+import Splice.Api.Token.AllocationV1 (Allocation)
 
 data Stage = Setup | Bidding | LeadSelected | Consented | Electing | Closed | Broken
   deriving (Eq, Show)
@@ -32,6 +37,24 @@ template ContinuationDeal
       controller gp
       do assertMsg "already terminal" (stage /= Closed && stage /= Broken)
          create this with stage = Broken
+
+    -- Phase-2 atomic settlement. gp exercises this in ONE transaction:
+    -- (1) gate on the antecedent DAG; (2) execute every pre-created leg
+    -- allocation via its co-signed ExecDelegation (Spike A authority pattern —
+    -- gp alone cannot run Allocation_ExecuteTransfer, whose controllers are
+    -- {sender,receiver,executor}); (3) burn each LP's co-signed OldFundInterest.
+    -- Any nested failure aborts the whole close (all-or-nothing).
+    choice Close : ContractId ContinuationDeal
+      with
+        basisCid : ContractId IssuanceBasis
+        legExecs : [(ContractId ExecDelegation, ContractId Allocation)]
+        burns    : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
+      controller gp
+      do assertMsg "must be consented/electing" (stage == Consented || stage == Electing)
+         _ <- exercise basisCid ValidateIssuance
+         forA_ legExecs \(d, a) -> exercise d ExecFor with allocCid = a
+         forA_ burns \(p, oi) -> exercise p BurnFor with interestCid = oi
+         create this with stage = Closed
 
 -- Reusable sample deal for tests. Per the MVP party model, gp = vehicle = oldFund.
 -- lpac/regulator are passed distinct.
