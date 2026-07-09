@@ -1,0 +1,38 @@
+module Test.Privacy where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Deal (FairnessDisclosure)
+import Continuum.Election (LPElection(..))
+import Continuum.Auction (SealedBid(..))
+import Continuum.Document (hashOf)
+import Continuum.Scenario
+
+-- Matrix group 7: GP blind mid-window; regulator scoped, aggregate-only, post-close.
+privacyScoped : Script ()
+privacyScoped = do
+  gp  <- allocateParty "GP"
+  lpA <- allocateParty "LPA"
+  -- GP cannot see LP election CONTENTS (sole signatory lp)
+  _ <- submit lpA do
+    createCmd LPElection with
+      lp = lpA; dealId = "D1"; positionNav = 5000000.0; rollNav = 5000000.0; sellNav = 0.0
+      disclosureHash = hashOf "d"
+  gpElec <- query @LPElection gp
+  gpElec === []
+  -- buyers blind to each other's sealed bids
+  b1 <- allocateParty "B1"
+  b2 <- allocateParty "B2"
+  _ <- submit b1 do createCmd SealedBid with gp; buyer = b1; dealId = "D1"; pctOfNav = 0.9; capacity = 1000000.0
+  b2v <- query @SealedBid b2
+  b2v === []
+  -- regulator: nothing deal-related pre-close; exactly one FairnessDisclosure post-close
+  prep <- setupPreClose
+  preReg <- query @FairnessDisclosure prep.regulator
+  preReg === []
+  _ <- submit prep.gp do runClose prep
+  postReg <- query @FairnessDisclosure prep.regulator
+  assert (length postReg == 1)
+  -- and the regulator still sees NO per-LP election data
+  regElec <- query @LPElection prep.regulator
+  regElec === []

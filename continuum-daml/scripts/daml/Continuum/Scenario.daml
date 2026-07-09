@@ -113,7 +113,7 @@ setupPreClose = do
       reconciliation = InRangeOfAll; valuationCids = [vr]; fairnessCid = fo
       auctionCertCid = ac; lpacConsentCid = lc; psaCid = psa
       closeDate = date 2026 Jun 30; maxAsOfDays = 120
-  dealCid <- submit gp do createCmd (mkDeal gp lpac reg) with stage = Consented
+  dealCid <- submit gp do createCmd (mkDeal gp lpac reg) with stage = Consented; room = buyers <> lps
   -- authority contracts (co-signed, pre-close)
   execBuyers  <- mapA (mkExecDeleg gp) buyers
   execRollers <- mapA (mkExecDeleg gp) rollers
@@ -152,7 +152,8 @@ setupPreClose = do
 -- The Close command (so callers can submit or submitMustFail it).
 runClose : ClosePrep -> Commands (ContractId ContinuationDeal)
 runClose p =
-  exerciseCmd p.dealCid Close with basisCid = p.basisCid; legExecs = p.legExecs; burns = p.burns
+  exerciseCmd p.dealCid Close with
+    basisCid = p.basisCid; legExecs = p.legExecs; burns = p.burns; fairnessHash = p.valHash
 
 -- Tally the post-close ACS into conservation figures.
 tally : ClosePrep -> Script ClosedWorld

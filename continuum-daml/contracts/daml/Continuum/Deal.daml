@@ -3,7 +3,7 @@ module Continuum.Deal where
 import DA.Date (date, Month(Jan))
 import DA.Time (time)
 import DA.Foldable (forA_)
-import DA.Optional (isSome)
+import DA.Optional (isSome, fromOptional)
 import Continuum.Issuance (IssuanceBasis, ValidateIssuance(..))
 import Continuum.Participation (AcceptedParticipation, BurnFor(..), OldFundInterest)
 import Continuum.Registry (ExecDelegation, ExecFor(..))
@@ -68,15 +68,49 @@ template ContinuationDeal
     -- Any nested failure aborts the whole close (all-or-nothing).
     choice Close : ContractId ContinuationDeal
       with
-        basisCid : ContractId IssuanceBasis
-        legExecs : [(ContractId ExecDelegation, ContractId Allocation)]
-        burns    : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
+        basisCid     : ContractId IssuanceBasis
+        legExecs     : [(ContractId ExecDelegation, ContractId Allocation)]
+        burns        : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
+        fairnessHash : Text
       controller gp
       do assertMsg "must be consented/electing" (stage == Consented || stage == Electing)
          _ <- exercise basisCid ValidateIssuance
          forA_ legExecs \(d, a) -> exercise d ExecFor with allocCid = a
          forA_ burns \(p, oi) -> exercise p BurnFor with interestCid = oi
+         let clearing   = fromOptional 0.0 clearingPrice
+             totalUnits = intToDecimal (round (clearing * refNav))
+         -- regulator sees ONLY aggregates + the fairness hash, never per-LP data
+         create FairnessDisclosure with
+           gp; regulator; dealId = cv; clearingPct = clearing; totalUnits; fairnessHash
+         -- the room (LPs + buyers) gets an aggregate settlement receipt
+         create SettlementReceipt with
+           gp; room; dealId = cv; clearingPct = clearing; totalUnits
          create this with stage = Closed
+
+-- Post-close regulator view: aggregates + fairness anchor, NO per-LP data.
+template FairnessDisclosure
+  with
+    gp          : Party
+    regulator   : Party
+    dealId      : Text
+    clearingPct : Decimal
+    totalUnits  : Decimal
+    fairnessHash : Text
+  where
+    signatory gp
+    observer regulator
+
+-- Aggregate settlement receipt visible to the deal room.
+template SettlementReceipt
+  with
+    gp          : Party
+    room        : [Party]
+    dealId      : Text
+    clearingPct : Decimal
+    totalUnits  : Decimal
+  where
+    signatory gp
+    observer room
 
 -- Reusable sample deal for tests. Per the MVP party model, gp = vehicle = oldFund.
 -- lpac/regulator are passed distinct.

@@ -34,9 +34,9 @@ sequencingGates = do
       closeDate = date 2026 Jun 30; maxAsOfDays = 120
   submitMustFail prep.gp do
     exerciseCmd prep.dealCid Close with
-      basisCid = badBasis; legExecs = prep.legExecs; burns = prep.burns
+      basisCid = badBasis; legExecs = prep.legExecs; burns = prep.burns; fairnessHash = "x"
 
   -- No double-close: after a successful close the deal is terminal
   closed <- submit prep.gp do runClose prep
   submitMustFail prep.gp do
-    exerciseCmd closed Close with basisCid = prep.basisCid; legExecs = []; burns = []
+    exerciseCmd closed Close with basisCid = prep.basisCid; legExecs = []; burns = []; fairnessHash = "x"
