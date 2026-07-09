@@ -1,0 +1,20 @@
+module Test.Seed where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Seed
+import Continuum.Credential (EligibilityCredential)
+import Continuum.Participation (OldFundInterest)
+
+seedCreatesExpectedAcs : Script ()
+seedCreatesExpectedAcs = do
+  s <- seedDeal1
+  -- 4 reusable credentials issued
+  length s.creds === 4
+  -- 8 LP interests recorded
+  interests <- query @OldFundInterest s.gp
+  length interests === 8
+  -- credentials all valid and visible to the issuer
+  issuerCreds <- query @EligibilityCredential s.issuer
+  length issuerCreds === 4
+  assert (all (\(_, c) -> c.valid) issuerCreds)

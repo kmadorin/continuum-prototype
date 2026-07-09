@@ -1,0 +1,45 @@
+module Continuum.Seed where
+
+import Daml.Script
+import DA.TextMap qualified as TextMap
+import Continuum.Registry
+import Continuum.Deal
+import Continuum.Credential
+import Continuum.Participation
+import Splice.Api.Token.HoldingV1
+
+data SeedResult = SeedResult with
+  gp       : Party
+  lpac     : Party
+  reg      : Party
+  issuer   : Party
+  buyers   : [Party]
+  lps      : [Party]
+  creds    : [ContractId EligibilityCredential]
+  factory  : ContractId RegistryAllocationFactory
+  dealCid  : ContractId ContinuationDeal
+
+-- Re-runnable seed for deal #1 (Meridian). Allocates parties, issues reusable
+-- eligibility credentials, mints the unit treasury + buyer cash, records LP
+-- interests, and creates the deal. Returns the ids for the flywheel + demo.
+seedDeal1 : Script SeedResult
+seedDeal1 = do
+  gp     <- allocateParty "GP"
+  lpac   <- allocateParty "LPAC"
+  reg    <- allocateParty "Regulator"
+  issuer <- allocateParty "Issuer"
+  buyers <- mapA allocateParty ["B1","B2","B3","B4"]
+  lps    <- mapA allocateParty ["R1","R2","R3","R4","E1","E2","E3","E4"]
+  factory <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  -- reusable QP eligibility credentials (issued once, reused across deals)
+  creds <- forA buyers \b ->
+    submit issuer do createCmd EligibilityCredential with issuer; holder = b; scheme = "QP"; valid = True
+  -- unit treasury + Atlas asset held by the vehicle(=gp)
+  _ <- submit gp do createCmd RegistryHolding with admin = gp; owner = gp; instId = unitId; amount = 49920000.0; locked = False; meta_ = TextMap.empty
+  _ <- submit gp do createCmd RegistryHolding with admin = gp; owner = gp; instId = assetId; amount = 1.0; locked = False; meta_ = TextMap.empty
+  -- LP interests in the old fund (co-signed)
+  _ <- forA lps \p ->
+    submitMulti [gp, p] [] do createCmd OldFundInterest with oldFund = gp; lp = p; nav = 1000000.0
+  dealCid <- submit gp do
+    createCmd (mkDeal gp lpac reg) with room = buyers <> lps
+  pure SeedResult with gp; lpac; reg; issuer; buyers; lps; creds; factory; dealCid
