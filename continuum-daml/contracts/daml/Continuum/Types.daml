@@ -3,3 +3,17 @@ module Continuum.Types where
 -- Percentages are Decimals in [0,1]; NAV/amounts are whole-dollar Decimals.
 navPerUnit : Decimal
 navPerUnit = 1.0
+
+-- Throwaway probe (Spike B): a sealed contract with no GP stakeholder.
+-- Explicit disclosure grants visibility, not authority, so the reader is the
+-- controller of the fetch choice.
+template SealedProbe
+  with
+    owner  : Party
+    secret : Decimal
+  where
+    signatory owner
+    nonconsuming choice Reveal : Decimal
+      with reader : Party
+      controller reader
+      do pure secret

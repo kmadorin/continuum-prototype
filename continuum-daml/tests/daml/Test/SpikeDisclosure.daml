@@ -1,0 +1,19 @@
+module Test.SpikeDisclosure where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Types
+
+spikeDisclosure : Script ()
+spikeDisclosure = do
+  gp    <- allocateParty "GP"
+  buyer <- allocateParty "Buyer"
+  cid <- submit buyer do createCmd SealedProbe with owner = buyer; secret = 96.0
+  -- GP query returns nothing: the sealed contract has no GP stakeholder
+  gpView <- query @SealedProbe gp
+  gpView === []
+  -- Buyer discloses to GP; GP (as reader/controller) can now use it in a submission
+  Some d <- queryDisclosure buyer cid
+  v <- submit (actAs gp <> disclose d) do exerciseCmd cid Reveal with reader = gp
+  v === 96.0
+  pure ()
