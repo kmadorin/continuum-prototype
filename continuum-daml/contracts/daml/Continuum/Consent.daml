@@ -1,0 +1,36 @@
+module Continuum.Consent where
+
+import DA.List (dedup)
+import Continuum.Auction (BidFiled(..))
+
+template LPACConsentRequest
+  with
+    gp           : Party
+    lpac         : Party
+    dealId       : Text
+    memberRoster : [Party]   -- the LPAC membership
+    recusals     : [Party]
+  where
+    signatory gp
+    observer lpac
+    -- LPAC grants only if every roster member that on-ledger DID bid is recused.
+    choice Grant : ContractId LPACConsent
+      with bidMarkerCids : [ContractId BidFiled]
+      controller lpac
+      do markers <- forA bidMarkerCids fetch
+         let bidders    = dedup (map (.buyer) markers)
+             conflicted = filter (`elem` bidders) memberRoster
+         assertMsg "recusals must cover every bidding LPAC member"
+           (all (`elem` recusals) conflicted)
+         create LPACConsent with gp; lpac; dealId; recusals; granted = True
+
+template LPACConsent
+  with
+    gp       : Party
+    lpac     : Party
+    dealId   : Text
+    recusals : [Party]
+    granted  : Bool
+  where
+    signatory lpac
+    observer gp

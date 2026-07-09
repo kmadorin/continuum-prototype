@@ -1,0 +1,21 @@
+module Test.Consent where
+
+import Daml.Script
+import Continuum.Consent
+import Continuum.Auction (BidFiled(..))
+
+recusalDerivedFromBidFacts : Script ()
+recusalDerivedFromBidFacts = do
+  lpac <- allocateParty "LPAC"
+  gp   <- allocateParty "GP"
+  m1   <- allocateParty "Member1"   -- LPAC member who also bid
+  m2   <- allocateParty "Member2"   -- LPAC member, no bid
+  -- m1 filed a bid (marker observed by gp+lpac)
+  bf <- submit m1 do createCmd BidFiled with gp; lpac; buyer = m1; dealId = "D1"
+  -- Grant with recusals = [] but roster includes m1 who bid -> FAILS (conflict uncovered)
+  req <- submit gp do createCmd LPACConsentRequest with gp; lpac; dealId = "D1"; memberRoster = [m1, m2]; recusals = []
+  submitMustFail lpac do exerciseCmd req Grant with bidMarkerCids = [bf]
+  -- Grant recusing m1 -> succeeds
+  req2 <- submit gp do createCmd LPACConsentRequest with gp; lpac; dealId = "D1"; memberRoster = [m1, m2]; recusals = [m1]
+  _ <- submit lpac do exerciseCmd req2 Grant with bidMarkerCids = [bf]
+  pure ()
