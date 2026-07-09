@@ -1,11 +1,13 @@
 module Continuum.Seed where
 
 import Daml.Script
+import DA.List (head)
 import DA.TextMap qualified as TextMap
 import Continuum.Registry
 import Continuum.Deal
 import Continuum.Credential
 import Continuum.Participation
+import Continuum.Auction (SealedBid(..))
 import Splice.Api.Token.HoldingV1
 
 data SeedResult = SeedResult with
@@ -43,3 +45,20 @@ seedDeal1 = do
   dealCid <- submit gp do
     createCmd (mkDeal gp lpac reg) with room = buyers <> lps
   pure SeedResult with gp; lpac; reg; issuer; buyers; lps; creds; factory; dealCid
+
+-- The flywheel: after deal #1, a returning buyer reuses its UNREVOKED eligibility
+-- credential to bid on a second continuation deal (Brightwater) — no re-issuance,
+-- no re-KYC. The same credential contract stays active across both deals.
+seedDeal2Reusing : SeedResult -> Script ()
+seedDeal2Reusing s = do
+  _deal2 <- submit s.gp do
+    createCmd (mkDeal s.gp s.lpac s.reg) with
+      fund = "Brightwater Fund II"; cv = "Brightwater CV"; asset = "Project Beacon"; room = s.buyers
+  let b1 = head s.buyers
+      c1 = head s.creds
+  Some cred <- queryContractId b1 c1
+  assert cred.valid                       -- credential from deal #1 still valid
+  _ <- submit b1 do
+    createCmd SealedBid with gp = s.gp; buyer = b1; dealId = "BW"; pctOfNav = 0.95; capacity = 5000000.0
+  Some cred2 <- queryContractId b1 c1
+  assert cred2.valid                      -- same credential unchanged (reused, not re-issued)

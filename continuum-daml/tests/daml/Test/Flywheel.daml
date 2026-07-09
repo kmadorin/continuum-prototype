@@ -1,0 +1,9 @@
+module Test.Flywheel where
+
+import Daml.Script
+import Continuum.Seed
+
+flywheelReusesCredential : Script ()
+flywheelReusesCredential = do
+  s <- seedDeal1
+  seedDeal2Reusing s
