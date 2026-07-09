@@ -1,0 +1,23 @@
+module Test.SpikeHash where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.Date (date, Month(Jun))
+import DA.Time (time)
+import Continuum.Document
+
+spikeHash : Script ()
+spikeHash = do
+  agent <- allocateParty "ValuationAgent"
+  let payload = "Project Atlas valuation report v1: NAV 52000000"
+      h = hashOf payload
+  cid <- submit agent do
+    createCmd SignedDocument with
+      attestor = agent; dealId = "MERIDIAN-1"; docType = Valuation
+      contentHash = h; docUri = "https://bucket.fil.one/atlas-val-v1.pdf.enc"
+      asOfDate = date 2026 Jun 30; signedAt = time (date 2026 Jun 30) 0 0 0
+  Some doc <- queryContractId agent cid
+  -- recomputing the hash of the same payload matches; a tampered payload does not
+  doc.contentHash === hashOf payload
+  assert (doc.contentHash /= hashOf (payload <> " TAMPERED"))
+  pure ()

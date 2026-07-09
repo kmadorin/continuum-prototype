@@ -1,0 +1,29 @@
+module Continuum.Document where
+
+import DA.Crypto.Text (sha256, toHex, BytesHex)
+
+data DocType = Valuation | Fairness | AuctionCert | Disclosure | PSA | Election
+  deriving (Eq, Show)
+
+template SignedDocument
+  with
+    attestor    : Party
+    dealId      : Text
+    docType     : DocType
+    contentHash : BytesHex   -- sha256 of the off-ledger document
+    docUri      : Text       -- e.g. an https://…/fil.one object URL
+    asOfDate    : Date
+    signedAt    : Time
+  where
+    signatory attestor
+    -- reader is the controller so a disclosed doc can be read by GP/Close
+    nonconsuming choice FetchDoc : SignedDocument
+      with reader : Party
+      controller reader
+      do pure this
+
+-- Canonical on-ledger hash of a text payload. sha256 requires a hex-string
+-- input, so we hex-encode the raw text first. All Continuum document hashing
+-- MUST go through hashOf so recomputation matches.
+hashOf : Text -> BytesHex
+hashOf t = sha256 (toHex t)
