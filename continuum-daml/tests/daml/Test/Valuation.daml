@@ -1,0 +1,25 @@
+module Test.Valuation where
+
+import Daml.Script
+import DA.Date (date, Month(Jun))
+import Continuum.Valuation
+import Continuum.Document (hashOf)
+
+valuationIsIndependentAndReconciles : Script ()
+valuationIsIndependentAndReconciles = do
+  gp    <- allocateParty "GP"
+  agent <- allocateParty "ValuationAgent"
+  fair  <- allocateParty "FairnessProvider"
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0
+      asOfDate = date 2026 Jun 30; contentHash = hashOf "val"
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0
+      opinionDate = date 2026 Jun 30; contentHash = hashOf "fair"
+  Some v <- queryContractId agent vr
+  -- reference NAV 52M is within [48M,56M]; clearing 0.96 within [0.92,1.0]
+  assert (v.navLow <= 52000000.0 && 52000000.0 <= v.navHigh)
+  Some f <- queryContractId fair fo
+  assert (f.fairLow <= 0.96 && 0.96 <= f.fairHigh)

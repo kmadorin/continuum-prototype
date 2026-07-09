@@ -1,0 +1,31 @@
+module Continuum.Valuation where
+
+import DA.Crypto.Text (BytesHex)
+
+template ValuationReport
+  with
+    agent       : Party         -- independent; MUST differ from gp
+    gp          : Party
+    dealId      : Text
+    navLow      : Decimal
+    navHigh     : Decimal
+    asOfDate    : Date
+    contentHash : BytesHex
+  where
+    signatory agent
+    observer gp
+    ensure navLow <= navHigh && agent /= gp
+
+template FairnessOpinion
+  with
+    provider    : Party
+    gp          : Party
+    dealId      : Text
+    fairLow     : Decimal
+    fairHigh    : Decimal
+    opinionDate : Date
+    contentHash : BytesHex
+  where
+    signatory provider
+    observer gp
+    ensure fairLow <= fairHigh && provider /= gp
