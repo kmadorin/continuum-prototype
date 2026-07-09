@@ -17,10 +17,31 @@
 ## Conventions
 
 - Project root: `continuum-daml/` (new, at repo top level next to `portal/`).
-- Two packages: `continuum-daml/contracts/` and `continuum-daml/tests/`, tied by `continuum-daml/multi-package.yaml`.
+- **Three packages:** `contracts/` (templates only — NO daml-script, this is the DAR we upload), `scripts/` (Seed + Scenario, depends on contracts + daml-script), `tests/` (Daml Script test suites), tied by `continuum-daml/multi-package.yaml`.
 - Module prefix `Continuum.` for our code; tests are `Test.<Group>`.
 - Commit after every task with the message shown. Run `dpm build --all` (from `continuum-daml/`) before every `dpm test`.
 - **TDD everywhere:** write the failing Script test, run it, see it fail, implement, run it, see it pass, commit.
+
+### Party model (MVP topology — decided from Fable plan review A1/A3)
+
+The GP's own internal hats are **one party** to keep authority tractable on a single participant: **`gp` also acts as `vehicle`, `oldFund`, and the single registry `admin`** (cash/units/asset instruments). This matches spec §4.1 ("may share the GP key in MVP"). Parties that MUST stay distinct (independence / authority separation): `ValuationAgent`, `FairnessProvider` (`ensure agent /= gp`), `LPAC`, `Regulator`, `Issuer`, each `RollingLP`/`ExitingLP`, each `Buyer`. Consequence: any contract co-signed by `gp`+`vehicle` (e.g. `ContinuationDeal`) or `oldFund`+`lp` (e.g. `OldFundInterest`) has `gp` on one side, so seeding it needs `submitMulti [lp, gp] []` (co-signed creation needs both authorities) — never a bare `submit gp`.
+
+### Reader-choice convention for confidential contracts (Fable A5)
+
+Explicit disclosure grants **visibility, not authority**. A party reading a disclosed contract in a submission must be the **controller** of the choice it exercises. So every confidential contract (`SealedBid`, `LPElection`, `SignedDocument`, `ValuationReport`, …) exposes a reader-parameterised fetch choice:
+
+```haskell
+nonconsuming choice Read : &lt;View&gt;
+  with reader : Party
+  controller reader
+  do pure (&lt;projected view of this&gt;)
+```
+
+The holder calls `queryDisclosure holder cid` and passes the `Disclosure` via `submit (actAs reader <> disclose d)`; the reader exercises `Read`. This is how `SelectLead` reads sealed bids and how `Close` reads sealed elections/valuations.
+
+### Two-phase settlement (Fable A3 — the load-bearing correction)
+
+`AllocationFactory_Allocate`'s controller is the leg **sender**; a GP-controlled `Close` choice has no buyer authority and cannot allocate buyer legs. Therefore settlement is two-phase: **(phase 1, per sender, own submission, pre-close)** each sender exercises `AllocationFactory_Allocate` against its `TransferLegRequest`, producing an admin-signed `RegistryAllocation` (this IS the sender's pre-authorization; `Allocation_Withdraw` is its escape hatch). **(phase 2, `Close`, one GP transaction)** GP exercises `Allocation_ExecuteTransfer` on every allocation (controller includes `settlement.executor = gp`), burns interests, mints units. Atomicity holds exactly at settlement.
 
 ---
 
@@ -31,6 +52,7 @@
 **Files:**
 - Create: `continuum-daml/multi-package.yaml`
 - Create: `continuum-daml/contracts/daml.yaml`
+- Create: `continuum-daml/scripts/daml.yaml`
 - Create: `continuum-daml/tests/daml.yaml`
 - Create: `continuum-daml/contracts/daml/Continuum/Types.daml`
 - Create: `continuum-daml/.gitignore`
@@ -41,6 +63,7 @@
 # continuum-daml/multi-package.yaml
 packages:
   - ./contracts
+  - ./scripts
   - ./tests
 ```
 
@@ -65,7 +88,30 @@ build-options:
   - --target=2.1
 ```
 
-- [ ] **Step 3: Write `tests/daml.yaml`**
+- [ ] **Step 3a: Write `scripts/daml.yaml`** (Seed + Scenario live here — they need daml-script and must NOT be in the uploaded contracts DAR)
+
+```yaml
+sdk-version: 3.4.11
+name: continuum-scripts
+source: daml
+version: 1.0.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+data-dependencies:
+  - ../contracts/.daml/dist/continuum-contracts-1.0.0.dar
+  - ../dars/splice-api-token-metadata-v1.dar
+  - ../dars/splice-api-token-holding-v1.dar
+  - ../dars/splice-api-token-transfer-instruction-v1.dar
+  - ../dars/splice-api-token-allocation-v1.dar
+  - ../dars/splice-api-token-allocation-instruction-v1.dar
+  - ../dars/splice-api-token-allocation-request-v1.dar
+build-options:
+  - --target=2.1
+```
+
+- [ ] **Step 3b: Write `tests/daml.yaml`** (all six splice DARs — tests import AllocationInstructionV1 etc.)
 
 ```yaml
 sdk-version: 3.4.11
@@ -78,9 +124,12 @@ dependencies:
   - daml-script
 data-dependencies:
   - ../contracts/.daml/dist/continuum-contracts-1.0.0.dar
+  - ../scripts/.daml/dist/continuum-scripts-1.0.0.dar
   - ../dars/splice-api-token-metadata-v1.dar
   - ../dars/splice-api-token-holding-v1.dar
+  - ../dars/splice-api-token-transfer-instruction-v1.dar
   - ../dars/splice-api-token-allocation-v1.dar
+  - ../dars/splice-api-token-allocation-instruction-v1.dar
   - ../dars/splice-api-token-allocation-request-v1.dar
 build-options:
   - --target=2.1
@@ -191,9 +240,9 @@ git commit -m "chore(daml): pin splice-api-token-*-v1 DARs from 0.6.11 bundle"
 
 ## Phase 1 — De-risking spikes (prove the hard plumbing before scaling)
 
-### Task 1.1: Spike A — generic Holding + one allocate→execute leg
+### Task 1.1: Spike A — full settlement dress rehearsal (the biggest risk, front-loaded)
 
-This validates our reconstructed interface signatures against the real DARs. If a signature differs, fix it HERE and propagate.
+This validates our reconstructed interface signatures AND every authority edge the atomic `Close` depends on (Fable review D): **two different senders each allocate in their own submissions (against a disclosed factory), then a third-party executor executes BOTH allocations plus a delegated burn of a co-signed contract in ONE transaction.** If this passes, Phase 7 is assembly; if it fails, we've lost hours not days. If a signature differs from the reconstruction, fix it HERE and propagate.
 
 **Files:**
 - Create: `continuum-daml/contracts/daml/Continuum/Registry.daml`
@@ -248,10 +297,14 @@ template RegistryAllocationFactory
         let spec    = arg.allocation
             leg     = spec.transferLeg
             sender  = leg.sender
-        -- fetch + archive the input holdings, summing their amounts
+        -- fetch + archive the input holdings, VALIDATING each belongs to the
+        -- sender, matches the leg instrument, and is unlocked (Fable MUST-FIX 2)
         inputs <- forA arg.inputHoldingCids \hcid -> do
-          let rcid = coerceContractId hcid : ContractId RegistryHolding
+          let rcid = fromInterfaceContractId @RegistryHolding hcid
           h <- fetch rcid
+          assertMsg "wrong owner"      (h.owner == sender)
+          assertMsg "wrong instrument" (h.instId == leg.instrumentId.id)
+          assertMsg "holding locked"   (not h.locked)
           archive rcid
           pure h
         let total = sum (map (.amount) inputs)
@@ -309,7 +362,25 @@ emptyTextMap = mempty
 
 > If the real interface requires additional methods or different names than reconstructed, `dpm build` will name the missing/incorrect method — fix each against the compiler and the `.mdx` reference, keeping the algorithm above.
 
-- [ ] **Step 2: Write the failing spike test**
+- [ ] **Step 1b: Add a tiny co-signed delegation to the registry module (for the burn edge of the rehearsal)**
+
+```haskell
+-- in Continuum.Registry (throwaway; the real ones live in Continuum.Participation)
+template ProbeInterest
+  with admin : Party; lp : Party
+  where signatory admin, lp
+
+template ProbeDelegation
+  with admin : Party; lp : Party
+  where
+    signatory admin, lp
+    nonconsuming choice ProbeBurn : ()
+      with icid : ContractId ProbeInterest
+      controller admin
+      do archive icid
+```
+
+- [ ] **Step 2: Write the failing dress-rehearsal test — two senders allocate, executor executes both + burns, in ONE tx**
 
 ```haskell
 module Test.SpikeAllocation where
@@ -322,54 +393,75 @@ import Splice.Api.Token.AllocationV1
 import Splice.Api.Token.AllocationInstructionV1
 import Splice.Api.Token.MetadataV1
 
-spikeOneLeg : Script ()
-spikeOneLeg = do
-  admin <- allocateParty "Registry"
-  alice <- allocateParty "Alice"
-  bob   <- allocateParty "Bob"
-  -- mint 100 to Alice
-  h <- submit admin do createCmd RegistryHolding with
-    admin; owner = alice; instId = "USDC"; amount = 100.0; locked = False; meta_ = emptyTextMap
-  factory <- submit admin do createCmd RegistryAllocationFactory with admin
-  now <- getTime
-  let leg = TransferLeg with
-        sender = alice; receiver = bob; amount = 40.0
-        instrumentId = InstrumentId with admin; id = "USDC"; meta = emptyMetadata
-      spec = AllocationSpecification with
-        settlement = SettlementInfo with
-          executor = admin; settlementRef = Reference with id = "s1"; cid = None
-          requestedAt = now; allocateBefore = now; settleBefore = now; meta = emptyMetadata
-        transferLegId = "leg1"; transferLeg = leg
-  -- allocate (sender authorizes)
-  res <- submit alice do
+-- helper: build an allocation spec for one leg
+legSpec : Party -> Party -> Party -> Text -> Decimal -> Time -> Text -> AllocationSpecification
+legSpec executor sender receiver instId amount now legId =
+  AllocationSpecification with
+    settlement = SettlementInfo with
+      executor; settlementRef = Reference with id = "settle-1"; cid = None
+      requestedAt = now; allocateBefore = now; settleBefore = now; meta = emptyMetadata
+    transferLegId = legId
+    transferLeg = TransferLeg with
+      sender; receiver; amount
+      instrumentId = InstrumentId with admin = executor; id = instId; meta = emptyMetadata
+
+-- sender allocates against the factory it must SEE via disclosure (Fable MUST-FIX 1)
+allocateLeg : Party -> Party -> ContractId RegistryAllocationFactory -> AllocationSpecification
+            -> ContractId Holding -> Time -> Script (ContractId Allocation)
+allocateLeg admin sender factory spec holdingCid now = do
+  Some dF <- queryDisclosure admin factory
+  res <- submit (actAs sender <> disclose dF) do
     exerciseCmd (toInterfaceContractId @AllocationFactory factory)
       AllocationFactory_Allocate with
         expectedAdmin = admin; allocation = spec; requestedAt = now
-        inputHoldingCids = [toInterfaceContractId @Holding h]
+        inputHoldingCids = [holdingCid]
         extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
-  allocCid <- case res.output of
+  case res.output of
     AllocationInstructionResult_Completed cid -> pure cid
     _ -> abort "allocate did not complete"
-  -- execute (executor = admin)
-  _ <- submit admin do
-    exerciseCmd allocCid Allocation_ExecuteTransfer with
-      extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
-  -- Bob now holds 40, Alice holds 60 change
-  bobHs <- query @RegistryHolding bob
-  map (.amount) [h | (_, h) <- bobHs, h.owner == bob] === [40.0]
-  pure ()
+
+spikeSettlementDressRehearsal : Script ()
+spikeSettlementDressRehearsal = do
+  gp    <- allocateParty "GP"          -- executor + registry admin + vehicle (MVP hats)
+  buyer <- allocateParty "Buyer"       -- sender of the cash leg
+  seller<- allocateParty "Seller"      -- receiver of cash
+  roller<- allocateParty "Roller"      -- receiver of units
+  lp    <- allocateParty "LP"          -- burn target
+  now <- getTime
+  factory <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  -- mint: buyer holds cash, gp(vehicle) holds a unit treasury
+  cash  <- submit gp do createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 19584000.0; locked = False; meta_ = emptyTextMap
+  units <- submit gp do createCmd RegistryHolding with admin = gp; owner = gp;    instId = unitId; amount = 49920000.0; locked = False; meta_ = emptyTextMap
+  -- co-signed interest + accepted delegation (created with BOTH authorities)
+  interest <- submitMulti [gp, lp] [] do createCmd ProbeInterest with admin = gp; lp
+  deleg    <- submitMulti [gp, lp] [] do createCmd ProbeDelegation with admin = gp; lp
+  -- PHASE 1 — each sender allocates in its own submission
+  aCash  <- allocateLeg gp buyer factory (legSpec gp buyer seller usdcId 19584000.0 now "cash") (toInterfaceContractId @Holding cash) now
+  aUnits <- allocateLeg gp gp    factory (legSpec gp gp    roller unitId 30336000.0 now "units")(toInterfaceContractId @Holding units) now
+  -- PHASE 2 — executor executes BOTH allocations + burns, in ONE transaction
+  submit gp do
+    _ <- exerciseCmd aCash  Allocation_ExecuteTransfer with extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+    _ <- exerciseCmd aUnits Allocation_ExecuteTransfer with extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+    exerciseCmd deleg ProbeBurn with icid = interest
+  -- assertions: seller has cash, roller has units, interest burned, gp has unit change
+  sellerHs <- query @RegistryHolding seller
+  [ h.amount | (_, h) <- sellerHs ] === [19584000.0]
+  rollerHs <- query @RegistryHolding roller
+  [ h.amount | (_, h) <- rollerHs ] === [30336000.0]
+  gone <- query @ProbeInterest lp
+  gone === []
 ```
 
-- [ ] **Step 3: Run — expect failure first, then pass after Registry compiles**
+- [ ] **Step 3: Run — iterate signatures until it passes**
 
 Run: `cd continuum-daml && dpm build --all && dpm test --files tests/daml/Test/SpikeAllocation.daml`
-Expected: first iteration fails to compile (Registry incomplete/mismatched); after fixing signatures, `spikeOneLeg` PASSES (Bob holds 40, Alice change 60).
+Expected: first iterations fail to compile (registry method names/records vs the real DARs) — fix each against the compiler and the api-reference `.mdx`, keeping the algorithm. Then `spikeSettlementDressRehearsal` PASSES. **This is the go/no-go gate for the whole design.**
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add continuum-daml/contracts/daml/Continuum/Registry.daml continuum-daml/tests/daml/Test/SpikeAllocation.daml
-git commit -m "feat(daml): generic Token-Standard registry + one-leg allocate/execute spike"
+git commit -m "feat(daml): registry + multi-sender settlement dress rehearsal (authority edges proven)"
 ```
 
 ### Task 1.2: Spike B — GP-blind-mid-window via explicit disclosure
@@ -388,8 +480,10 @@ template SealedProbe
     secret : Decimal
   where
     signatory owner
+    -- reader is the controller (disclosure grants visibility, not authority)
     nonconsuming choice Reveal : Decimal
-      controller owner
+      with reader : Party
+      controller reader
       do pure secret
 ```
 
@@ -410,9 +504,9 @@ spikeDisclosure = do
   -- GP query returns nothing: the sealed contract has no GP stakeholder
   gpView <- query @SealedProbe gp
   gpView === []
-  -- Buyer discloses to GP; GP can now use it in a submission
+  -- Buyer discloses to GP; GP (as reader/controller) can now use it in a submission
   Some d <- queryDisclosure buyer cid
-  v <- submit (actAs gp <> disclose d) do exerciseCmd cid Reveal
+  v <- submit (actAs gp <> disclose d) do exerciseCmd cid Reveal with reader = gp
   v === 96.0
   pure ()
 ```
@@ -456,8 +550,10 @@ template SignedDocument
     signedAt    : Time
   where
     signatory attestor
+    -- reader is the controller so a disclosed doc can be read by GP/Close
     nonconsuming choice FetchDoc : SignedDocument
-      controller attestor
+      with reader : Party
+      controller reader
       do pure this
 
 -- helper: compute the on-ledger hash of a text payload
@@ -541,7 +637,6 @@ instrumentsMint : Script ()
 instrumentsMint = do
   gp    <- allocateParty "GP"
   buyer <- allocateParty "Buyer"
-  _ <- submit gp do createAndExerciseCmd (RegistryAllocationFactory with admin = gp) Archive
   cash <- submit gp do createCmd RegistryHolding with
     admin = gp; owner = buyer; instId = usdcId; amount = 20000000.0; locked = False; meta_ = mempty
   Some h <- queryContractId gp cash
@@ -693,21 +788,30 @@ template ContinuationDeal
       do assertMsg "already terminal" (stage /= Closed && stage /= Broken)
          create this with stage = Broken
 
--- a reusable sample for tests
-sampleDeal : ContinuationDeal
-sampleDeal = ContinuationDeal with
-  gp = undefined  -- filled by `with gp` at call sites in tests
-  vehicle = undefined; oldFund = undefined; lpac = undefined; regulator = undefined
+-- a reusable sample for tests. Per the MVP party model, gp = vehicle = oldFund.
+-- lpac/regulator are passed distinct. (Daml has no `undefined`; this is a function.)
+mkDeal : Party -> Party -> Party -> ContinuationDeal
+mkDeal gp lpac regulator = ContinuationDeal with
+  gp; vehicle = gp; oldFund = gp; lpac; regulator
   room = []; fund = "Meridian Growth Fund III"; cv = "Meridian CV I"; asset = "Project Atlas"
   refNav = 52000000.0; electionDeadline = time (date 1970 Jan 1) 0 0 0
   clearingPrice = None; gpCommitment = 0.0; carryCrystallized = 0.0; stage = Setup
 ```
 
-> Note: `sampleDeal with gp` in the test overrides only `gp`; extend the test helper to set `vehicle`, `oldFund`, `lpac`, `regulator` to `gp` for the single-party stage tests, or allocate distinct parties. Prefer distinct parties once Task 3.3 lands.
+- [ ] **Step 4: Write the test using `mkDeal`, run — expect pass**
 
-- [ ] **Step 4: Fix the test to supply all parties, run — expect pass**
-
-Update `dealBreakGoesToBroken` to `createCmd sampleDeal with gp; vehicle = gp; oldFund = gp; lpac = gp; regulator = gp`.
+```haskell
+-- Test.Deal
+dealBreakGoesToBroken : Script ()
+dealBreakGoesToBroken = do
+  gp   <- allocateParty "GP"
+  lpac <- allocateParty "LPAC"
+  reg  <- allocateParty "Regulator"
+  deal <- submit gp do createCmd (mkDeal gp lpac reg)   -- gp signs both gp+vehicle (same party)
+  broken <- submit gp do exerciseCmd deal Break with reason = "LPAC denied"
+  Some d <- queryContractId gp broken
+  d.stage === Broken
+```
 Run: `dpm build --all && dpm test --files tests/daml/Test/Deal.daml`
 Expected: PASS (`stage == Broken`).
 
@@ -734,13 +838,14 @@ import Continuum.Participation
 
 burnNeedsDelegation : Script ()
 burnNeedsDelegation = do
-  gp <- allocateParty "GP"
+  gp <- allocateParty "GP"      -- gp also plays oldFund (MVP party model)
   lp <- allocateParty "LP"
-  oi <- submit lp do createCmd OldFundInterest with oldFund = gp, lp, nav = 5000000.0
-  -- GP cannot archive the LP-co-signed interest unilaterally
+  -- co-signed interest: creation needs BOTH oldFund(=gp) and lp authority
+  oi <- submitMulti [gp, lp] [] do createCmd OldFundInterest with oldFund = gp; lp; nav = 5000000.0
+  -- GP cannot archive the LP-co-signed interest unilaterally (needs lp too)
   submitMustFail gp do archiveCmd oi
-  -- with a DealParticipation (LP+GP co-signed), GP can burn via BurnFor
-  part <- submit lp do createCmd DealParticipation with gp, lp
+  -- LP proposes participation; GP accepts -> co-signed authority the Close uses
+  part <- submit lp do createCmd DealParticipation with gp; lp
   part2 <- submit gp do exerciseCmd part Accept
   _ <- submit gp do exerciseCmd part2 BurnFor with interestCid = oi
   remaining <- query @OldFundInterest lp
@@ -853,19 +958,21 @@ template SealedBid
     capacity : Decimal
   where
     signatory buyer            -- sole signatory => peer-blind and GP-blind
-    ensure pctOfNav > 0.0 && pctOfNav <= 1.0 && capacity > 0.0
+    -- GP self-dealing guard (matrix 8.11): the GP cannot bid on its own deal
+    ensure pctOfNav > 0.0 && pctOfNav <= 1.0 && capacity > 0.0 && buyer /= gp
     choice Withdraw : ()
       controller buyer
       do pure ()
 
-template BidFiled            -- contentless marker: GP sees THAT a bid is in
+template BidFiled            -- contentless marker: GP + LPAC see THAT a bid is in
   with
     gp     : Party
+    lpac   : Party
     buyer  : Party
     dealId : Text
   where
     signatory buyer
-    observer gp
+    observer gp, lpac        -- lpac observes so the recusal gate can fetch these facts
 ```
 
 - [ ] **Step 4: Run — expect pass**
@@ -1036,36 +1143,62 @@ git commit -m "feat(daml): independent ValuationReport + FairnessOpinion (ensure
 - Create: `continuum-daml/contracts/daml/Continuum/Issuance.daml`
 - Create: `continuum-daml/tests/daml/Test/Issuance.daml`
 
-- [ ] **Step 1: Write the failing test — basis validates price = clearing × NAV, dates fresh, all antecedents present**
+- [ ] **Step 1: Write the failing test — basis fetches every antecedent and checks price/range/consent/staleness**
 
 ```haskell
 module Test.Issuance where
 
 import Daml.Script
+import DA.Date (date, Month(Jun), subDate)
+import DA.Crypto.Text (sha256)
 import Continuum.Issuance
+import Continuum.Valuation
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
 
 issuanceBasisValidates : Script ()
 issuanceBasisValidates = do
-  gp <- allocateParty "GP"
+  gp    <- allocateParty "GP"          -- gp = oldFund = vehicle (MVP)
+  agent <- allocateParty "ValuationAgent"
+  fair  <- allocateParty "FairnessProvider"
+  lpac  <- allocateParty "LPAC"
+  let asOf = date 2026 Jun 30; closeD = date 2026 Jun 30
+  vr <- submit agent do createCmd ValuationReport with
+    agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = sha256 "v"
+  fo <- submit fair do createCmd FairnessOpinion with
+    provider = fair; gp; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = sha256 "f"
+  ac <- submit gp do createCmd AuctionCertificate with
+    gp; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = sha256 "b"
+  lc <- submit lpac do createCmd LPACConsent with gp; lpac; dealId = "D1"; recusals = []; granted = True
+  psa <- submit gp do createCmd PurchaseAgreement with
+    oldFund = gp; vehicle = gp; dealId = "D1"; price = 49920000.0; refNav = 52000000.0; clearingPct = 0.96; asOfDate = asOf
   let basis = IssuanceBasis with
-        gp; dealId = "D1"; reconciledNav = 52000000.0; clearingPct = 0.96
-        psaPrice = 49920000.0; reconciliation = InRangeOfAll
+        gp; dealId = "D1"; reconciledNav = 52000000.0; clearingPct = 0.96; psaPrice = 49920000.0
+        reconciliation = InRangeOfAll; valuationCids = [vr]; fairnessCid = fo
+        auctionCertCid = ac; lpacConsentCid = lc; psaCid = psa; closeDate = closeD; maxAsOfDays = 120
   cid <- submit gp do createCmd basis
-  -- validate: psaPrice == clearing × reconciledNav
   ok <- submit gp do exerciseCmd cid ValidateIssuance
   assert ok
-  -- a mismatched price is rejected
-  let bad = basis with psaPrice = 50000000.0
-  badCid <- submit gp do createCmd bad
-  submitMustFail gp do exerciseCmd badCid ValidateIssuance
+  -- price mismatch rejected
+  bad <- submit gp do createCmd basis with psaPrice = 50000000.0
+  submitMustFail gp do exerciseCmd bad ValidateIssuance
 ```
 
-- [ ] **Step 2: Run — expect fail; Step 3: Implement**
+- [ ] **Step 2: Run — expect fail; Step 3: Implement the full gate**
 
 ```haskell
 module Continuum.Issuance where
 
+import DA.Date (subDate)
+import DA.Foldable (forA_)
+import Continuum.Valuation (ValuationReport(..), FairnessOpinion(..))
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
+
 data Reconciliation = InRangeOfAll | LowerOf | Midpoint deriving (Eq, Show)
+
+roundDollar : Decimal -> Decimal
+roundDollar x = fromIntegral (round x : Int)
 
 template PurchaseAgreement
   with
@@ -1080,6 +1213,8 @@ template PurchaseAgreement
     signatory oldFund, vehicle
     ensure price == roundDollar (clearingPct * refNav)
 
+-- The antecedent DAG gate. gp is a stakeholder of every referenced contract
+-- (observer of valuation/fairness/consent; signatory of cert/PSA), so it can fetch them.
 template IssuanceBasis
   with
     gp             : Party
@@ -1088,18 +1223,44 @@ template IssuanceBasis
     clearingPct    : Decimal
     psaPrice       : Decimal
     reconciliation : Reconciliation
+    valuationCids  : [ContractId ValuationReport]
+    fairnessCid    : ContractId FairnessOpinion
+    auctionCertCid : ContractId AuctionCertificate
+    lpacConsentCid : ContractId LPACConsent
+    psaCid         : ContractId PurchaseAgreement
+    closeDate      : Date
+    maxAsOfDays    : Int
   where
     signatory gp
     choice ValidateIssuance : Bool
       controller gp
-      do assertMsg "psaPrice must equal clearing × reconciledNav"
+      do -- 1. price == clearing × reconciled NAV
+         assertMsg "psaPrice != clearing × reconciledNav"
            (psaPrice == roundDollar (clearingPct * reconciledNav))
+         -- 2. every independent valuation contains the reconciled NAV in range, and is fresh
+         assertMsg "no valuation" (not (null valuationCids))
+         forA_ valuationCids \vc -> do
+           v <- fetch vc
+           assertMsg "reconciledNav outside a valuation range"
+             (v.navLow <= reconciledNav && reconciledNav <= v.navHigh)
+           assertMsg "valuation stale" (subDate closeDate v.asOfDate <= maxAsOfDays)
+         -- 3. clearing within the fairness range, fairness fresh
+         f <- fetch fairnessCid
+         assertMsg "clearing outside fairness range" (f.fairLow <= clearingPct && clearingPct <= f.fairHigh)
+         assertMsg "fairness stale" (subDate closeDate f.opinionDate <= maxAsOfDays)
+         -- 4. auction certificate agrees on clearing
+         c <- fetch auctionCertCid
+         assertMsg "auction cert clearing mismatch" (c.clearingPct == clearingPct)
+         -- 5. LPAC granted
+         l <- fetch lpacConsentCid
+         assertMsg "LPAC not granted" l.granted
+         -- 6. PSA price agrees
+         p <- fetch psaCid
+         assertMsg "PSA price mismatch" (p.price == psaPrice && p.clearingPct == clearingPct)
          pure True
-
--- round to whole dollars (cents rule for cash is applied in Close)
-roundDollar : Decimal -> Decimal
-roundDollar x = fromIntegral (round x : Int)
 ```
+
+> `subDate : Date -> Date -> Int` (DA.Date) returns the day difference. Staleness uses whole days for the demo.
 
 - [ ] **Step 4: Run — expect pass; Step 5: Commit**
 
@@ -1118,27 +1279,31 @@ git commit -m "feat(daml): PurchaseAgreement + IssuanceBasis price-gate"
 - Create: `continuum-daml/contracts/daml/Continuum/Consent.daml`
 - Create: `continuum-daml/tests/daml/Test/Consent.daml`
 
-- [ ] **Step 1: Write the failing test (matrix 8.6) — a consent whose recusals don't cover an LPAC-member-who-bid is rejected**
+- [ ] **Step 1: Write the failing test (matrix 8.6) — recusal coverage is derived from on-ledger `BidFiled` facts, not a GP-typed field (Decision 9)**
 
 ```haskell
 module Test.Consent where
 
 import Daml.Script
 import Continuum.Consent
+import Continuum.Auction (BidFiled(..))
 
-recusalMustCoverBiddingMembers : Script ()
-recusalMustCoverBiddingMembers = do
+recusalDerivedFromBidFacts : Script ()
+recusalDerivedFromBidFacts = do
   lpac <- allocateParty "LPAC"
   gp   <- allocateParty "GP"
-  m1   <- allocateParty "Member1"   -- also a bidder
-  -- consent that omits m1 from recusals but m1 is in biddingMembers -> Grant fails
+  m1   <- allocateParty "Member1"   -- LPAC member who also bid
+  m2   <- allocateParty "Member2"   -- LPAC member, no bid
+  -- m1 filed a bid (marker observed by gp+lpac)
+  bf <- submit m1 do createCmd BidFiled with gp; lpac; buyer = m1; dealId = "D1"
+  -- Grant with recusals = [] but roster includes m1 who bid -> FAILS (conflict uncovered)
   req <- submit gp do createCmd LPACConsentRequest with
-    gp; lpac; dealId = "D1"; biddingMembers = [m1]; recusals = []
-  submitMustFail lpac do exerciseCmd req Grant
-  -- consent that recuses m1 -> Grant succeeds
+    gp; lpac; dealId = "D1"; memberRoster = [m1, m2]; recusals = []
+  submitMustFail lpac do exerciseCmd req Grant with bidMarkerCids = [bf]
+  -- Grant recusing m1 -> succeeds
   req2 <- submit gp do createCmd LPACConsentRequest with
-    gp; lpac; dealId = "D1"; biddingMembers = [m1]; recusals = [m1]
-  _ <- submit lpac do exerciseCmd req2 Grant
+    gp; lpac; dealId = "D1"; memberRoster = [m1, m2]; recusals = [m1]
+  _ <- submit lpac do exerciseCmd req2 Grant with bidMarkerCids = [bf]
   pure ()
 ```
 
@@ -1148,22 +1313,27 @@ recusalMustCoverBiddingMembers = do
 module Continuum.Consent where
 
 import DA.List (nub)
-import DA.Foldable (all)
+import Continuum.Auction (BidFiled(..))
 
 template LPACConsentRequest
   with
-    gp             : Party
-    lpac           : Party
-    dealId         : Text
-    biddingMembers : [Party]   -- LPAC members detected as bidders (from BidFiled × roster)
-    recusals       : [Party]
+    gp           : Party
+    lpac         : Party
+    dealId       : Text
+    memberRoster : [Party]   -- the LPAC membership
+    recusals     : [Party]
   where
     signatory gp
     observer lpac
+    -- LPAC grants only if every roster member that on-ledger DID bid is recused.
     choice Grant : ContractId LPACConsent
+      with bidMarkerCids : [ContractId BidFiled]
       controller lpac
-      do assertMsg "recusals must cover all bidding LPAC members"
-           (all (`elem` recusals) biddingMembers)
+      do markers <- forA bidMarkerCids fetch
+         let bidders    = nub (map (.buyer) markers)
+             conflicted = filter (`elem` bidders) memberRoster
+         assertMsg "recusals must cover every bidding LPAC member"
+           (all (`elem` recusals) conflicted)
          create LPACConsent with gp; lpac; dealId; recusals; granted = True
 
 template LPACConsent
@@ -1177,6 +1347,8 @@ template LPACConsent
     signatory lpac
     observer gp
 ```
+
+> Requires `BidFiled` to have `lpac` as an observer too (so LPAC can fetch the markers). Update `Continuum.Auction.BidFiled` to `observer gp, lpac` (or pass `lpac` in and disclose). Small change to Task 4.1.
 
 - [ ] **Step 4: Run — expect pass; Step 5: Commit**
 
@@ -1399,6 +1571,8 @@ data ClearingInput = ClearingInput with
   syndicateCap : Decimal
 
 data ClearingResult = ClearingResult with
+  demand         : Decimal
+  sellNav        : Decimal
   psaPrice       : Decimal
   buyerCash      : Decimal
   rollerUnits    : Decimal
@@ -1407,21 +1581,50 @@ data ClearingResult = ClearingResult with
   rollFillRatio  : Decimal
   buyerFillRatio : Decimal
 
+-- Per-buyer allocation (matrix 4.2/4.3): lead filled first to capacity, then
+-- syndicate pro-rata on the overflow; residual whole units to the lead.
+data BuyerCommit = BuyerCommit with party : Party; capacity : Decimal; isLead : Bool
+data BuyerFill   = BuyerFill   with party : Party; navFilled : Decimal; units : Decimal
+
+allocateBuyers : Decimal -> Decimal -> [BuyerCommit] -> [BuyerFill]
+allocateBuyers clearing sellPool commits =
+  let lead = filter (.isLead) commits
+      syn  = filter (not . (.isLead)) commits
+      leadFill = sum (map (\c -> min c.capacity sellPool) lead)
+      overflow = max 0.0 (sellPool - leadFill)
+      synCap   = sum (map (.capacity) syn)
+      fillOf c
+        | c.isLead  = min c.capacity sellPool
+        | synCap > 0.0 = roundDollar (overflow * (c.capacity / synCap))
+        | otherwise = 0.0
+  in [ let nav = fillOf c in BuyerFill c.party nav (roundDollar (clearing * nav)) | c <- commits ]
+
 roundDollar : Decimal -> Decimal
 roundDollar x = fromIntegral (round x : Int)
 
+-- Close asserts `not (undersubscribed r)` (matrix 4.4: never force sellers to roll).
+undersubscribed : ClearingResult -> Bool
+undersubscribed r = r.demand < r.sellNav
+
 computeClearing : ClearingInput -> ClearingResult
 computeClearing i =
-  let refNav       = i.rollNav + i.sellNav
-      psaPrice     = roundDollar (i.clearing * refNav)
-      filledSell   = min i.sellNav (i.leadCap + i.syndicateCap)
-      buyerCash    = roundDollar (i.clearing * filledSell)
-      rollerUnits  = roundDollar (i.clearing * i.rollNav)      -- roll at deal price
-      buyerUnits   = roundDollar (i.clearing * filledSell)
-      totalUnits   = rollerUnits + buyerUnits
-      buyerFill    = if i.sellNav > 0.0 then filledSell / i.sellNav else 1.0
+  let refNav      = i.rollNav + i.sellNav
+      demand      = i.leadCap + i.syndicateCap                 -- total buyer capacity
+      psaPrice    = roundDollar (i.clearing * refNav)
+      -- the whole sell pool fills whenever demand >= sell; buyers absorb it
+      filledSell  = min i.sellNav demand
+      buyerCash   = roundDollar (i.clearing * filledSell)
+      rollerUnits = roundDollar (i.clearing * i.rollNav)       -- roll at DEAL price
+      buyerUnits  = roundDollar (i.clearing * filledSell)
+      -- oversubscription scales each buyer's CAPACITY down to sell/demand (<1);
+      -- exactly-/under-subscribed => 1.0. Rolls are NEVER scaled.
+      buyerFill   = if demand > i.sellNav && demand > 0.0
+                    then i.sellNav / demand
+                    else 1.0
   in ClearingResult with
-       psaPrice; buyerCash; rollerUnits; buyerUnits; totalUnits
+       demand; sellNav = i.sellNav
+       psaPrice; buyerCash; rollerUnits; buyerUnits
+       totalUnits = rollerUnits + buyerUnits
        rollFillRatio = 1.0                                     -- rolls never scaled
        buyerFillRatio = buyerFill
 ```
@@ -1433,13 +1636,173 @@ git add continuum-daml/contracts/daml/Continuum/Clearing.daml continuum-daml/tes
 git commit -m "feat(daml): pure clearing math (roll-at-deal-price, buyer-only scaling)"
 ```
 
-### Task 7.3: The atomic Close choice (gate + legs + burns + provenance)
+### Task 7.3a: Phase-1 allocate — each sender reserves its leg (own submission)
+
+**Files:**
+- Create: `continuum-daml/scripts/daml/Continuum/Settle.daml` (allocate helpers)
+- Create: `continuum-daml/tests/daml/Test/AllocatePhase.daml`
+
+- [ ] **Step 1: Write the failing test — a buyer allocates its cash leg against a disclosed factory; result is an `Allocation`**
+
+```haskell
+module Test.AllocatePhase where
+
+import Daml.Script
+import Continuum.Registry
+import Continuum.Settle (allocateFor)
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1
+
+buyerAllocatesCashLeg : Script ()
+buyerAllocatesCashLeg = do
+  gp    <- allocateParty "GP"
+  buyer <- allocateParty "Buyer"
+  seller<- allocateParty "Seller"
+  now <- getTime
+  fac  <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  cash <- submit gp do createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 19584000.0; locked = False; meta_ = mempty
+  a <- allocateFor gp buyer seller fac usdcId 19584000.0 (toInterfaceContractId @Holding cash) now "cash"
+  Some _ <- queryInterfaceContractId buyer a   -- an Allocation now exists
+  pure ()
+```
+
+- [ ] **Step 2: Run — expect fail; Step 3: Implement `allocateFor`** (reuses the disclosed-factory pattern proven in Spike A)
+
+```haskell
+module Continuum.Settle where
+
+import Daml.Script
+import Continuum.Registry (RegistryAllocationFactory)
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.AllocationInstructionV1
+import Splice.Api.Token.MetadataV1
+
+allocateFor
+  : Party -> Party -> Party -> ContractId RegistryAllocationFactory
+  -> Text -> Decimal -> ContractId Holding -> Time -> Text
+  -> Script (ContractId Allocation)
+allocateFor admin sender receiver factory instId amount holdingCid now legId = do
+  let spec = AllocationSpecification with
+        settlement = SettlementInfo with
+          executor = admin; settlementRef = Reference with id = legId; cid = None
+          requestedAt = now; allocateBefore = now; settleBefore = now; meta = emptyMetadata
+        transferLegId = legId
+        transferLeg = TransferLeg with
+          sender; receiver; amount
+          instrumentId = InstrumentId with admin; id = instId; meta = emptyMetadata
+  Some dF <- queryDisclosure admin factory
+  res <- submit (actAs sender <> disclose dF) do
+    exerciseCmd (toInterfaceContractId @AllocationFactory factory)
+      AllocationFactory_Allocate with
+        expectedAdmin = admin; allocation = spec; requestedAt = now
+        inputHoldingCids = [holdingCid]
+        extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+  case res.output of
+    AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "allocate did not complete"
+```
+
+- [ ] **Step 4: Run — expect pass; Step 5: Commit**
+
+```bash
+git add continuum-daml/scripts/daml/Continuum/Settle.daml continuum-daml/tests/daml/Test/AllocatePhase.daml
+git commit -m "feat(daml): phase-1 per-sender allocate helper (disclosed factory)"
+```
+
+### Task 7.3b: Phase-2 `Close` — executor executes all allocations + burns + mints
 
 **Files:**
 - Modify: `continuum-daml/contracts/daml/Continuum/Deal.daml` (add `Close`)
+- Modify: `continuum-daml/contracts/daml/Continuum/Election.daml` (add a `Read` choice so Close can read disclosed elections)
+- Create: `continuum-daml/tests/daml/Test/CloseChoice.daml`
+
+- [ ] **Step 1: Add a reader-controlled `Read` to `LPElection`** (Close reads sealed elections via disclosure)
+
+```haskell
+-- in Continuum.Election, inside `template LPElection ... where`
+data ElectionView = ElectionView with rollNav : Decimal; sellNav : Decimal; disclosureHash : BytesHex
+  deriving (Eq, Show)
+nonconsuming choice Read : ElectionView
+  with reader : Party
+  controller reader
+  do pure (ElectionView with rollNav; sellNav; disclosureHash)
+```
+
+- [ ] **Step 2: Write the failing test — `Close` executes pre-created allocations, burns, mints units-with-meta**
+
+```haskell
+module Test.CloseChoice where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Deal
+import Splice.Api.Token.AllocationV1
+
+closeExecutesAllLegs : Script ()
+closeExecutesAllLegs = do
+  -- minimal 1-buyer/1-roller world assembled inline; allocations pre-created via allocateFor
+  ClosePrep{..} <- prepMinimalClose
+  submit gp do
+    exerciseCmd dealCid Close with
+      basisCid; legAllocs = [cashAlloc, unitAlloc]; burns = [(accParticipation, oldInterest)]
+      valuationHash = valHash
+  sellerHs <- query @Continuum.Registry.RegistryHolding seller
+  [ h.amount | (_, h) <- sellerHs ] === [19584000.0]
+  -- interest burned
+  gone <- query @Continuum.Participation.OldFundInterest lp
+  gone === []
+```
+
+- [ ] **Step 3: Implement the `Close` choice — phase 2 only (execute + burn + mint + receipts)**
+
+```haskell
+-- Continuum.Deal (add)
+import Continuum.Issuance (IssuanceBasis, ValidateIssuance)
+import Continuum.Participation (AcceptedParticipation, BurnFor, OldFundInterest)
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.MetadataV1
+import DA.Foldable (forA_)
+
+    choice Close : ()
+      with
+        basisCid      : ContractId IssuanceBasis
+        legAllocs     : [ContractId Allocation]                       -- pre-created by senders (7.3a)
+        burns         : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
+        valuationHash : Text
+      controller gp
+      do assertMsg "must be consented" (stage == Consented || stage == Electing)
+         -- 1. gate on the antecedent DAG
+         _ <- exercise basisCid ValidateIssuance
+         -- 2. execute every pre-allocated leg atomically (executor authority = gp)
+         forA_ legAllocs \a ->
+           exercise a Allocation_ExecuteTransfer with
+             extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+         -- 3. burn each LP's co-signed old interest via its delegation
+         forA_ burns \(p, oi) -> exercise p BurnFor with interestCid = oi
+         -- (unit legs already carry ("continuum/valuation-sha256", valuationHash) in their
+         --  TransferLeg.meta, set when the vehicle allocated them in 7.3a; the receiver
+         --  Holding.meta_ is populated from leg.meta by the registry's execute impl.)
+         create this with stage = Closed
+         pure ()
+```
+
+> `prepMinimalClose`/`ClosePrep` live in `scripts/Continuum/Settle.daml`: allocate the parties, mint, publish docs + `IssuanceBasis`, create the `AcceptedParticipation` + `OldFundInterest`, run phase-1 `allocateFor` for each leg (unit legs pass `meta` carrying the valuation hash), and return the cids `Close` consumes.
+
+- [ ] **Step 4: Run — expect pass; Step 5: Commit**
+
+```bash
+git add continuum-daml/contracts/daml/Continuum/Deal.daml continuum-daml/contracts/daml/Continuum/Election.daml continuum-daml/scripts/daml/Continuum/Settle.daml continuum-daml/tests/daml/Test/CloseChoice.daml
+git commit -m "feat(daml): phase-2 Close executes allocations + burns + provenance"
+```
+
+### Task 7.3c: Full-deal Scenario + conservation acceptance test (matrix group 5)
+
+**Files:**
+- Create: `continuum-daml/scripts/daml/Continuum/Scenario.daml`
 - Create: `continuum-daml/tests/daml/Test/Conservation.daml`
 
-- [ ] **Step 1: Write the failing conservation test (matrix group 5) — full close ties out on-ledger**
+- [ ] **Step 1: Write the failing conservation test — the whole deal #1 ties out on-ledger**
 
 ```haskell
 module Test.Conservation where
@@ -1451,51 +1814,31 @@ import Continuum.Scenario (setupAndClose, ClosedWorld(..))
 conservationTiesOut : Script ()
 conservationTiesOut = do
   w <- setupAndClose
-  w.exitingCashTotal === 19584000.0
-  w.rollerUnitsTotal === 30336000.0
-  w.buyerUnitsTotal  === 19584000.0
-  w.totalUnits       === 49920000.0
-  -- old interests all burned
+  w.exitingCashTotal      === 19584000.0
+  w.rollerUnitsTotal      === 30336000.0
+  w.buyerUnitsTotal       === 19584000.0
+  w.totalUnits            === 49920000.0
   w.oldInterestsRemaining === 0
-  -- provenance: minted units carry the valuation hash
   assert w.unitsCarryValuationHash
 ```
 
-- [ ] **Step 2: Implement a `Continuum.Scenario` helper that wires the whole flow and a `Close` choice on the deal**
-
-Add `Close` to `ContinuationDeal` (in `Deal.daml`), which: validates the `IssuanceBasis` (disclosed), computes clearing via `Continuum.Clearing`, creates `TransferLegRequest`s, drives `AllocationFactory_Allocate` per sender + `Allocation_ExecuteTransfer` per leg, burns each `OldFundInterest` via `AcceptedParticipation.BurnFor`, and mints units with `meta_` carrying `("continuum/valuation-sha256", hash)`. Create `contracts/daml/Continuum/Scenario.daml` that seeds parties/instruments/docs/elections and calls `Close`, returning a `ClosedWorld` record of the measured totals.
+- [ ] **Step 2: Implement `setupAndClose : Script ClosedWorld`** in `Scenario.daml` — seed the full 8-LP/4-buyer deal (incl. one non-electing LP), run phase-1 `allocateFor` for all legs, `exercise dealCid Close`, then query the ACS and total cash/units/interests into a `ClosedWorld` record.
 
 ```haskell
--- Continuum.Deal (add)
-import Continuum.Clearing
-import Continuum.Registry (RegistryHolding, mint, unitId)
--- ... Close choice signature:
-    choice Close : ()
-      with
-        basisCid    : ContractId Continuum.Issuance.IssuanceBasis
-        input       : ClearingInput
-        valuationHash : Text
-        -- (roster of elections, leg senders, participations threaded in)
-      controller gp
-      do assertMsg "must be consented" (stage == Consented || stage == Electing)
-         _ <- exercise basisCid Continuum.Issuance.ValidateIssuance
-         let r = computeClearing input
-         -- ... create+allocate+execute the 4 legs; burn interests; mint units with meta
-         pure ()
+data ClosedWorld = ClosedWorld with
+  exitingCashTotal      : Decimal
+  rollerUnitsTotal      : Decimal
+  buyerUnitsTotal       : Decimal
+  totalUnits            : Decimal
+  oldInterestsRemaining : Int
+  unitsCarryValuationHash : Bool
 ```
 
-> This is the integrating task: keep each sub-action (allocate a leg, execute a leg, burn one interest, mint units-with-meta) as a small helper in `Scenario.daml`, unit-tested by the earlier spikes. The conservation test is the acceptance test for the whole batch.
-
-- [ ] **Step 3: Run — iterate until pass**
-
-Run: `dpm build --all && dpm test --files tests/daml/Test/Conservation.daml`
-Expected: PASS — all six equalities hold and interests are burned.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Run — iterate until pass; Step 4: Commit**
 
 ```bash
-git add continuum-daml/contracts/daml/Continuum/Deal.daml continuum-daml/contracts/daml/Continuum/Scenario.daml continuum-daml/tests/daml/Test/Conservation.daml
-git commit -m "feat(daml): atomic Close — gate, clearing, allocation batch, burns, provenance"
+git add continuum-daml/scripts/daml/Continuum/Scenario.daml continuum-daml/tests/daml/Test/Conservation.daml
+git commit -m "feat(daml): full deal Scenario + conservation acceptance (group 5)"
 ```
 
 ### Task 7.4: Atomicity — all-or-nothing (matrix group 6)
@@ -1509,20 +1852,26 @@ git commit -m "feat(daml): atomic Close — gate, clearing, allocation batch, bu
 module Test.Atomicity where
 
 import Daml.Script
-import Continuum.Scenario (setupPreClose, sabotageOneLeg, closeWorld, worldAcs)
+import Continuum.Scenario (setupPreClose, ClosePrep(..), worldAcs, runClose)
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.MetadataV1
 
 closeIsAllOrNothing : Script ()
 closeIsAllOrNothing = do
-  w0 <- setupPreClose
-  before <- worldAcs w0
-  w1 <- sabotageOneLeg w0            -- e.g. withdraw a buyer's cash holding
-  submitMustFail (closeParty w1) do closeWorld w1
-  after <- worldAcs w1
-  -- no cash moved, no units minted, no interest burned
-  assert (before == after)
+  prep <- setupPreClose                       -- allocations pre-created (phase 1 done)
+  before <- worldAcs prep
+  -- SABOTAGE: a buyer withdraws its own allocation (controller = sender). This is the
+  -- correct sabotage vector — the buyer cannot archive its admin-signed Holding directly.
+  _ <- submit prep.buyer do
+    exerciseCmd prep.cashAlloc Allocation_Withdraw with
+      extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+  -- Close now references a consumed allocation -> whole close fails
+  submitMustFail prep.gp do runClose prep
+  after <- worldAcs prep
+  assert (before == after)                    -- no cash moved, no units minted, no interest burned
 ```
 
-- [ ] **Step 2: Implement the `sabotageOneLeg`/`worldAcs` helpers in `Scenario.daml`; run — expect pass; Step 3: Commit**
+- [ ] **Step 2: Implement `setupPreClose`/`worldAcs`/`runClose` helpers in `Scenario.daml`; run — expect pass; Step 3: Commit**
 
 ```bash
 git add continuum-daml/contracts/daml/Continuum/Scenario.daml continuum-daml/tests/daml/Test/Atomicity.daml
@@ -1561,8 +1910,8 @@ git commit -m "test(daml): close is all-or-nothing (byte-identical rollback on f
 
 **Files:** Create `continuum-daml/tests/daml/Test/Documents.daml`
 
-- [ ] **Step 1: Write** — `Close` fails without a `ValuationReport` (9.1) and if `agent == gp` (ensure already blocks creation, so test creation fails); missing any `IssuanceBasis` antecedent → `Close` fails (9.2); `clearing ∉ [fairLow,fairHigh]` → fails (9.3); two `ValuationReport`s with price outside either range → fails, inside both → passes (9.4); staleness gap beyond max → fails (9.5); an `LPElection.disclosureHash` not matching the current `DisclosureDocument` → rejected at close (9.6); minted unit `meta` contains the valuation hash (9.8); a non-stakeholder query cannot see the disclosed `ValuationReport` (9.9).
-- [ ] **Step 2: Thread `maxAsOfGap` + date checks + disclosure-hash check into `IssuanceBasis.ValidateIssuance` and `Close`.**
+- [ ] **Step 1: Write** (the `IssuanceBasis` gate + fields already exist from Task 5.2 — this task only exercises them): `ValidateIssuance` (and thus `Close`) fails with a stale valuation (9.5: set `closeDate` beyond `maxAsOfDays` past `asOfDate`, using `setTime`/`passTime` on the `--static-time` sandbox); `clearing ∉ [fairLow,fairHigh]` → fails (9.3); creating a `ValuationReport` with `agent == gp` fails the `ensure` (9.1); dropping any antecedent cid from the basis and validating → fails (9.2); two `ValuationReport`s, reconciled NAV outside one range → fails, inside both → passes (9.4); an `LPElection.disclosureHash` ≠ the seeded `DisclosureDocument` hash → rejected at close (9.6 — add this check to `Close`: fetch each election's `disclosureHash` via `Read` and assert it equals the deal's disclosure hash); minted unit `Holding.meta_` contains `("continuum/valuation-sha256", h)` (9.8); a `Buyer`/other-LP `queryContractId` on the disclosed `ValuationReport` returns `None` (9.9).
+- [ ] **Step 2: Add the disclosure-hash equality check to `Close` (fetch elections via `Read`, assert against the deal disclosure hash).**
 - [ ] **Step 3: Run — expect pass; Step 4: Commit** `git commit -m "test(daml): document + valuation anchoring (group 9)"`
 
 ### Task 8.5: Edge cases (group 8 stretch) + price/allocation (groups 3,4)
@@ -1579,9 +1928,9 @@ git commit -m "test(daml): close is all-or-nothing (byte-identical rollback on f
 
 ### Task 9.1: Re-runnable Seed script
 
-**Files:** Create `continuum-daml/contracts/daml/Continuum/Seed.daml`
+**Files:** Create `continuum-daml/scripts/daml/Continuum/Seed.daml` (scripts package — has daml-script)
 
-- [ ] **Step 1: Write `seedDeal1 : Script SeedResult`** — allocate all parties (`GP`, `Vehicle`, `OldFund`, `LPAC`, `Regulator`, `ValuationAgent`, `FairnessProvider`, `Issuer`, 8 LPs, 4 buyers); create `RegistryAllocationFactory`; mint USDC to buyers, unit treasury to `Vehicle`, the Atlas asset to `OldFund`, `OldFundInterest` per LP; issue `EligibilityCredential`s; publish `ValuationReport`/`FairnessOpinion`/`DisclosureDocument` with `sha256` of sample payloads; create `ContinuationDeal`. Return party ids + cids in `SeedResult`.
+- [ ] **Step 1: Write `seedDeal1 : Script SeedResult`** — allocate all parties (`GP` [also vehicle/oldFund/registry-admin per the MVP party model], `LPAC`, `Regulator`, `ValuationAgent`, `FairnessProvider`, `Issuer`, 8 LPs, 4 buyers); create `RegistryAllocationFactory`; mint USDC to buyers and the unit treasury + Atlas asset to `gp`; create each `OldFundInterest` with `submitMulti [gp, lp] []`; issue `EligibilityCredential`s; publish `ValuationReport`/`FairnessOpinion`/`DisclosureDocument` with `sha256` of sample payloads; create `ContinuationDeal`. Return party ids + cids in `SeedResult`.
 - [ ] **Step 2: Test** `tests/daml/Test/Seed.daml` runs `seedDeal1` and asserts the ACS has the expected counts.
 - [ ] **Step 3: Run — expect pass; Step 4: Commit** `git commit -m "feat(daml): re-runnable Seed script for deal #1"`
 
@@ -1613,21 +1962,22 @@ Expected: all suites (groups 1–9 + spikes) PASS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dpm build --all
-DAR="contracts/.daml/dist/continuum-contracts-1.0.0.dar"
-# start a static-time sandbox with the DAR preloaded, in the background
-dpm sandbox --static-time --dar "$DAR" --port 6865 &
+CONTRACTS="contracts/.daml/dist/continuum-contracts-1.0.0.dar"
+SCRIPTS="scripts/.daml/dist/continuum-scripts-1.0.0.dar"   # data-depends on contracts
+# start a static-time sandbox (setTime/passTime need static time), preload both DARs
+dpm sandbox --static-time --dar "$CONTRACTS" --dar "$SCRIPTS" --port 6865 &
 SANDBOX_PID=$!
 trap "kill $SANDBOX_PID" EXIT
-# wait for the ledger to be ready
-until dpm script --ledger-host localhost --port 6865 --dar "$DAR" \
-      --script-name Continuum.Seed:seedDeal1 2>/dev/null; do sleep 2; done
-# run the full deal close against the live ledger
-dpm script --ledger-host localhost --port 6865 --dar "$DAR" \
+# readiness: poll the ledger with a trivial no-op script (does NOT double-seed)
+until dpm script --ledger-host localhost --ledger-port 6865 --dar "$SCRIPTS" \
+      --script-name Continuum.Scenario:ping 2>/dev/null; do sleep 2; done
+# run the full deal close + conservation assertions against the live ledger
+dpm script --ledger-host localhost --ledger-port 6865 --dar "$SCRIPTS" \
   --script-name Continuum.Scenario:setupCloseAndAssert
 echo "E2E OK: deal closed and conservation asserted on a live ledger"
 ```
 
-- [ ] **Step 2: Make `Continuum.Scenario:setupCloseAndAssert` a `Script ()` that runs the full flow and `assert`s the §5 identities on the running ledger.**
+- [ ] **Step 2: Add `ping : Script ()` (`pure ()`) and `setupCloseAndAssert : Script ()` (runs `setupAndClose` and `assert`s the §5 identities) to `Continuum.Scenario`.**
 
 - [ ] **Step 3: Run**
 
@@ -1637,7 +1987,7 @@ Expected: prints "E2E OK …"; exit 0.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add continuum-daml/e2e/run.sh continuum-daml/contracts/daml/Continuum/Scenario.daml
+git add continuum-daml/e2e/run.sh continuum-daml/scripts/daml/Continuum/Scenario.daml
 git commit -m "test(daml): end-to-end close on a live canton sandbox"
 ```
 
@@ -1650,6 +2000,10 @@ git commit -m "test(daml): end-to-end close on a live canton sandbox"
 - **Units = PSA price**, not valuation NAV: `IssuanceBasis.ValidateIssuance` checks `psaPrice == clearing × reconciledNav`; units come from clearing result, gated on the basis (5.2, 7.3).
 - **Default-to-sell without LP signature** via `AcceptedParticipation` created pre-deadline (3.3, 8.2).
 - **Type consistency:** `RegistryHolding`/`mint`/`InstrumentId`/`computeClearing`/`ClearingResult` field names are used identically across tasks.
+
+## Fable plan-review fixes applied (2026-07-09)
+
+Applied before execution: **(1)** two-phase settlement — senders allocate pre-close, `Close` only executes (Task 7.3a/b/c) — the plan's Close is now executable; **(2)** MVP party model pinned (`gp = vehicle = oldFund = registry admin`); co-signed creates use `submitMulti`; **(3)** reader-controller convention on every disclosure-fetch choice (Spike B, `SignedDocument`, `LPElection.Read`); **(4)** factory disclosed to senders in every allocate (Spike A + `allocateFor`); **(5)** registry validates input holdings (owner/instrument/unlocked); **(6)** `computeClearing` scaling fixed (oversubscription scales buyers only; undersubscription → fail/Break) + per-buyer `allocateBuyers`; **(7)** full `IssuanceBasis` (antecedent cids + fairness/staleness/consent checks) defined in Task 5.2, not retrofitted; **(8)** recusal derived from on-ledger `BidFiled` × roster (Decision 9); **(9)** Seed/Scenario moved to a `scripts/` package (daml-script, not in the uploaded contracts DAR); **(10)** `e2e/run.sh` uses `--ledger-port`, both DARs, and a `ping` readiness script; **(11)** Spike A promoted to the full multi-sender settlement dress rehearsal (the go/no-go gate); plus nits (`ensure buyer /= gp`, `mkDeal` function not `undefined`, dropped colliding imports, sabotage via `Allocation_Withdraw`).
 
 ## Known-risk follow-ups (resolve during execution, not blockers to starting)
 
