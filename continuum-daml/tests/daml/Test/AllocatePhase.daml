@@ -1,0 +1,20 @@
+module Test.AllocatePhase where
+
+import Daml.Script
+import DA.TextMap qualified as TextMap
+import Continuum.Registry
+import Continuum.Settle (allocateFor)
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1
+
+buyerAllocatesCashLeg : Script ()
+buyerAllocatesCashLeg = do
+  gp     <- allocateParty "GP"
+  buyer  <- allocateParty "Buyer"
+  seller <- allocateParty "Seller"
+  now <- getTime
+  fac  <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  cash <- submit gp do createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 19584000.0; locked = False; meta_ = TextMap.empty
+  a <- allocateFor gp buyer seller fac usdcId 19584000.0 (toInterfaceContractId @Holding cash) now "cash"
+  Some _ <- queryInterfaceContractId buyer a   -- an Allocation now exists
+  pure ()

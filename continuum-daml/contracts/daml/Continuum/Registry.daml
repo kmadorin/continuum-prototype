@@ -94,6 +94,8 @@ template RegistryAllocation
     reserved : Decimal
   where
     signatory admin
+    -- the allocation's stakeholders can track it (wallet visibility)
+    observer spec.transferLeg.sender, spec.transferLeg.receiver, spec.settlement.executor
 
     interface instance Allocation for RegistryAllocation where
       view = AllocationView with

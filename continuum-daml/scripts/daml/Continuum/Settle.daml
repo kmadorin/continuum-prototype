@@ -1,0 +1,46 @@
+module Continuum.Settle where
+
+import Daml.Script
+import DA.TextMap qualified as TextMap
+import Continuum.Registry (RegistryAllocationFactory)
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.AllocationInstructionV1
+import Splice.Api.Token.MetadataV1
+
+-- Phase-1: a sender allocates its leg against the disclosed factory (Spike A pattern).
+-- legMeta rides on the TransferLeg; the registry's execute impl copies it onto the
+-- minted receiver Holding, which is how unit legs carry the valuation-hash provenance.
+allocateForMeta
+  : Party -> Party -> Party -> ContractId RegistryAllocationFactory
+  -> Text -> Decimal -> ContractId Holding -> Time -> Text -> TextMap.TextMap Text
+  -> Script (ContractId Allocation)
+allocateForMeta admin sender receiver factory instId amount holdingCid now legId legMeta = do
+  let spec = AllocationSpecification with
+        settlement = SettlementInfo with
+          executor = admin
+          settlementRef = Reference with id = legId; cid = None
+          requestedAt = now; allocateBefore = now; settleBefore = now; meta = emptyMetadata
+        transferLegId = legId
+        transferLeg = TransferLeg with
+          sender; receiver; amount
+          instrumentId = InstrumentId with admin; id = instId
+          meta = Metadata with values = legMeta
+  Some dF <- queryDisclosure admin factory
+  res <- submit (actAs sender <> disclose dF) do
+    exerciseCmd (toInterfaceContractId @AllocationFactory factory)
+      AllocationFactory_Allocate with
+        expectedAdmin = admin; allocation = spec; requestedAt = now
+        inputHoldingCids = [holdingCid]
+        extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+  case res.output of
+    AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "allocate did not complete"
+
+-- Convenience: allocate with no leg metadata.
+allocateFor
+  : Party -> Party -> Party -> ContractId RegistryAllocationFactory
+  -> Text -> Decimal -> ContractId Holding -> Time -> Text
+  -> Script (ContractId Allocation)
+allocateFor admin sender receiver factory instId amount holdingCid now legId =
+  allocateForMeta admin sender receiver factory instId amount holdingCid now legId TextMap.empty
