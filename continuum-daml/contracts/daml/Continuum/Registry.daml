@@ -13,6 +13,11 @@ usdcId  = "USDC"
 unitId  = "MERIDIAN-CV-I"
 assetId = "PROJECT-ATLAS"
 
+-- Mint a fresh unlocked holding of any instrument (admin authority).
+mint : Party -> Party -> Text -> Decimal -> TextMap Text -> Update (ContractId RegistryHolding)
+mint admin owner instId amount meta_ =
+  create RegistryHolding with admin; owner; instId; amount; locked = False; meta_
+
 -- A fungible holding for ANY instrument. signatory = admin (registry) so the
 -- admin can author/deliver holdings without the owner's live signature.
 template RegistryHolding

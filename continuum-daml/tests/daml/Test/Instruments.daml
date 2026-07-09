@@ -1,0 +1,17 @@
+module Test.Instruments where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.TextMap qualified as TextMap
+import Continuum.Registry
+
+instrumentsMint : Script ()
+instrumentsMint = do
+  gp    <- allocateParty "GP"
+  buyer <- allocateParty "Buyer"
+  cash <- submit gp do createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 20000000.0; locked = False; meta_ = TextMap.empty
+  Some h <- queryContractId gp cash
+  h.amount === 20000000.0
+  -- distinct instrument ids
+  assert (usdcId /= unitId && unitId /= assetId && usdcId /= assetId)
+  pure ()
