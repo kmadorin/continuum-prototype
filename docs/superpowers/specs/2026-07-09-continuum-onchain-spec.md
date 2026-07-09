@@ -103,6 +103,13 @@ A reusable signed-document primitive plus typed valuation/fairness contracts. Al
 
 **Multi-estimator:** N `ValuationReport`s from distinct agents; `reconciliation` is a *predicate* (deal price within all ranges), not an average. Default point-pick when required: `LowerOf`.
 
+**Where the document bytes live (off-ledger).** Canton is **not** a document store — only the `sha256` hash (+ `docUri`, optional signature) goes on-ledger; the actual (encrypted) PDF lives off-ledger, keyed by that hash. Storage backends are interchangeable because the contracts only hold the hash:
+
+- **S3-compatible object storage** — simplest; e.g. **[fil.one](https://www.fil.one/)** as the S3-compatible (Filecoin-backed) bucket, or any S3/data-room. Store the encrypted document; put its `s3://…`/`https://…` URL in `docUri`; the on-ledger `sha256` makes it tamper-evident.
+- **Encrypted IPFS/Filecoin** (CID as `docUri`) — adds decentralized, self-verifying retrieval; optional flourish, no extra trust property beyond the on-ledger hash.
+
+If the stored object is ciphertext, keep **both** hashes: the plaintext `sha256` on-ledger (integrity/attestation proof) and the storage object's own address in `docUri` (retrieval); distribute decryption keys off-band. Swapping backends (local data room → fil.one → IPFS) changes only what `docUri` points at, never the contracts.
+
 ### 4.4 Contract set
 
 | Template | Signatory | Observers | Key choices (controller) |
