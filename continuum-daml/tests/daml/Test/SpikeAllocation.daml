@@ -1,0 +1,83 @@
+{-# LANGUAGE ApplicativeDo #-}
+module Test.SpikeAllocation where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.TextMap qualified as TextMap
+import Continuum.Registry
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.AllocationInstructionV1
+import Splice.Api.Token.MetadataV1
+
+-- Build an allocation spec for one leg. executor = the registry admin (gp).
+legSpec : Party -> Party -> Party -> Text -> Decimal -> Time -> Text -> AllocationSpecification
+legSpec admin sender receiver instId amount now legId =
+  AllocationSpecification with
+    settlement = SettlementInfo with
+      executor = admin
+      settlementRef = Reference with id = "settle-1"; cid = None
+      requestedAt = now; allocateBefore = now; settleBefore = now; meta = emptyMetadata
+    transferLegId = legId
+    transferLeg = TransferLeg with
+      sender; receiver; amount
+      instrumentId = InstrumentId with admin; id = instId
+      meta = emptyMetadata
+
+-- Phase 1: a sender allocates its leg against the factory it must SEE via disclosure.
+allocateLeg : Party -> Party -> ContractId RegistryAllocationFactory -> AllocationSpecification
+            -> ContractId Holding -> Time -> Script (ContractId Allocation)
+allocateLeg admin sender factory spec holdingCid now = do
+  Some dF <- queryDisclosure admin factory
+  res <- submit (actAs sender <> disclose dF) do
+    exerciseCmd (toInterfaceContractId @AllocationFactory factory)
+      AllocationFactory_Allocate with
+        expectedAdmin = admin; allocation = spec; requestedAt = now
+        inputHoldingCids = [holdingCid]
+        extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+  case res.output of
+    AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "allocate did not complete"
+
+-- The go/no-go gate: two DIFFERENT senders each allocate in their own submission,
+-- then the executor (gp) executes BOTH allocations + a delegated burn in ONE tx.
+-- Under the MVP party model gp = vehicle = oldFund, so every leg has gp on one
+-- side; each leg's ExecuteTransfer (controllers {sender,receiver,executor}) is
+-- authorised by a pre-signed ExecDelegation(gp, otherParty) nested in gp's tx.
+spikeSettlementDressRehearsal : Script ()
+spikeSettlementDressRehearsal = do
+  gp     <- allocateParty "GP"      -- executor + registry admin + vehicle + oldFund
+  buyer  <- allocateParty "Buyer"   -- sender of the cash leg
+  roller <- allocateParty "Roller"  -- receiver of the unit leg
+  lp     <- allocateParty "LP"      -- burn target
+  now <- getTime
+  factory <- submit gp do createCmd RegistryAllocationFactory with admin = gp
+  -- mint: buyer holds cash; gp(vehicle) holds a unit treasury
+  cash  <- submit gp do createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 19584000.0; locked = False; meta_ = TextMap.empty
+  units <- submit gp do createCmd RegistryHolding with admin = gp; owner = gp; instId = unitId; amount = 30336000.0; locked = False; meta_ = TextMap.empty
+  -- co-signed pre-authorisations (created with BOTH authorities, pre-close)
+  interest <- submitMulti [gp, lp]     [] do createCmd ProbeInterest  with admin = gp; lp
+  deleg    <- submitMulti [gp, lp]     [] do createCmd ProbeDelegation with admin = gp; lp
+  execBuyer  <- submitMulti [gp, buyer]  [] do createCmd ExecDelegation with admin = gp; party = buyer
+  execRoller <- submitMulti [gp, roller] [] do createCmd ExecDelegation with admin = gp; party = roller
+  -- PHASE 1 — each sender allocates in its own submission
+  aCash  <- allocateLeg gp buyer factory
+              (legSpec gp buyer gp usdcId 19584000.0 now "cash")
+              (toInterfaceContractId @Holding cash) now
+  aUnits <- allocateLeg gp gp    factory
+              (legSpec gp gp roller unitId 30336000.0 now "units")
+              (toInterfaceContractId @Holding units) now
+  -- PHASE 2 — executor executes BOTH allocations + burns, in ONE transaction
+  submit gp do
+    b1 <- exerciseCmd execBuyer  ExecFor with allocCid = aCash
+    b2 <- exerciseCmd execRoller ExecFor with allocCid = aUnits
+    b3 <- exerciseCmd deleg ProbeBurn with icid = interest
+    pure ()
+  -- assertions: gp(oldFund) received cash, roller received units, interest burned
+  gpCash <- query @RegistryHolding gp
+  [ h.amount | (_, h) <- gpCash, h.instId == usdcId ] === [19584000.0]
+  rollerHs <- query @RegistryHolding roller
+  [ h.amount | (_, h) <- rollerHs ] === [30336000.0]
+  gone <- query @ProbeInterest lp
+  gone === []
+  pure ()

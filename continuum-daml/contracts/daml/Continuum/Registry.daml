@@ -1,0 +1,152 @@
+module Continuum.Registry where
+
+import DA.TextMap (TextMap)
+import DA.TextMap qualified as TextMap
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.MetadataV1
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.AllocationInstructionV1
+
+-- Instrument identifiers (formalised + tested in Task 2.1).
+usdcId, unitId, assetId : Text
+usdcId  = "USDC"
+unitId  = "MERIDIAN-CV-I"
+assetId = "PROJECT-ATLAS"
+
+-- A fungible holding for ANY instrument. signatory = admin (registry) so the
+-- admin can author/deliver holdings without the owner's live signature.
+template RegistryHolding
+  with
+    admin  : Party
+    owner  : Party
+    instId : Text
+    amount : Decimal
+    locked : Bool
+    meta_  : TextMap Text
+  where
+    signatory admin
+    observer owner
+    ensure amount > 0.0
+
+    interface instance Holding for RegistryHolding where
+      view = HoldingView with
+        owner
+        instrumentId = InstrumentId with admin; id = instId
+        amount
+        lock = if locked then Some (Lock with holders = [admin]; expiresAt = None; expiresAfter = None; context = None) else None
+        meta = Metadata with values = meta_
+
+-- The registry factory that mints allocations by reserving holdings.
+template RegistryAllocationFactory
+  with
+    admin : Party
+  where
+    signatory admin
+
+    interface instance AllocationFactory for RegistryAllocationFactory where
+      view = AllocationFactoryView with admin; meta = emptyMetadata
+      allocationFactory_publicFetchImpl _self arg = do
+        assertMsg "wrong admin" (arg.expectedAdmin == admin)
+        pure (AllocationFactoryView with admin; meta = emptyMetadata)
+      allocationFactory_allocateImpl _self arg = do
+        assertMsg "wrong admin" (arg.expectedAdmin == admin)
+        let spec   = arg.allocation
+            leg    = spec.transferLeg
+            sender = leg.sender
+        -- fetch + archive the input holdings, VALIDATING each belongs to the
+        -- sender, matches the leg instrument, and is unlocked (Fable MUST-FIX 2)
+        inputs <- forA arg.inputHoldingCids \hcid -> do
+          let rcid = fromInterfaceContractId @RegistryHolding hcid
+          h <- fetch rcid
+          assertMsg "wrong owner"      (h.owner == sender)
+          assertMsg "wrong instrument" (h.instId == leg.instrumentId.id)
+          assertMsg "holding locked"   (not h.locked)
+          archive rcid
+          pure h
+        let total = sum (map (.amount) inputs)
+        assertMsg "insufficient holdings for allocation" (total >= leg.amount)
+        -- reserve the leg amount in the Allocation
+        allocCid <- create RegistryAllocation with
+          admin; spec; reserved = leg.amount
+        -- return change to the sender if any
+        changeCids <- if total > leg.amount
+          then do
+            c <- create RegistryHolding with
+              admin; owner = sender; instId = leg.instrumentId.id
+              amount = total - leg.amount; locked = False; meta_ = TextMap.empty
+            pure [toInterfaceContractId @Holding c]
+          else pure []
+        pure AllocationInstructionResult with
+          output = AllocationInstructionResult_Completed with
+            allocationCid = toInterfaceContractId @Allocation allocCid
+          senderChangeCids = changeCids
+          meta = emptyMetadata
+
+template RegistryAllocation
+  with
+    admin    : Party
+    spec     : AllocationSpecification
+    reserved : Decimal
+  where
+    signatory admin
+
+    interface instance Allocation for RegistryAllocation where
+      view = AllocationView with
+        allocation = spec; holdingCids = []; meta = emptyMetadata
+      allocation_executeTransferImpl _self _arg = do
+        let leg = spec.transferLeg
+        rc <- create RegistryHolding with
+          admin; owner = leg.receiver; instId = leg.instrumentId.id
+          amount = reserved; locked = False; meta_ = leg.meta.values
+        pure Allocation_ExecuteTransferResult with
+          senderHoldingCids = []
+          receiverHoldingCids = [toInterfaceContractId @Holding rc]
+          meta = emptyMetadata
+      allocation_cancelImpl _self _arg = do
+        rc <- returnToSender admin spec reserved
+        pure Allocation_CancelResult with senderHoldingCids = [rc]; meta = emptyMetadata
+      allocation_withdrawImpl _self _arg = do
+        rc <- returnToSender admin spec reserved
+        pure Allocation_WithdrawResult with senderHoldingCids = [rc]; meta = emptyMetadata
+
+-- Release the reserved amount back to the leg sender (used by cancel/withdraw).
+returnToSender : Party -> AllocationSpecification -> Decimal -> Update (ContractId Holding)
+returnToSender admin spec reserved = do
+  let leg = spec.transferLeg
+  c <- create RegistryHolding with
+    admin; owner = leg.sender; instId = leg.instrumentId.id
+    amount = reserved; locked = False; meta_ = TextMap.empty
+  pure (toInterfaceContractId @Holding c)
+
+-- ── Phase-2 authority pattern (throwaway probes for Spike A) ─────────────────
+-- Allocation_ExecuteTransfer controllers are FIXED by the interface as
+-- {sender, receiver, executor}. Authority does not persist across transactions,
+-- so the executor (gp) cannot execute a leg alone when sender/receiver /= gp.
+-- Fix: each such party pre-signs a co-signed delegation to gp BEFORE the close.
+-- Inside ExecFor's body the authorizers are signatories(ExecDelegation)={gp,party}
+-- ∪ controllers={gp} = {gp,party}, which covers a leg needing {party, gp}.
+template ExecDelegation
+  with
+    admin : Party   -- gp / executor
+    party : Party   -- the sender or receiver that must co-authorize its leg
+  where
+    signatory admin, party
+    nonconsuming choice ExecFor : Allocation_ExecuteTransferResult
+      with allocCid : ContractId Allocation
+      controller admin
+      do exercise allocCid Allocation_ExecuteTransfer with
+           extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+
+-- Burn edge: a co-signed interest that gp cannot archive alone; delegation lets it.
+template ProbeInterest
+  with admin : Party; lp : Party
+  where signatory admin, lp
+
+template ProbeDelegation
+  with admin : Party; lp : Party
+  where
+    signatory admin, lp
+    nonconsuming choice ProbeBurn : ()
+      with icid : ContractId ProbeInterest
+      controller admin
+      do archive icid

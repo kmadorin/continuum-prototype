@@ -1,0 +1,8 @@
+-- Placeholder so the scripts package builds before Phase 7 populates it
+-- (Settle / Scenario / Seed). Replaced/extended in later tasks.
+module Continuum.ScriptsPrelude where
+
+import Daml.Script
+
+ping : Script ()
+ping = pure ()
