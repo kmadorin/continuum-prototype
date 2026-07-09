@@ -4,6 +4,7 @@ import Daml.Script
 import DA.Assert ((===))
 import DA.List (head)
 import Continuum.Scenario
+import Continuum.Deal (Close(..))
 import Continuum.Registry (RegistryHolding, usdcId)
 import Continuum.Participation (OldFundInterest)
 
@@ -18,3 +19,12 @@ closeExecutesAllLegs = do
   -- its old-fund interest was burned
   remain <- query @OldFundInterest e1
   remain === []
+
+-- The on-ledger conservation guard fires: a Close whose legs don't issue units
+-- equal to the PSA price is rejected (units must be deal-price-backed, §5.4).
+closeRejectsUnbackedUnits : Script ()
+closeRejectsUnbackedUnits = do
+  prep <- setupPreClose
+  submitMustFail prep.gp do
+    exerciseCmd prep.dealCid Close with
+      basisCid = prep.basisCid; legExecs = []; burns = []; fairnessHash = "x"

@@ -3,10 +3,10 @@ module Continuum.Deal where
 import DA.Date (date, Month(Jan))
 import DA.Time (time)
 import DA.Foldable (forA_)
-import DA.Optional (isSome, fromOptional)
-import Continuum.Issuance (IssuanceBasis, ValidateIssuance(..))
+import DA.Optional (isSome)
+import Continuum.Issuance (IssuanceBasis(..), ValidateIssuance(..))
 import Continuum.Participation (AcceptedParticipation, BurnFor(..), OldFundInterest)
-import Continuum.Registry (ExecDelegation, ExecFor(..))
+import Continuum.Registry (ExecDelegation, ExecFor(..), RegistryAllocation, unitId)
 import Splice.Api.Token.AllocationV1 (Allocation)
 
 data Stage = Setup | Bidding | LeadSelected | Consented | Electing | Closed | Broken
@@ -74,17 +74,28 @@ template ContinuationDeal
         fairnessHash : Text
       controller gp
       do assertMsg "must be consented/electing" (stage == Consented || stage == Electing)
+         -- bind the basis to THIS deal's gp, then gate on the antecedent DAG
+         basis <- fetch basisCid
+         assertMsg "issuance basis is for a different gp" (basis.gp == gp)
          _ <- exercise basisCid ValidateIssuance
+         -- read leg amounts BEFORE executing (execute consumes the allocations) and
+         -- enforce on-ledger that units issued == the PSA price — units are backed by
+         -- the deal price, not the valuation NAV (§5.4). This makes conservation a
+         -- contract guarantee, not a property of how the caller built the legs.
+         legs <- forA legExecs \(_, a) -> do
+           ra <- fetch (fromInterfaceContractId @RegistryAllocation a)
+           pure (ra.spec.transferLeg.instrumentId.id, ra.reserved)
+         let unitTotal = sum [ amt | (iid, amt) <- legs, iid == unitId ]
+         assertMsg "units issued must equal the PSA price" (unitTotal == basis.psaPrice)
+         -- phase-2: execute every pre-authorised leg, then burn old interests
          forA_ legExecs \(d, a) -> exercise d ExecFor with allocCid = a
          forA_ burns \(p, oi) -> exercise p BurnFor with interestCid = oi
-         let clearing   = fromOptional 0.0 clearingPrice
-             totalUnits = intToDecimal (round (clearing * refNav))
          -- regulator sees ONLY aggregates + the fairness hash, never per-LP data
          create FairnessDisclosure with
-           gp; regulator; dealId = cv; clearingPct = clearing; totalUnits; fairnessHash
+           gp; regulator; dealId = cv; clearingPct = basis.clearingPct; totalUnits = unitTotal; fairnessHash
          -- the room (LPs + buyers) gets an aggregate settlement receipt
          create SettlementReceipt with
-           gp; room; dealId = cv; clearingPct = clearing; totalUnits
+           gp; room; dealId = cv; clearingPct = basis.clearingPct; totalUnits = unitTotal
          create this with stage = Closed
 
 -- Post-close regulator view: aggregates + fairness anchor, NO per-LP data.

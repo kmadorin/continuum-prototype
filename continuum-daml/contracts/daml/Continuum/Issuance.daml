@@ -48,24 +48,33 @@ template IssuanceBasis
       do -- 1. price == clearing × reconciled NAV
          assertMsg "psaPrice != clearing × reconciledNav"
            (psaPrice == roundDollar (clearingPct * reconciledNav))
-         -- 2. every independent valuation contains the reconciled NAV in range, and is fresh
+         -- 2. every independent valuation is bound to THIS deal+gp, contains the
+         --    reconciled NAV in range, and is fresh (0 <= age <= maxAsOfDays;
+         --    the lower bound rejects future-dated valuations).
          assertMsg "no valuation" (not (null valuationCids))
          forA_ valuationCids \vc -> do
            v <- fetch vc
+           assertMsg "valuation not for this deal" (v.dealId == dealId && v.gp == gp)
            assertMsg "reconciledNav outside a valuation range"
              (v.navLow <= reconciledNav && reconciledNav <= v.navHigh)
-           assertMsg "valuation stale" (subDate closeDate v.asOfDate <= maxAsOfDays)
-         -- 3. clearing within the fairness range, fairness fresh
+           assertMsg "valuation stale or future-dated"
+             (let age = subDate closeDate v.asOfDate in age >= 0 && age <= maxAsOfDays)
+         -- 3. clearing within the fairness range, fairness bound+fresh
          f <- fetch fairnessCid
+         assertMsg "fairness not for this deal" (f.dealId == dealId && f.gp == gp)
          assertMsg "clearing outside fairness range" (f.fairLow <= clearingPct && clearingPct <= f.fairHigh)
-         assertMsg "fairness stale" (subDate closeDate f.opinionDate <= maxAsOfDays)
-         -- 4. auction certificate agrees on clearing
+         assertMsg "fairness stale or future-dated"
+           (let age = subDate closeDate f.opinionDate in age >= 0 && age <= maxAsOfDays)
+         -- 4. auction certificate agrees on clearing, bound to this deal
          c <- fetch auctionCertCid
+         assertMsg "auction cert not for this deal" (c.dealId == dealId && c.gp == gp)
          assertMsg "auction cert clearing mismatch" (c.clearingPct == clearingPct)
-         -- 5. LPAC granted
+         -- 5. LPAC granted, bound to this deal
          l <- fetch lpacConsentCid
+         assertMsg "LPAC consent not for this deal" (l.dealId == dealId && l.gp == gp)
          assertMsg "LPAC not granted" l.granted
-         -- 6. PSA price agrees
+         -- 6. PSA price agrees, bound to this deal+gp
          p <- fetch psaCid
+         assertMsg "PSA not for this deal" (p.dealId == dealId && p.oldFund == gp && p.vehicle == gp)
          assertMsg "PSA price mismatch" (p.price == psaPrice && p.clearingPct == clearingPct)
          pure True

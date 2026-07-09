@@ -2,7 +2,8 @@ module Test.Privacy where
 
 import Daml.Script
 import DA.Assert ((===))
-import Continuum.Deal (FairnessDisclosure)
+import DA.List (head)
+import Continuum.Deal (FairnessDisclosure(..))
 import Continuum.Election (LPElection(..))
 import Continuum.Auction (SealedBid(..))
 import Continuum.Document (hashOf)
@@ -30,9 +31,20 @@ privacyScoped = do
   prep <- setupPreClose
   preReg <- query @FairnessDisclosure prep.regulator
   preReg === []
+  -- elections DO exist mid-window (electing rollers filed them) ...
+  r1Elec <- query @LPElection (head prep.rollers)
+  assert (not (null r1Elec))
+  -- ... but the regulator cannot see any per-LP election contents
+  regElecPre <- query @LPElection prep.regulator
+  regElecPre === []
   _ <- submit prep.gp do runClose prep
+  -- post-close the regulator sees exactly one aggregate disclosure with REAL figures
   postReg <- query @FairnessDisclosure prep.regulator
-  assert (length postReg == 1)
-  -- and the regulator still sees NO per-LP election data
+  case map snd postReg of
+    [fd] -> do
+      fd.clearingPct === 0.96
+      fd.totalUnits === 49920000.0
+    _ -> abort "expected exactly one FairnessDisclosure"
+  -- and still NO per-LP election data
   regElec <- query @LPElection prep.regulator
   regElec === []

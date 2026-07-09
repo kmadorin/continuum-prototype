@@ -3,9 +3,11 @@ module Test.DefaultSell where
 import Daml.Script
 import DA.Assert ((===))
 import DA.List (last)
+import DA.List (head)
 import Continuum.Scenario
 import Continuum.Registry (RegistryHolding, usdcId, unitId)
 import Continuum.Participation (OldFundInterest)
+import Continuum.Election (LPElection)
 
 -- Matrix 8.7: an LP with an OldFundInterest but NO LPElection is settled as SELL
 -- (cash, zero units, interest burned) using only the pre-close co-signed authority
@@ -13,8 +15,13 @@ import Continuum.Participation (OldFundInterest)
 defaultToSellNeedsNoElection : Script ()
 defaultToSellNeedsNoElection = do
   prep <- setupPreClose
-  _ <- submit prep.gp do runClose prep
   let e4 = last prep.exiting          -- the non-electing exiting LP
+  -- E4 genuinely filed NO election, while an electing exiting LP (E1) did
+  e4Pre <- query @LPElection e4
+  e4Pre === []
+  e1Elec <- query @LPElection (head prep.exiting)
+  assert (not (null e1Elec))
+  _ <- submit prep.gp do runClose prep
   e4H <- query @RegistryHolding e4
   -- receives cash at the clearing haircut, zero units
   [ h.amount | (_, h) <- e4H, h.instId == usdcId ] === [4896000.0]

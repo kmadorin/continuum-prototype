@@ -1,7 +1,8 @@
 module Continuum.Scenario where
 
 import Daml.Script
-import DA.List (head)
+import DA.List (head, init)
+import DA.Foldable (forA_)
 import DA.Date (date, Month(Jun))
 import DA.TextMap qualified as TextMap
 import Continuum.Registry
@@ -11,6 +12,7 @@ import Continuum.Valuation
 import Continuum.Auction (AuctionCertificate(..))
 import Continuum.Consent (LPACConsent(..))
 import Continuum.Participation
+import Continuum.Election (LPElection(..))
 import Continuum.Document (hashOf)
 import Continuum.Settle (allocateFor, allocateForMeta)
 import Splice.Api.Token.HoldingV1
@@ -120,6 +122,13 @@ setupPreClose = do
   execExiting <- mapA (mkExecDeleg gp) exiting
   accLPs      <- mapA (mkAccPart gp) lps
   interests   <- mapA (\p -> mkInterest gp p 1000000.0) lps
+  -- LP elections (sole-signatory, peer-blind): rollers roll fully, E1..E3 sell fully,
+  -- E4 files NOTHING -> exercised as default-to-sell purely on its pre-close authority.
+  let dHash = hashOf "meridian disclosure v1"
+  forA_ rollers \r ->
+    submit r do createCmd LPElection with lp = r; dealId = "M1"; positionNav = rollNavEach; rollNav = rollNavEach; sellNav = 0.0; disclosureHash = dHash
+  forA_ (init exiting) \e ->
+    submit e do createCmd LPElection with lp = e; dealId = "M1"; positionNav = sellEach; rollNav = 0.0; sellNav = sellEach; disclosureHash = dHash
   -- PHASE 1 — mint one dedicated holding per leg and allocate it
   -- cash-in: buyer holds cash, allocates buyer -> gp
   cashInAllocs <- forA buyers \b -> do
