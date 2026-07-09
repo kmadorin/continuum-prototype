@@ -1,0 +1,22 @@
+module Test.Atomicity where
+
+import Daml.Script
+import DA.List (head)
+import Continuum.Scenario
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.MetadataV1
+
+closeIsAllOrNothing : Script ()
+closeIsAllOrNothing = do
+  prep <- setupPreClose                       -- allocations pre-created (phase 1 done)
+  before <- worldAcs prep
+  -- SABOTAGE: a buyer withdraws its own cash allocation (controller = sender). This
+  -- is the correct vector — the buyer cannot archive its admin-signed Holding directly.
+  _ <- submit (head prep.buyers) do
+    exerciseCmd (head prep.cashInAllocs) Allocation_Withdraw with
+      extraArgs = ExtraArgs with context = emptyChoiceContext; meta = emptyMetadata
+  -- Close now references a consumed allocation -> the whole close fails
+  submitMustFail prep.gp do runClose prep
+  after <- worldAcs prep
+  -- no cash moved, no units minted, no interest burned
+  assert (before == after)

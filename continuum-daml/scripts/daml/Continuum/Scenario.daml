@@ -164,6 +164,13 @@ tally p = do
     oldInterestsRemaining = length (concat remain)
     unitsCarryValuationHash = carries
 
+-- Close-effect snapshot (exiting cash, roller units, buyer units, interests left).
+-- Used by the atomicity test: a failed Close must leave all of these unchanged.
+worldAcs : ClosePrep -> Script (Decimal, Decimal, Decimal, Int)
+worldAcs p = do
+  w <- tally p
+  pure (w.exitingCashTotal, w.rollerUnitsTotal, w.buyerUnitsTotal, w.oldInterestsRemaining)
+
 setupAndClose : Script ClosedWorld
 setupAndClose = do
   prep <- setupPreClose
