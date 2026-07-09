@@ -1,0 +1,43 @@
+module Test.Issuance where
+
+import Daml.Script
+import DA.Date (date, Month(Jun))
+import Continuum.Issuance
+import Continuum.Valuation
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
+import Continuum.Document (hashOf)
+
+issuanceBasisValidates : Script ()
+issuanceBasisValidates = do
+  gp    <- allocateParty "GP"          -- gp = oldFund = vehicle (MVP)
+  agent <- allocateParty "ValuationAgent"
+  fair  <- allocateParty "FairnessProvider"
+  lpac  <- allocateParty "LPAC"
+  let asOf = date 2026 Jun 30
+      closeD = date 2026 Jun 30
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
+  ac <- submit gp do
+    createCmd AuctionCertificate with
+      gp; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+  lc <- submit lpac do
+    createCmd LPACConsent with
+      gp; lpac; dealId = "D1"; recusals = []; granted = True
+  psa <- submit gp do
+    createCmd PurchaseAgreement with
+      oldFund = gp; vehicle = gp; dealId = "D1"; price = 49920000.0; refNav = 52000000.0; clearingPct = 0.96; asOfDate = asOf
+  let basis = IssuanceBasis with
+        gp; dealId = "D1"; reconciledNav = 52000000.0; clearingPct = 0.96; psaPrice = 49920000.0
+        reconciliation = InRangeOfAll; valuationCids = [vr]; fairnessCid = fo
+        auctionCertCid = ac; lpacConsentCid = lc; psaCid = psa; closeDate = closeD; maxAsOfDays = 120
+  cid <- submit gp do createCmd basis
+  ok <- submit gp do exerciseCmd cid ValidateIssuance
+  assert ok
+  -- price mismatch rejected
+  bad <- submit gp do createCmd basis with psaPrice = 50000000.0
+  submitMustFail gp do exerciseCmd bad ValidateIssuance

@@ -1,0 +1,71 @@
+module Continuum.Issuance where
+
+import DA.Date (subDate)
+import DA.Foldable (forA_)
+import Continuum.Valuation (ValuationReport(..), FairnessOpinion(..))
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
+
+data Reconciliation = InRangeOfAll | LowerOf | Midpoint deriving (Eq, Show)
+
+roundDollar : Decimal -> Decimal
+roundDollar x = intToDecimal (round x)
+
+template PurchaseAgreement
+  with
+    oldFund     : Party
+    vehicle     : Party
+    dealId      : Text
+    price       : Decimal
+    refNav      : Decimal
+    clearingPct : Decimal
+    asOfDate    : Date
+  where
+    signatory oldFund, vehicle
+    ensure price == roundDollar (clearingPct * refNav)
+
+-- The antecedent DAG gate. gp is a stakeholder of every referenced contract
+-- (observer of valuation/fairness/consent; signatory of cert/PSA), so it can fetch them.
+template IssuanceBasis
+  with
+    gp             : Party
+    dealId         : Text
+    reconciledNav  : Decimal
+    clearingPct    : Decimal
+    psaPrice       : Decimal
+    reconciliation : Reconciliation
+    valuationCids  : [ContractId ValuationReport]
+    fairnessCid    : ContractId FairnessOpinion
+    auctionCertCid : ContractId AuctionCertificate
+    lpacConsentCid : ContractId LPACConsent
+    psaCid         : ContractId PurchaseAgreement
+    closeDate      : Date
+    maxAsOfDays    : Int
+  where
+    signatory gp
+    choice ValidateIssuance : Bool
+      controller gp
+      do -- 1. price == clearing × reconciled NAV
+         assertMsg "psaPrice != clearing × reconciledNav"
+           (psaPrice == roundDollar (clearingPct * reconciledNav))
+         -- 2. every independent valuation contains the reconciled NAV in range, and is fresh
+         assertMsg "no valuation" (not (null valuationCids))
+         forA_ valuationCids \vc -> do
+           v <- fetch vc
+           assertMsg "reconciledNav outside a valuation range"
+             (v.navLow <= reconciledNav && reconciledNav <= v.navHigh)
+           assertMsg "valuation stale" (subDate closeDate v.asOfDate <= maxAsOfDays)
+         -- 3. clearing within the fairness range, fairness fresh
+         f <- fetch fairnessCid
+         assertMsg "clearing outside fairness range" (f.fairLow <= clearingPct && clearingPct <= f.fairHigh)
+         assertMsg "fairness stale" (subDate closeDate f.opinionDate <= maxAsOfDays)
+         -- 4. auction certificate agrees on clearing
+         c <- fetch auctionCertCid
+         assertMsg "auction cert clearing mismatch" (c.clearingPct == clearingPct)
+         -- 5. LPAC granted
+         l <- fetch lpacConsentCid
+         assertMsg "LPAC not granted" l.granted
+         -- 6. PSA price agrees
+         p <- fetch psaCid
+         assertMsg "PSA price mismatch" (p.price == psaPrice && p.clearingPct == clearingPct)
+         pure True
