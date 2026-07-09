@@ -1,0 +1,15 @@
+module Test.Conservation where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Scenario (setupAndClose, ClosedWorld(..))
+
+conservationTiesOut : Script ()
+conservationTiesOut = do
+  w <- setupAndClose
+  w.exitingCashTotal      === 19584000.0
+  w.rollerUnitsTotal      === 30336000.0
+  w.buyerUnitsTotal       === 19584000.0
+  w.totalUnits            === 49920000.0
+  w.oldInterestsRemaining === 0
+  assert w.unitsCarryValuationHash
