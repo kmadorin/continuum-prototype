@@ -1,0 +1,66 @@
+module Continuum.Clearing where
+
+data ClearingInput = ClearingInput with
+  clearing     : Decimal
+  rollNav      : Decimal
+  sellNav      : Decimal
+  leadCap      : Decimal
+  syndicateCap : Decimal
+
+data ClearingResult = ClearingResult with
+  demand         : Decimal
+  sellNav        : Decimal
+  psaPrice       : Decimal
+  buyerCash      : Decimal
+  rollerUnits    : Decimal
+  buyerUnits     : Decimal
+  totalUnits     : Decimal
+  rollFillRatio  : Decimal
+  buyerFillRatio : Decimal
+
+-- Per-buyer allocation (matrix 4.2/4.3): lead filled first to capacity, then
+-- syndicate pro-rata on the overflow.
+data BuyerCommit = BuyerCommit with party : Party; capacity : Decimal; isLead : Bool
+data BuyerFill   = BuyerFill   with party : Party; navFilled : Decimal; units : Decimal
+
+roundDollar : Decimal -> Decimal
+roundDollar x = intToDecimal (round x)
+
+allocateBuyers : Decimal -> Decimal -> [BuyerCommit] -> [BuyerFill]
+allocateBuyers clearing sellPool commits =
+  let lead = filter (.isLead) commits
+      syn  = filter (not . (.isLead)) commits
+      leadFill = sum (map (\c -> min c.capacity sellPool) lead)
+      overflow = max 0.0 (sellPool - leadFill)
+      synCap   = sum (map (.capacity) syn)
+      fillOf c
+        | c.isLead  = min c.capacity sellPool
+        | synCap > 0.0 = roundDollar (overflow * (c.capacity / synCap))
+        | otherwise = 0.0
+  in [ let nav = fillOf c in BuyerFill c.party nav (roundDollar (clearing * nav)) | c <- commits ]
+
+-- Close asserts `not (undersubscribed r)` (matrix 4.4: never force sellers to roll).
+undersubscribed : ClearingResult -> Bool
+undersubscribed r = r.demand < r.sellNav
+
+computeClearing : ClearingInput -> ClearingResult
+computeClearing i =
+  let refNav      = i.rollNav + i.sellNav
+      demand      = i.leadCap + i.syndicateCap                 -- total buyer capacity
+      psaPrice    = roundDollar (i.clearing * refNav)
+      -- the whole sell pool fills whenever demand >= sell; buyers absorb it
+      filledSell  = min i.sellNav demand
+      buyerCash   = roundDollar (i.clearing * filledSell)
+      rollerUnits = roundDollar (i.clearing * i.rollNav)       -- roll at DEAL price
+      buyerUnits  = roundDollar (i.clearing * filledSell)
+      -- oversubscription scales each buyer's CAPACITY down to sell/demand (<1);
+      -- exactly-/under-subscribed => 1.0. Rolls are NEVER scaled.
+      buyerFill   = if demand > i.sellNav && demand > 0.0
+                    then i.sellNav / demand
+                    else 1.0
+  in ClearingResult with
+       demand; sellNav = i.sellNav
+       psaPrice; buyerCash; rollerUnits; buyerUnits
+       totalUnits = rollerUnits + buyerUnits
+       rollFillRatio = 1.0                                     -- rolls never scaled
+       buyerFillRatio = buyerFill

@@ -1,0 +1,29 @@
+module Test.Clearing where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Clearing
+
+canonicalCloseNumbers : Script ()
+canonicalCloseNumbers = do
+  let inp = ClearingInput with
+        clearing = 0.96; rollNav = 31600000.0; sellNav = 20400000.0
+        leadCap = 20400000.0; syndicateCap = 6000000.0
+      r = computeClearing inp
+  r.psaPrice        === 49920000.0
+  r.buyerCash       === 19584000.0
+  r.rollerUnits     === 30336000.0
+  r.buyerUnits      === 19584000.0
+  r.totalUnits      === 49920000.0
+  -- rolls never scaled; buyers scaled only on oversubscription
+  r.rollFillRatio   === 1.0
+
+oversubscriptionScalesBuyersOnly : Script ()
+oversubscriptionScalesBuyersOnly = do
+  let inp = ClearingInput with
+        clearing = 0.96; rollNav = 31600000.0; sellNav = 20400000.0
+        leadCap = 12000000.0; syndicateCap = 20000000.0   -- lead 12 + syn 20 = 32 > 20.4
+      r = computeClearing inp
+  r.rollFillRatio === 1.0                 -- rolls untouched
+  assert (r.buyerFillRatio < 1.0)         -- buyers scaled
+  r.buyerCash === 19584000.0              -- still fills the whole sell pool at clearing
