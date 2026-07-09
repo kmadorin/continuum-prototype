@@ -1,0 +1,28 @@
+module Continuum.Election where
+
+import DA.Crypto.Text (BytesHex)
+
+template LPElection
+  with
+    lp             : Party
+    dealId         : Text
+    positionNav    : Decimal
+    rollNav        : Decimal
+    sellNav        : Decimal
+    disclosureHash : BytesHex   -- the DisclosureDocument the LP consented against
+  where
+    signatory lp                 -- sole signatory => peer-blind
+    ensure rollNav >= 0.0 && sellNav >= 0.0 && rollNav + sellNav == positionNav
+    choice Amend : ContractId LPElection
+      with newRoll : Decimal, newSell : Decimal
+      controller lp
+      do create this with rollNav = newRoll; sellNav = newSell
+
+template ElectionFiled          -- contentless marker
+  with
+    lp     : Party
+    gp     : Party
+    dealId : Text
+  where
+    signatory lp
+    observer gp

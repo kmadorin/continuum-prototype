@@ -1,0 +1,30 @@
+module Test.Election where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Election
+import Continuum.Document (hashOf)
+
+splitMustPartitionExactly : Script ()
+splitMustPartitionExactly = do
+  lp <- allocateParty "LP"
+  -- position 10M: roll 6 + sell 4 OK; roll 6 + sell 5 fails
+  _ <- submit lp do
+    createCmd LPElection with
+      lp; dealId = "D1"; positionNav = 10000000.0; rollNav = 6000000.0; sellNav = 4000000.0
+      disclosureHash = hashOf "disc-v1"
+  submitMustFail lp do
+    createCmd LPElection with
+      lp; dealId = "D1"; positionNav = 10000000.0; rollNav = 6000000.0; sellNav = 5000000.0
+      disclosureHash = hashOf "disc-v1"
+
+electionPeerBlind : Script ()
+electionPeerBlind = do
+  a <- allocateParty "LPA"
+  b <- allocateParty "LPB"
+  _ <- submit a do
+    createCmd LPElection with
+      lp = a; dealId = "D1"; positionNav = 5000000.0; rollNav = 5000000.0; sellNav = 0.0
+      disclosureHash = hashOf "disc-v1"
+  bView <- query @LPElection b
+  bView === []
