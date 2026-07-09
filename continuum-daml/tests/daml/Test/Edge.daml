@@ -1,0 +1,52 @@
+module Test.Edge where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Clearing
+import Continuum.Election (LPElection(..))
+import Continuum.Auction (SealedBid(..))
+import Continuum.Registry (RegistryHolding(..), usdcId)
+import Continuum.Document (hashOf)
+import DA.TextMap qualified as TextMap
+
+-- 8.1: over-roll (roll+sell /= position) rejected by the LPElection ensure.
+overRollRejected : Script ()
+overRollRejected = do
+  lp <- allocateParty "LP"
+  submitMustFail lp do
+    createCmd LPElection with
+      lp; dealId = "D"; positionNav = 10000000.0; rollNav = 11000000.0; sellNav = 0.0
+      disclosureHash = hashOf "d"
+
+-- 8.2: zero/negative amounts rejected.
+zeroNegativeRejected : Script ()
+zeroNegativeRejected = do
+  gp <- allocateParty "GP"; buyer <- allocateParty "Buyer"
+  -- zero-amount holding rejected (ensure amount > 0)
+  submitMustFail gp do
+    createCmd RegistryHolding with admin = gp; owner = buyer; instId = usdcId; amount = 0.0; locked = False; meta_ = TextMap.empty
+  -- zero-capacity bid rejected (ensure capacity > 0)
+  submitMustFail buyer do
+    createCmd SealedBid with gp; buyer; dealId = "D"; pctOfNav = 0.96; capacity = 0.0
+
+-- 8.11: GP self-dealing guard — the GP cannot bid on its own deal.
+gpSelfDealingRejected : Script ()
+gpSelfDealingRejected = do
+  gp <- allocateParty "GP"
+  submitMustFail gp do
+    createCmd SealedBid with gp; buyer = gp; dealId = "D"; pctOfNav = 0.96; capacity = 1000000.0
+
+-- 8.4: all-roll (sell = 0) does not divide by zero; buyers unaffected.
+allRollNoDivZero : Script ()
+allRollNoDivZero = do
+  let r = computeClearing (ClearingInput with clearing = 0.96; rollNav = 52000000.0; sellNav = 0.0; leadCap = 0.0; syndicateCap = 0.0)
+  r.buyerFillRatio === 1.0
+  r.buyerCash === 0.0
+  r.rollerUnits === 49920000.0
+
+-- 8.5: all-sell (roll = 0) → zero roller units.
+allSell : Script ()
+allSell = do
+  let r = computeClearing (ClearingInput with clearing = 0.96; rollNav = 0.0; sellNav = 20400000.0; leadCap = 20400000.0; syndicateCap = 0.0)
+  r.rollerUnits === 0.0
+  r.buyerUnits === 19584000.0

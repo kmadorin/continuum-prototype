@@ -1,0 +1,42 @@
+module Test.PriceAlloc where
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.List (find)
+import Continuum.Clearing
+
+-- 3.1/3.2: one clearing price for everyone; exiting haircut uniform.
+singleClearingUniformHaircut : Script ()
+singleClearingUniformHaircut = do
+  let inp = ClearingInput with
+        clearing = 0.96; rollNav = 31600000.0; sellNav = 20400000.0
+        leadCap = 20400000.0; syndicateCap = 6000000.0
+      r = computeClearing inp
+  -- every dollar of sold NAV is haircut at the SAME 0.96: cash == 0.96 × sell filled
+  r.buyerCash === 19584000.0
+  -- rollers haircut at the same 0.96 as buyers (single price)
+  r.rollerUnits === 30336000.0
+
+-- 4.3: syndicate fills ONLY the overflow after the lead is filled to capacity.
+syndicateFillsOnlyOverflow : Script ()
+syndicateFillsOnlyOverflow = do
+  lead <- allocateParty "Lead"
+  syn  <- allocateParty "Syn"
+  let commits = [ BuyerCommit with party = lead; capacity = 12000000.0; isLead = True
+                , BuyerCommit with party = syn;  capacity = 20000000.0; isLead = False ]
+      fills = allocateBuyers 0.96 20400000.0 commits
+      Some lf = find (\f -> f.party == lead) fills
+      Some sf = find (\f -> f.party == syn)  fills
+  lf.navFilled === 12000000.0            -- lead filled to capacity first
+  sf.navFilled === 8400000.0             -- syndicate gets only the 8.4M overflow
+  lf.units === 11520000.0                -- 0.96 × 12M, single price
+  sf.units === 8064000.0                 -- 0.96 × 8.4M
+
+-- 4.4: undersubscription is detectable (Close must never force sellers to roll).
+undersubscriptionDetected : Script ()
+undersubscriptionDetected = do
+  let inp = ClearingInput with
+        clearing = 0.96; rollNav = 31600000.0; sellNav = 20400000.0
+        leadCap = 5000000.0; syndicateCap = 5000000.0   -- demand 10M < sell 20.4M
+      r = computeClearing inp
+  assert (undersubscribed r)
