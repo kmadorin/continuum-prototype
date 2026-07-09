@@ -3,6 +3,7 @@ module Continuum.Deal where
 import DA.Date (date, Month(Jan))
 import DA.Time (time)
 import DA.Foldable (forA_)
+import DA.Optional (isSome)
 import Continuum.Issuance (IssuanceBasis, ValidateIssuance(..))
 import Continuum.Participation (AcceptedParticipation, BurnFor(..), OldFundInterest)
 import Continuum.Registry (ExecDelegation, ExecFor(..))
@@ -37,6 +38,27 @@ template ContinuationDeal
       controller gp
       do assertMsg "already terminal" (stage /= Closed && stage /= Broken)
          create this with stage = Broken
+
+    -- Record LPAC consent (moves the deal to the Consented stage).
+    choice RecordConsent : ContractId ContinuationDeal
+      controller gp
+      do assertMsg "terminal" (stage /= Closed && stage /= Broken)
+         create this with stage = Consented
+
+    -- Publish the auction clearing price onto the deal.
+    choice SetClearing : ContractId ContinuationDeal
+      with p : Decimal
+      controller gp
+      do assertMsg "terminal" (stage /= Closed && stage /= Broken)
+         create this with clearingPrice = Some p
+
+    -- Open the LP election window. Gated: must be consented AND clearing published
+    -- (matrix group 1: LPAC-before-elections, price-before-elections).
+    choice OpenElections : ContractId ContinuationDeal
+      controller gp
+      do assertMsg "elections need LPAC consent first" (stage == Consented)
+         assertMsg "elections need the clearing price published" (isSome clearingPrice)
+         create this with stage = Electing
 
     -- Phase-2 atomic settlement. gp exercises this in ONE transaction:
     -- (1) gate on the antecedent DAG; (2) execute every pre-created leg

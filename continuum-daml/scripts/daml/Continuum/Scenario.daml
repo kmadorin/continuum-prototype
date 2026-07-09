@@ -33,11 +33,20 @@ buyerUnitsEach = 4896000.0
 
 data ClosePrep = ClosePrep with
   gp           : Party
+  agent        : Party
+  fair         : Party
+  lpac         : Party
+  regulator    : Party
   buyers       : [Party]
   rollers      : [Party]
   exiting      : [Party]
   dealCid      : ContractId ContinuationDeal
   basisCid     : ContractId IssuanceBasis
+  vrCid        : ContractId ValuationReport
+  foCid        : ContractId FairnessOpinion
+  acCid        : ContractId AuctionCertificate
+  lcCid        : ContractId LPACConsent
+  psaCid       : ContractId PurchaseAgreement
   legExecs     : [(ContractId ExecDelegation, ContractId Allocation)]
   burns        : [(ContractId AcceptedParticipation, ContractId OldFundInterest)]
   cashInAllocs : [ContractId Allocation]   -- buyer->gp legs (sabotage target for 7.4)
@@ -135,7 +144,10 @@ setupPreClose = do
         <> zip execBuyers  unitBuyAllocs
       burns = zip accLPs interests
   pure ClosePrep with
-    gp; buyers; rollers; exiting; dealCid; basisCid; legExecs; burns; cashInAllocs; valHash
+    gp; agent; fair; lpac; regulator = reg
+    buyers; rollers; exiting; dealCid; basisCid
+    vrCid = vr; foCid = fo; acCid = ac; lcCid = lc; psaCid = psa
+    legExecs; burns; cashInAllocs; valHash
 
 -- The Close command (so callers can submit or submitMustFail it).
 runClose : ClosePrep -> Commands (ContractId ContinuationDeal)

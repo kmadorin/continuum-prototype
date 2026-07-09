@@ -1,0 +1,42 @@
+module Test.Sequencing where
+
+import Daml.Script
+import DA.Date (date, Month(Jun))
+import Continuum.Deal
+import Continuum.Issuance
+import Continuum.Scenario (setupPreClose, runClose, ClosePrep(..))
+
+-- Matrix group 1: LPAC-before-elections, price-before-elections, close-needs-basis,
+-- no double-close.
+sequencingGates : Script ()
+sequencingGates = do
+  gp   <- allocateParty "GP"
+  lpac <- allocateParty "LPAC"
+  reg  <- allocateParty "Regulator"
+  deal0 <- submit gp do createCmd (mkDeal gp lpac reg)   -- Setup, clearing = None
+  -- OpenElections before consent -> fails
+  submitMustFail gp do exerciseCmd deal0 OpenElections
+  -- consent recorded, but clearing not yet published -> still fails
+  d1 <- submit gp do exerciseCmd deal0 RecordConsent
+  submitMustFail gp do exerciseCmd d1 OpenElections
+  -- clearing published -> OpenElections succeeds
+  d2 <- submit gp do exerciseCmd d1 SetClearing with p = 0.96
+  _  <- submit gp do exerciseCmd d2 OpenElections
+
+  -- Close needs a VALID IssuanceBasis: a wrong-price basis is rejected
+  prep <- setupPreClose
+  badBasis <- submit prep.gp do
+    createCmd IssuanceBasis with
+      gp = prep.gp; dealId = "M1"; reconciledNav = 52000000.0; clearingPct = 0.96
+      psaPrice = 50000000.0                     -- wrong (should be 49.92M)
+      reconciliation = InRangeOfAll; valuationCids = [prep.vrCid]; fairnessCid = prep.foCid
+      auctionCertCid = prep.acCid; lpacConsentCid = prep.lcCid; psaCid = prep.psaCid
+      closeDate = date 2026 Jun 30; maxAsOfDays = 120
+  submitMustFail prep.gp do
+    exerciseCmd prep.dealCid Close with
+      basisCid = badBasis; legExecs = prep.legExecs; burns = prep.burns
+
+  -- No double-close: after a successful close the deal is terminal
+  closed <- submit prep.gp do runClose prep
+  submitMustFail prep.gp do
+    exerciseCmd closed Close with basisCid = prep.basisCid; legExecs = []; burns = []
