@@ -1,0 +1,24 @@
+module Test.Auction where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Auction
+import Continuum.Document (hashOf)
+
+leadSetsClearingPrice : Script ()
+leadSetsClearingPrice = do
+  gp <- allocateParty "GP"
+  b1 <- allocateParty "B1"
+  b2 <- allocateParty "B2"
+  bid1 <- submit b1 do createCmd SealedBid with gp; buyer = b1; dealId = "D1"; pctOfNav = 0.96; capacity = 20000000.0
+  bid2 <- submit b2 do createCmd SealedBid with gp; buyer = b2; dealId = "D1"; pctOfNav = 0.95; capacity = 10000000.0
+  -- GP tabulates from the disclosed bids (sealed contracts have no GP stakeholder)
+  Some d1 <- queryDisclosure b1 bid1
+  Some d2 <- queryDisclosure b2 bid2
+  cert <- submit (actAs gp <> disclose d1 <> disclose d2) do
+    createCmd AuctionCertificate with
+      gp; dealId = "D1"; clearingPct = 0.96; leadBuyer = b1
+      bidTabulationHash = hashOf "b1:0.96;b2:0.95"
+  Some c <- queryContractId gp cert
+  c.clearingPct === 0.96
+  c.leadBuyer === b1
