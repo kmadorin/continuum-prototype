@@ -1,0 +1,18 @@
+module Test.Settlement where
+
+import Daml.Script
+import Continuum.Settlement
+import Splice.Api.Token.AllocationRequestV1
+
+legRequestExposesView : Script ()
+legRequestExposesView = do
+  gp     <- allocateParty "GP"
+  sender <- allocateParty "Sender"
+  recv   <- allocateParty "Recv"
+  now <- getTime
+  _cid <- submit gp do
+    createCmd TransferLegRequest with
+      gp; sender; receiver = recv; instId = "USDC"; amount = 19584000.0
+      settleBy = now; legId = "cash1"
+  views <- queryInterface @AllocationRequest gp
+  assert (not (null views))

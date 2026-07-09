@@ -1,0 +1,36 @@
+module Continuum.Settlement where
+
+import Splice.Api.Token.AllocationRequestV1
+import Splice.Api.Token.AllocationV1
+import Splice.Api.Token.HoldingV1
+import Splice.Api.Token.MetadataV1
+import DA.TextMap (fromList)
+
+template TransferLegRequest
+  with
+    gp       : Party
+    sender   : Party
+    receiver : Party
+    instId   : Text
+    amount   : Decimal
+    settleBy : Time
+    legId    : Text
+  where
+    signatory gp
+    observer sender, receiver          -- senders' wallets must see the request
+
+    interface instance AllocationRequest for TransferLegRequest where
+      view = AllocationRequestView with
+        settlement = SettlementInfo with
+          executor = gp
+          settlementRef = Reference with id = legId; cid = None
+          requestedAt = settleBy; allocateBefore = settleBy; settleBefore = settleBy
+          meta = emptyMetadata
+        transferLegs = fromList
+          [ (legId, TransferLeg with
+                sender; receiver; amount
+                instrumentId = InstrumentId with admin = gp; id = instId
+                meta = emptyMetadata) ]
+        meta = emptyMetadata
+      allocationRequest_RejectImpl _self _arg = pure (ChoiceExecutionMetadata with meta = emptyMetadata)
+      allocationRequest_WithdrawImpl _self _arg = pure (ChoiceExecutionMetadata with meta = emptyMetadata)
