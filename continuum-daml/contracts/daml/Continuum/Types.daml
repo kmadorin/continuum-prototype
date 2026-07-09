@@ -1,0 +1,5 @@
+module Continuum.Types where
+
+-- Percentages are Decimals in [0,1]; NAV/amounts are whole-dollar Decimals.
+navPerUnit : Decimal
+navPerUnit = 1.0

@@ -1,0 +1,5 @@
+# continuum-daml/multi-package.yaml
+packages:
+  - ./contracts
+  - ./scripts
+  - ./tests
