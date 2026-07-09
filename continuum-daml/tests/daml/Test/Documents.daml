@@ -1,0 +1,122 @@
+module Test.Documents where
+
+import Daml.Script
+import DA.Date (date, Month(Jan, Jun))
+import Continuum.Issuance
+import Continuum.Valuation
+import Continuum.Auction (AuctionCertificate(..))
+import Continuum.Consent (LPACConsent(..))
+import Continuum.Document (hashOf)
+
+-- shared non-varying antecedents (fairness [0.92,1.0], cert 0.96, consent, PSA 49.92M)
+stdAntecedents : Party -> Party -> Party -> Date
+  -> Script (ContractId FairnessOpinion, ContractId AuctionCertificate, ContractId LPACConsent, ContractId PurchaseAgreement)
+stdAntecedents gp fair lpac asOf = do
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
+  ac <- submit gp do
+    createCmd AuctionCertificate with
+      gp; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+  lc <- submit lpac do createCmd LPACConsent with gp; lpac; dealId = "D"; recusals = []; granted = True
+  psa <- submit gp do
+    createCmd PurchaseAgreement with
+      oldFund = gp; vehicle = gp; dealId = "D"; price = 49920000.0; refNav = 52000000.0; clearingPct = 0.96; asOfDate = asOf
+  pure (fo, ac, lc, psa)
+
+mkBasis : Party -> [ContractId ValuationReport]
+  -> (ContractId FairnessOpinion, ContractId AuctionCertificate, ContractId LPACConsent, ContractId PurchaseAgreement)
+  -> Date -> Int -> IssuanceBasis
+mkBasis gp vrs (fo, ac, lc, psa) closeD maxDays = IssuanceBasis with
+  gp; dealId = "D"; reconciledNav = 52000000.0; clearingPct = 0.96; psaPrice = 49920000.0
+  reconciliation = InRangeOfAll; valuationCids = vrs; fairnessCid = fo
+  auctionCertCid = ac; lpacConsentCid = lc; psaCid = psa; closeDate = closeD; maxAsOfDays = maxDays
+
+-- 9.1: a valuation whose agent IS the gp is rejected at creation (ensure agent/=gp).
+valuationAgentMustDiffer : Script ()
+valuationAgentMustDiffer = do
+  gp <- allocateParty "GP"
+  submitMustFail gp do
+    createCmd ValuationReport with
+      agent = gp; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0
+      asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
+
+-- 9.2: dropping the valuation antecedent fails the gate.
+droppedAntecedentFails : Script ()
+droppedAntecedentFails = do
+  gp <- allocateParty "GP"; fair <- allocateParty "Fair"; lpac <- allocateParty "LPAC"
+  let asOf = date 2026 Jun 30
+  ants <- stdAntecedents gp fair lpac asOf
+  b <- submit gp do createCmd (mkBasis gp [] ants asOf 120)   -- no valuations
+  submitMustFail gp do exerciseCmd b ValidateIssuance
+
+-- 9.3: clearing outside the fairness range fails.
+clearingOutsideFairnessFails : Script ()
+clearingOutsideFairnessFails = do
+  gp <- allocateParty "GP"; agent <- allocateParty "Agent"; fair <- allocateParty "Fair"; lpac <- allocateParty "LPAC"
+  let asOf = date 2026 Jun 30
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+  -- fairness range that EXCLUDES 0.96
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "D"; fairLow = 0.90; fairHigh = 0.95; opinionDate = asOf; contentHash = hashOf "f"
+  ac <- submit gp do
+    createCmd AuctionCertificate with gp; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+  lc <- submit lpac do createCmd LPACConsent with gp; lpac; dealId = "D"; recusals = []; granted = True
+  psa <- submit gp do
+    createCmd PurchaseAgreement with
+      oldFund = gp; vehicle = gp; dealId = "D"; price = 49920000.0; refNav = 52000000.0; clearingPct = 0.96; asOfDate = asOf
+  b <- submit gp do createCmd (mkBasis gp [vr] (fo, ac, lc, psa) asOf 120)
+  submitMustFail gp do exerciseCmd b ValidateIssuance
+
+-- 9.4: two valuations; reconciled NAV outside one range fails, inside both passes.
+twoValuationsReconcile : Script ()
+twoValuationsReconcile = do
+  gp <- allocateParty "GP"; a1 <- allocateParty "Agent1"; a2 <- allocateParty "Agent2"
+  fair <- allocateParty "Fair"; lpac <- allocateParty "LPAC"
+  let asOf = date 2026 Jun 30
+  ants <- stdAntecedents gp fair lpac asOf
+  vrWide <- submit a1 do
+    createCmd ValuationReport with
+      agent = a1; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v1"
+  vrNarrow <- submit a2 do
+    createCmd ValuationReport with
+      agent = a2; gp; dealId = "D"; navLow = 48000000.0; navHigh = 50000000.0; asOfDate = asOf; contentHash = hashOf "v2"
+  -- 52M outside the narrow [48,50] → fails
+  bBad <- submit gp do createCmd (mkBasis gp [vrWide, vrNarrow] ants asOf 120)
+  submitMustFail gp do exerciseCmd bBad ValidateIssuance
+  -- both wide → passes
+  vrWide2 <- submit a2 do
+    createCmd ValuationReport with
+      agent = a2; gp; dealId = "D"; navLow = 50000000.0; navHigh = 54000000.0; asOfDate = asOf; contentHash = hashOf "v3"
+  bOk <- submit gp do createCmd (mkBasis gp [vrWide, vrWide2] ants asOf 120)
+  _ <- submit gp do exerciseCmd bOk ValidateIssuance
+  pure ()
+
+-- 9.5: a stale valuation (asOf far before close beyond maxAsOfDays) fails.
+staleValuationFails : Script ()
+staleValuationFails = do
+  gp <- allocateParty "GP"; agent <- allocateParty "Agent"; fair <- allocateParty "Fair"; lpac <- allocateParty "LPAC"
+  let asOf = date 2026 Jan 1
+      closeD = date 2026 Jun 30           -- ~180 days later
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+  (_, ac, lc, psa) <- stdAntecedents gp fair lpac closeD
+  fo <- submit fair do
+    createCmd FairnessOpinion with
+      provider = fair; gp; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = closeD; contentHash = hashOf "f"
+  b <- submit gp do createCmd (mkBasis gp [vr] (fo, ac, lc, psa) closeD 120)  -- 180 > 120
+  submitMustFail gp do exerciseCmd b ValidateIssuance
+
+-- 9.9: a disclosed valuation is invisible to non-stakeholders (a buyer).
+disclosedValuationInvisible : Script ()
+disclosedValuationInvisible = do
+  gp <- allocateParty "GP"; agent <- allocateParty "Agent"; buyer <- allocateParty "Buyer"
+  vr <- submit agent do
+    createCmd ValuationReport with
+      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
+  seen <- queryContractId buyer vr
+  assert (seen == None)
