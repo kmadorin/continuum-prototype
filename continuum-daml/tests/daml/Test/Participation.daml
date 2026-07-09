@@ -1,0 +1,19 @@
+module Test.Participation where
+
+import Daml.Script
+import Continuum.Participation
+
+burnNeedsDelegation : Script ()
+burnNeedsDelegation = do
+  gp <- allocateParty "GP"      -- gp also plays oldFund (MVP party model)
+  lp <- allocateParty "LP"
+  -- co-signed interest: creation needs BOTH oldFund(=gp) and lp authority
+  oi <- submitMulti [gp, lp] [] do createCmd OldFundInterest with oldFund = gp; lp; nav = 5000000.0
+  -- GP cannot archive the LP-co-signed interest unilaterally (needs lp too)
+  submitMustFail gp do archiveCmd oi
+  -- LP proposes participation; GP accepts -> co-signed authority the Close uses
+  part <- submit lp do createCmd DealParticipation with gp; lp
+  part2 <- submit gp do exerciseCmd part Accept
+  _ <- submit gp do exerciseCmd part2 BurnFor with interestCid = oi
+  remaining <- query @OldFundInterest lp
+  assert (null remaining)

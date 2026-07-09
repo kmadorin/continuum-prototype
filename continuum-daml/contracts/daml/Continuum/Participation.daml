@@ -1,0 +1,37 @@
+module Continuum.Participation where
+
+-- The exiting/rolling LP's stake in the old fund. Co-signed so neither the
+-- oldFund(=gp) nor the lp can burn it alone.
+template OldFundInterest
+  with
+    oldFund : Party
+    lp      : Party
+    nav     : Decimal
+  where
+    signatory oldFund, lp
+
+-- LP proposes; GP accepts -> co-signed authority the Close exercises.
+template DealParticipation
+  with
+    gp : Party
+    lp : Party
+  where
+    signatory lp
+    observer gp
+    choice Accept : ContractId AcceptedParticipation
+      controller gp
+      do create AcceptedParticipation with gp, lp
+
+template AcceptedParticipation
+  with
+    gp : Party
+    lp : Party
+  where
+    signatory gp, lp             -- both authorities available in choice bodies
+    -- GP (executor) burns the LP's interest using the co-signed authority here.
+    nonconsuming choice BurnFor : ()
+      with interestCid : ContractId OldFundInterest
+      controller gp
+      do oi <- fetch interestCid
+         assertMsg "wrong lp" (oi.lp == lp)
+         archive interestCid
