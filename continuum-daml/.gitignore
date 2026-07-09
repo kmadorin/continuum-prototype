@@ -1,3 +1,4 @@
 .daml/
 dars/*.dar
 dars/*.tar.gz
+log/
