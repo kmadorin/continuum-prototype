@@ -1,0 +1,39 @@
+module Continuum.Auction where
+
+import DA.Crypto.Text (BytesHex)
+
+template SealedBid
+  with
+    gp       : Party
+    buyer    : Party
+    dealId   : Text
+    pctOfNav : Decimal
+    capacity : Decimal
+  where
+    signatory buyer            -- sole signatory => peer-blind and GP-blind
+    -- GP self-dealing guard (matrix 8.11): the GP cannot bid on its own deal
+    ensure pctOfNav > 0.0 && pctOfNav <= 1.0 && capacity > 0.0 && buyer /= gp
+    choice Withdraw : ()
+      controller buyer
+      do pure ()
+
+template BidFiled            -- contentless marker: GP + LPAC see THAT a bid is in
+  with
+    gp     : Party
+    lpac   : Party
+    buyer  : Party
+    dealId : Text
+  where
+    signatory buyer
+    observer gp, lpac        -- lpac observes so the recusal gate can fetch these facts
+
+template AuctionCertificate
+  with
+    gp                : Party
+    dealId            : Text
+    clearingPct       : Decimal
+    leadBuyer         : Party
+    bidTabulationHash : BytesHex
+  where
+    signatory gp
+    ensure clearingPct > 0.0 && clearingPct <= 1.0

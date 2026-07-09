@@ -1,0 +1,17 @@
+module Test.AuctionPrivacy where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Auction
+
+buyersBlindToEachOther : Script ()
+buyersBlindToEachOther = do
+  gp <- allocateParty "GP"
+  b1 <- allocateParty "B1"
+  b2 <- allocateParty "B2"
+  _ <- submit b1 do createCmd SealedBid with gp; buyer = b1; dealId = "D1"; pctOfNav = 0.96; capacity = 20000000.0
+  -- B2 cannot see B1's bid; GP cannot see its contents (no observers)
+  b2View <- query @SealedBid b2
+  b2View === []
+  gpView <- query @SealedBid gp
+  gpView === []
