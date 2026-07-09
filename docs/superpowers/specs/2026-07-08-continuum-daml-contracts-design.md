@@ -1,5 +1,7 @@
 # Continuum — Daml Contracts, Tests & Local E2E (Phase 1 Design)
 
+> **⚠️ SUPERSEDED** by `docs/superpowers/specs/2026-07-09-continuum-onchain-spec.md`, which is the single, clean, freshly-grounded spec (adds the valuation/document hash-anchoring layer). This draft is kept for history only.
+
 **Date:** 2026-07-08
 **Status:** Approved (brainstorming) → ready for writing-plans
 **Companion:** `docs/specs/2026-07-08-continuum-daml-contract-spec.md` (the architecture/contract reference this design implements)
