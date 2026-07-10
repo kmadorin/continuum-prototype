@@ -15,6 +15,8 @@ import Buyer from './views/Buyer';
 import ExitingLP from './views/ExitingLP';
 import RollingLP from './views/RollingLP';
 import LPAC from './views/LPAC';
+import Settlement from './views/Settlement';
+import TrustPanel from './views/TrustPanel';
 import './styles.css';
 
 // Each seat's human label + the workspace it unlocks. One tab = one role.
@@ -47,6 +49,11 @@ function Gate() {
       </header>
 
       <main className="portal-wrap">{seat.view()}</main>
+
+      {/* Overlays the workspace with a full-screen SETTLED takeover once this
+          party's own projection sees the atomic close (Task 8). */}
+      <Settlement />
+      <TrustPanel />
     </div>
   );
 }
