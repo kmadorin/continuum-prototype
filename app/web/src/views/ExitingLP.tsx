@@ -1,4 +1,4 @@
-// Exiting LP (role `lpExiting`) — the investor cashing out. Signs its OWN wallet:
+// Exiting LP (role `lpExiting`) — the investor cashing out. Its custodian signs:
 //   • Elect to sell     → create Continuum.Election:LPElection (sellNav = positionNav, peer-blind)
 //   • Accept delegation → EDP_Accept on its ExecDelegationProposal
 //   • Accept interest   → OFI_Accept on its OldFundInterestOffer (gp offers → lp accepts)
@@ -114,7 +114,7 @@ export default function ExitingLP() {
         tag="INVESTOR — LEAVING"
         role="Exiting LP"
         title="Cash out at the set price"
-        lede="You decide to sell at the room's clearing price — signed by your own wallet, and blind to every other LP. Your cash leg settles inside the GP's one atomic Close."
+        lede="You decide to sell at the room's clearing price — signed by your custodian, and blind to every other LP. Your cash leg settles inside the GP's one atomic Close."
       />
 
       <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>

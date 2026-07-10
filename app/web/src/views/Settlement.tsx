@@ -54,7 +54,7 @@ function ownOutcome(role: Role | null, holdings: ActiveContract[], me: string): 
     case 'lpRolling':
       return 'Your position rolled into the new vehicle — no cash leg.';
     case 'gp':
-      return 'One atomic Close moved every leg — signed by your wallet alone.';
+      return 'One atomic Close moved every leg — signed by your custodian alone.';
     case 'lpac':
       return 'Fairness verified — aggregates + fairness anchor, never per-LP data.';
     default:

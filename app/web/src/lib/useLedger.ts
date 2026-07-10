@@ -1,29 +1,23 @@
-// Task 7 seam: turn the per-tab wallet session into a signing ledger client.
+// Custody seam: every persona view drives its OWN on-ledger actions, but signing
+// now happens in the CUSTODY BACKEND, not the browser. `submit(commands)` POSTs to
+// `/action`; the backend signs with the SESSION party's key (chosen from the
+// httpOnly cookie — the client cannot pick a party) and returns `{updateId}`.
+// Reads go through the backend's per-party proxy (`HttpLedgerClient('/api')`, which
+// forces the session party's projection). Party ids come from the PUBLIC `/registry`.
 //
-// Every persona view submits its OWN on-ledger actions by signing with the
-// logged-in role's wallet key (session.key) via the interactive-submission API.
-// Reads use the real per-party Canton projection: activeContracts(session.party)
-// returns exactly what THAT role is a stakeholder of — the privacy story, not a
-// sim. Command/template shapes are copied verbatim from app/scripts/close-wallets.ts,
-// which is proven against the deployed continuum-contracts 1.1.0 on 5N devnet.
-//
-// SECURITY: the private key never leaves this process. submitSigned signs the
-// prepared-transaction hash locally; only the resulting signature + public
-// fingerprint go to the ledger. Nothing here logs, persists, or transmits
-// session.key or the mnemonic.
+// SECURITY: NO key material in the browser. There is no client-side signing, no
+// mnemonic, no private key, nothing in sessionStorage/localStorage. The command
+// shapes + demo economics are copied verbatim from app/scripts/close-wallets.ts,
+// proven against continuum-contracts 1.1.0 on 5N devnet.
 import { useMemo } from 'react';
 import { HttpLedgerClient } from '../../../ledger-client/src/client';
-import { WalletClient } from '../../../ledger-client/src/wallet';
-import type { JsCommand } from '../../../ledger-client/src/types';
-import registry from '../party-registry.json';
+import type { ActiveContract, JsCommand } from '../../../ledger-client/src/types';
 import { useSession } from '../state/WalletSession';
+import { useToast } from '../state/Toast';
 
-// Shared, tab-lifetime clients. Reads + interactive submission both go through
-// the Vite dev-proxy (/api → reverse-proxy → ledger API). The synchronizer id is
-// pinned from the registry so onboarding needs no discovery round-trip. App.tsx
-// reuses `walletClient` as the session's Onboarder, so a tab holds ONE client.
+// Per-party reads proxy (session-scoped by the backend). Same-origin, so the
+// httpOnly session cookie rides along automatically (default `credentials`).
 export const reads = new HttpLedgerClient('/api');
-export const walletClient = new WalletClient('/api', reads, undefined, registry.synchronizerId);
 
 // Fully-qualified create/exercise template ids the deployed 1.1.0 contracts
 // expect (#package:Module:Entity). Verbatim from close-wallets.ts `T`.
@@ -77,23 +71,40 @@ export const R = {
   disclosure: 'Deal:FairnessDisclosure',
 } as const;
 
-// Well-known counterparties from the PUBLIC registry. The signed-in role always
-// signs as its OWN freshly-onboarded wallet (session.party); references to the
-// OTHER seats resolve to these seeded parties so the wired commands typecheck and
-// submit. A fully-live 5-party close (every seat its own fresh wallet, discovered
-// cross-tab) is Task 9 — see plan.
-const P = registry.parties as Record<string, string>;
-export const counter = {
-  gp: P.gp,
-  buyer: P.buyer,
-  lpExiting: P.lpExiting ?? P.lp,
-  lpRolling: P.lpRolling ?? P.lp2,
-  lpac: P.lpac,
+// Well-known counterparties + their custodians, populated ONCE from the PUBLIC
+// `/registry` (party ids are public; NO keys are ever included). The signed-in
+// role always acts as its OWN session party (enforced server-side); references to
+// the OTHER seats resolve to these ids so the wired commands typecheck and submit.
+export const counter: Record<'gp' | 'buyer' | 'lpExiting' | 'lpRolling' | 'lpac', string> = {
+  gp: '',
+  buyer: '',
+  lpExiting: '',
+  lpRolling: '',
+  lpac: '',
 };
 
-// Demo economics — identical to close-wallets.ts so a Task 9 cross-tab run ties
-// out. dealId ('M1') is the join key across SealedBid/LPElection/certs/basis; it
-// is deliberately distinct from the deal's human-readable `cv`.
+/** role → custodian display name (from `/registry`). For institutional chrome. */
+export const custodians: Record<string, string> = {};
+
+let registryLoaded = false;
+
+/**
+ * Fetch the PUBLIC registry once and populate `counter` + `custodians` in place
+ * (views hold a live reference to the same objects). Idempotent.
+ */
+export async function loadRegistry(): Promise<void> {
+  if (registryLoaded) return;
+  const r = await fetch('/registry', { credentials: 'include' });
+  if (!r.ok) throw new Error(`/registry → ${r.status}`);
+  const body = await r.json();
+  Object.assign(counter, body?.parties ?? {});
+  Object.assign(custodians, body?.custodians ?? {});
+  registryLoaded = true;
+}
+
+// Demo economics — identical to close-wallets.ts so a cross-tab live run ties out.
+// dealId ('M1') is the join key across SealedBid/LPElection/certs/basis; it is
+// deliberately distinct from the deal's human-readable `cv`.
 export const DEAL_ID = 'M1';
 export const DEMO = {
   cv: 'Meridian CV I',
@@ -115,15 +126,37 @@ export const DEMO = {
 } as const;
 
 export const shortParty = (p?: string | null): string => (p ? p.split('::')[0] : '—');
+const shortId = (id?: string): string => (id ? (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id) : '—');
+
+/** Result of a custody-signed submit. `contract` present only if `awaitTemplate` matched. */
+export type SubmitResult = { updateId?: string; contract?: ActiveContract };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Poll the party's ACS until a contract of `templateSuffix` appears; newest wins. */
+async function pollForContract(
+  party: string,
+  templateSuffix: string,
+  tries = 8,
+  delayMs = 700,
+): Promise<ActiveContract | undefined> {
+  for (let i = 0; i < tries; i++) {
+    await sleep(delayMs);
+    const acs = await reads.activeContracts(party, { templateId: templateSuffix });
+    if (acs.length) return acs[acs.length - 1];
+  }
+  return undefined;
+}
 
 export type Ledger = ReturnType<typeof useLedger>;
 
 /**
- * The signing + reading surface for a persona view. Only usable from a signed-in
- * tab (App routes views only when isSignedIn); `me` is the logged-in party.
+ * The signing + reading surface for a persona view. `me` is the logged-in party.
+ * `submit` routes through the custody backend — the browser holds no key.
  */
 export function useLedger() {
-  const { party, key, fingerprint } = useSession();
+  const { party, custodianName } = useSession();
+  const toast = useToast();
   return useMemo(() => {
     const me = party as string;
     return {
@@ -131,24 +164,46 @@ export function useLedger() {
       reads,
       /** This role's OWN per-party ACS projection for `templateSuffix`. */
       myAcs: (templateSuffix: string) => reads.activeContracts(me, { templateId: templateSuffix }),
-      /** Another party's projection (used only for honest cross-party privacy proofs). */
+      /** Another party's projection (backend forces the session party, so honest). */
       acsOf: (p: string, templateSuffix: string) =>
         reads.activeContracts(p, { templateId: templateSuffix }),
       /**
-       * Submit commands signed by the logged-in role's OWN wallet key. Pass
-       * `awaitTemplate` to poll for and return the created contract.
+       * Submit commands — the CUSTODY BACKEND signs with the session party's key.
+       * Pass `awaitTemplate` to poll for and return the created contract.
        */
-      submit: (commands: JsCommand[], awaitTemplate?: string) => {
-        if (!key || !fingerprint) throw new Error('not signed in');
-        return walletClient.submitSigned(
-          me,
-          key,
-          fingerprint,
-          commands,
-          undefined,
-          awaitTemplate ? { awaitTemplate } : {},
-        );
+      submit: async (commands: JsCommand[], awaitTemplate?: string): Promise<SubmitResult> => {
+        const tid = toast.show(`signing via ${custodianName ?? 'custodian'}…`, 'pending');
+        try {
+          const r = await fetch('/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ commands }),
+          });
+          const txt = await r.text();
+          if (!r.ok) {
+            let msg = txt;
+            try {
+              msg = JSON.parse(txt)?.error ?? txt;
+            } catch {
+              /* non-JSON error body */
+            }
+            throw new Error(msg || `action failed (${r.status})`);
+          }
+          const body = txt ? JSON.parse(txt) : {};
+          const updateId: string | undefined = body?.updateId;
+          toast.update(tid, `committed · updateId ${shortId(updateId)}`, 'success');
+          const result: SubmitResult = { updateId };
+          if (awaitTemplate) {
+            const contract = await pollForContract(me, awaitTemplate);
+            if (contract) result.contract = contract;
+          }
+          return result;
+        } catch (e) {
+          toast.update(tid, e instanceof Error ? e.message : String(e), 'error');
+          throw e;
+        }
       },
     };
-  }, [party, key, fingerprint]);
+  }, [party, custodianName, toast]);
 }

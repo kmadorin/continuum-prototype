@@ -1,144 +1,104 @@
-// Per-tab wallet session gate (Task 6).
+// Backend-session gate (custody build). Keys are GONE from the browser — the
+// custody backend holds each party's Ed25519 key and signs on its behalf. This
+// context tracks ONLY the non-secret session identity returned by the backend:
+// { role, party, custodianName }.
 //
-// Each role signs into ONE browser tab and that tab is locked to that role's
-// Canton external party for the whole session. The demo opens SEPARATE tabs, one
-// per role — and because `sessionStorage` is per-tab, "separate tabs = separate
-// role sessions" comes for free. This is NOT an in-tab "Viewing as" switcher; it
-// is a login gate + per-tab role lock.
-//
-// SECURITY (hard rule): the mnemonic/private key is wallet key material. It lives
-// ONLY in-memory + `sessionStorage` (per-tab, browser-local, cleared when the tab
-// closes). It is NEVER sent to any server (only the derived PUBLIC key leaves, and
-// only inside `onboard`), NEVER logged, and NEVER written to a repo file.
-import { createContext, useContext, useMemo, useState } from 'react';
+// SECURITY (hard rule): NO key material, NO mnemonic, NO private key ever lives in
+// the browser now. Nothing is written to sessionStorage/localStorage. The session
+// is an httpOnly cookie set by the backend at /auth/login; the browser never reads
+// it. `GET /me` restores identity on reload; `signIn` posts credentials; `signOut`
+// drops local identity (the cookie is short-lived and re-`/me` would restore, which
+// is fine for the demo — a logout endpoint can be added later).
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { keyFromMnemonic, type Ed25519Key } from '../../../ledger-client/src/ed25519';
-import type { OnboardResult } from '../../../ledger-client/src/wallet';
+import { loadRegistry } from '../lib/useLedger';
 
-/** The five demo seats. Each browser tab locks to exactly one of these. */
+/** The five demo seats (also the backend usernames). */
 export type Role = 'gp' | 'buyer' | 'lpExiting' | 'lpRolling' | 'lpac';
 
 export const ROLES: Role[] = ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac'];
 
-/**
- * The onboarding boundary. `WalletClient` from the ledger-client satisfies this
- * (`onboard(partyHint, mnemonicOrKey)`); tests inject a fake so no network is hit.
- * Only the PUBLIC key derived inside `onboard` ever leaves the browser.
- */
-export interface Onboarder {
-  onboard(partyHint: string, mnemonicOrKey: string): Promise<OnboardResult>;
-}
-
-/** `sessionStorage` keys (per-tab, browser-local). Namespaced to avoid clashes. */
-export const SESSION_KEYS = {
-  role: 'continuum.session.role',
-  party: 'continuum.session.party',
-  fingerprint: 'continuum.session.fingerprint',
-  // Key material — sessionStorage ONLY (per-tab), never sent/logged/committed.
-  mnemonic: 'continuum.session.mnemonic',
-} as const;
-
-export type Session = {
-  role: Role;
-  party: string;
-  fingerprint: string;
-  key: Ed25519Key;
-};
+/** Non-secret session identity, exactly what `/me` and `/auth/login` return. */
+export type Identity = { role: Role; party: string; custodianName: string };
 
 type Ctx = {
   role: Role | null;
   party: string | null;
-  fingerprint: string | null;
-  key: Ed25519Key | null;
+  custodianName: string | null;
   isSignedIn: boolean;
-  /** Sign this tab in as `role`, onboarding the wallet derived from `mnemonic`. */
-  signIn: (role: Role, mnemonic: string) => Promise<void>;
-  /** Clear the session and all key material from this tab. */
+  /** True once the initial `/me` restore + `/registry` load have settled. */
+  ready: boolean;
+  /** Log in with backend credentials → httpOnly session cookie. */
+  signIn: (username: string, password: string) => Promise<void>;
+  /** Drop local identity (no key material to clear — there is none). */
   signOut: () => void;
 };
 
 const C = createContext<Ctx | null>(null);
 
-/** A partyHint that ties the allocated party to its role (kept human-readable). */
-function partyHint(role: Role): string {
-  return `continuum-${role}`;
+async function readJson(r: Response): Promise<any> {
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : {};
 }
 
-/** Restore a session from this tab's sessionStorage, if one is present + intact. */
-function restore(): Session | null {
-  try {
-    const role = sessionStorage.getItem(SESSION_KEYS.role) as Role | null;
-    const party = sessionStorage.getItem(SESSION_KEYS.party);
-    const fingerprint = sessionStorage.getItem(SESSION_KEYS.fingerprint);
-    const mnemonic = sessionStorage.getItem(SESSION_KEYS.mnemonic);
-    if (!role || !party || !fingerprint || !mnemonic) return null;
-    // Re-derive the key from the stored mnemonic — no network, no re-onboard.
-    return { role, party, fingerprint, key: keyFromMnemonic(mnemonic) };
-  } catch {
-    return null;
-  }
-}
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [ready, setReady] = useState(false);
 
-export function WalletSessionProvider({
-  onboarder,
-  children,
-}: {
-  onboarder: Onboarder;
-  children: ReactNode;
-}) {
-  // Lazy init reads sessionStorage once so a reload in the SAME tab restores the
-  // signed-in role without re-onboarding.
-  const [session, setSession] = useState<Session | null>(() => restore());
-
-  const value = useMemo<Ctx>(() => {
-    return {
-      role: session?.role ?? null,
-      party: session?.party ?? null,
-      fingerprint: session?.fingerprint ?? null,
-      key: session?.key ?? null,
-      isSignedIn: session != null,
-      async signIn(role, mnemonic) {
-        // Per-tab lock: once signed in, this tab is bound to its role. A different
-        // role must signOut first. (Re-signing the same role is allowed.)
-        if (session && session.role !== role) {
-          throw new Error(
-            `This tab is already signed in as "${session.role}" — sign out before switching role.`,
-          );
+  // On mount: load the PUBLIC registry (party ids) and restore any live session.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      // Registry is public and required before any view renders; a failure here is
+      // non-fatal to auth (the SignIn screen still works).
+      await loadRegistry().catch(() => {});
+      try {
+        const r = await fetch('/me', { credentials: 'include' });
+        if (alive && r.ok) {
+          const me = (await readJson(r)) as Identity;
+          if (me?.party) setIdentity(me);
         }
-        // Derive key material locally (may throw on a bad mnemonic — surfaced).
-        const key = keyFromMnemonic(mnemonic);
-        // Onboard the external party. Only the PUBLIC key leaves the browser here.
-        // Failures propagate to the UI; nothing is persisted on failure.
-        const { partyId, fingerprint } = await onboarder.onboard(partyHint(role), mnemonic);
+      } catch {
+        /* offline / no session — stay signed out */
+      } finally {
+        if (alive) setReady(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-        // Commit atomically only after a successful onboard.
-        try {
-          sessionStorage.setItem(SESSION_KEYS.role, role);
-          sessionStorage.setItem(SESSION_KEYS.party, partyId);
-          sessionStorage.setItem(SESSION_KEYS.fingerprint, fingerprint);
-          sessionStorage.setItem(SESSION_KEYS.mnemonic, mnemonic);
-        } catch {
-          // sessionStorage unavailable (private mode / quota): keep the in-memory
-          // session so the tab still works; it just won't survive a reload.
-        }
-        setSession({ role, party: partyId, fingerprint, key });
+  const value = useMemo<Ctx>(
+    () => ({
+      role: identity?.role ?? null,
+      party: identity?.party ?? null,
+      custodianName: identity?.custodianName ?? null,
+      isSignedIn: identity != null,
+      ready,
+      async signIn(username, password) {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password }),
+        });
+        const body = await readJson(r).catch(() => ({}));
+        if (!r.ok) throw new Error(body?.error ?? `login failed (${r.status})`);
+        setIdentity({ role: body.role, party: body.party, custodianName: body.custodianName });
       },
       signOut() {
-        try {
-          for (const k of Object.values(SESSION_KEYS)) sessionStorage.removeItem(k);
-        } catch {
-          /* nothing to clear */
-        }
-        setSession(null);
+        setIdentity(null);
       },
-    };
-  }, [session, onboarder]);
+    }),
+    [identity, ready],
+  );
 
   return <C.Provider value={value}>{children}</C.Provider>;
 }
 
 export function useSession(): Ctx {
   const c = useContext(C);
-  if (!c) throw new Error('useSession must be used within a WalletSessionProvider');
+  if (!c) throw new Error('useSession must be used within a SessionProvider');
   return c;
 }

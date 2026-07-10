@@ -1,21 +1,19 @@
-// Task 8 render tests for the settlement money-shot. Mounts <Settlement/> in a
-// signed-in session (session seeded via sessionStorage, restored WITHOUT
-// onboarding — same path as personas.test.tsx) and stubs the shared `reads`
-// client's per-party ACS. No network, no key material beyond the standard BIP-39
-// test vector.
+// Render tests for the settlement money-shot (custody build). Mounts <Settlement/>
+// in a signed-in backend session (restored via a mocked /me) and stubs the shared
+// `reads` client's per-party ACS. No network, no key material.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { WalletSessionProvider, SESSION_KEYS, type Onboarder } from '../state/WalletSession';
+import { SessionProvider } from '../state/WalletSession';
 import { reads, R, DEMO } from '../lib/useLedger';
+import { installBackend } from '../test/mockBackend';
 import Settlement from './Settlement';
 
-const TEST_MNEMONIC = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
-const noopOnboarder: Onboarder = { onboard: vi.fn() };
+const ME_PARTY = 'continuum-buyer-demo::abc123';
 const RECEIPT_CID = 'receipt-cid-0xABCDEF';
 
 function signedIn(children: ReactNode) {
-  return <WalletSessionProvider onboarder={noopOnboarder}>{children}</WalletSessionProvider>;
+  return <SessionProvider>{children}</SessionProvider>;
 }
 
 // A ContinuationDeal (Closed) so the "awaiting" path has a stage to show; the
@@ -41,16 +39,16 @@ function stub(withReceipt: boolean) {
 }
 
 beforeEach(() => {
-  sessionStorage.clear();
-  sessionStorage.setItem(SESSION_KEYS.role, 'buyer');
-  sessionStorage.setItem(SESSION_KEYS.party, 'continuum-test::abc123');
-  sessionStorage.setItem(SESSION_KEYS.fingerprint, 'fp-test');
-  sessionStorage.setItem(SESSION_KEYS.mnemonic, TEST_MNEMONIC);
+  installBackend({
+    me: { role: 'buyer', party: ME_PARTY, custodianName: 'Copper — buyer' },
+    registry: { parties: { buyer: ME_PARTY }, custodians: {} },
+  });
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('Settlement money-shot', () => {

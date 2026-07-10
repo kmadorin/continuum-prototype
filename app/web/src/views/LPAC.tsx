@@ -118,7 +118,7 @@ export default function LPAC() {
         tag="OVERSIGHT"
         role="LPAC"
         title="Verify it was fair"
-        lede="The governance seat. You record consent and attest fairness with your own wallet, and get a scoped window to verify the settled close — without ever seeing the live per-LP inputs."
+        lede="The governance seat. You record consent and attest fairness via your custodian, and get a scoped window to verify the settled close — without ever seeing the live per-LP inputs."
       />
 
       <Card title={deal ? (deal.args.cv as string) : 'No deal in scope yet'}>

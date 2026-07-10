@@ -1,8 +1,8 @@
-// Secondary Buyer (role `buyer`). Signs its OWN transactions with its wallet key:
+// Secondary Buyer (role `buyer`). Its custodian signs its transactions on its
 //   • Submit sealed bid       → create Continuum.Auction:SealedBid   (buyer-signed, peer+GP-blind)
 //   • Accept exec delegation  → EDP_Accept on its ExecDelegationProposal (once gp proposes it)
 // Reads its own SealedBid + post-close CV-unit RegistryHolding from its own
-// per-party ACS projection. Every write is submitSigned(session.party, ...).
+// per-party ACS projection. Every write POSTs to /action — the custody backend signs.
 import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
@@ -90,7 +90,7 @@ export default function Buyer() {
         tag="SECONDARY BUYER"
         role="Buy-side"
         title="Bid sealed, buy the units"
-        lede="Your bid is signed by your own wallet and stays blind to every other buyer. You separately pre-authorize the GP to settle your leg — you never hand over your key."
+        lede="Your bid is signed by your custodian and stays blind to every other buyer. You separately pre-authorize the GP to settle your leg — no key ever touches this browser."
       />
 
       <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
@@ -140,7 +140,7 @@ export default function Buyer() {
               <button className="btn" type="button" disabled={!!busy} onClick={submitBid}>
                 {busy === 'bid' ? 'Signing…' : 'Submit sealed bid'}
               </button>
-              <span className="cant-see">Signed with your wallet — blind to other buyers.</span>
+              <span className="cant-see">Signed by your custodian — blind to other buyers.</span>
             </div>
           </div>
         )}

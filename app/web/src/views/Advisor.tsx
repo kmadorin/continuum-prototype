@@ -1,5 +1,5 @@
 // Advisor / Organizer (role `gp`) — runs the deal. Every write is signed by the
-// GP's OWN wallet key (submitSigned(session.party, ...)). Two sections:
+// GP's custodian (POST /action — the backend signs with the GP party's key). Two sections:
 //
 //  1. Closing room  — the deal lifecycle: create ContinuationDeal, SetClearing,
 //     OpenElections. (RecordConsent is lpac-controlled in 1.1.0, so it lives in
@@ -98,7 +98,7 @@ export default function Advisor() {
         R.deal,
       );
       await refresh();
-      return 'Closing room opened — deal created and signed by the GP wallet.';
+      return 'Closing room opened — deal created and signed by the GP custodian.';
     });
 
   const exerciseDeal = (label: string, choice: string, arg: Record<string, unknown>, ok: string) =>
@@ -284,7 +284,7 @@ export default function Advisor() {
         tag="ADVISOR"
         role="Organizer"
         title="Run the closing room"
-        lede="One source of truth for the close, signed by your own wallet. Everyone's in the room — nobody can see anyone else's private inputs until the atomic settlement."
+        lede="One source of truth for the close, signed by your custodian on your behalf. Everyone's in the room — nobody can see anyone else's private inputs until the atomic settlement."
       />
 
       <Card title={deal ? (deal.args.cv as string) : DEMO.cv}>
@@ -330,7 +330,7 @@ export default function Advisor() {
 
       <Card title="Settlement — GP-signable backstage">
         <p className="hint" style={{ marginTop: 0 }}>
-          Each step is a real command signed by the GP wallet, ported from the proven close-wallets flow. The
+          Each step is a real command signed by the GP custodian, ported from the proven close-wallets flow. The
           counterparty accepts (buyer/LP delegations, LP interest + participation) are signed in those tabs; run
           Close once they're in — the coordinated live close is Task 9.
         </p>

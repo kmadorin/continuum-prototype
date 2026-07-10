@@ -7,9 +7,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Browser calls to /api/* forward to the running reverse-proxy (which
-      // injects the M2M token), stripping the /api prefix.
-      '/api': { target: 'http://localhost:8788', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') },
+      // Dev: forward every custody-backend route (auth, action, per-party reads
+      // proxy, registry, audit, ledger inspector) to the running custody spine.
+      // The backend owns the /api prefix (it proxies to the ledger itself), so no
+      // rewrite here.
+      '/api': { target: 'http://localhost:8787', changeOrigin: true },
+      '/auth': { target: 'http://localhost:8787', changeOrigin: true },
+      '/action': { target: 'http://localhost:8787', changeOrigin: true },
+      '/registry': { target: 'http://localhost:8787', changeOrigin: true },
+      '/me': { target: 'http://localhost:8787', changeOrigin: true },
+      '/audit': { target: 'http://localhost:8787', changeOrigin: true },
+      '/ledger': { target: 'http://localhost:8787', changeOrigin: true },
     },
   },
   test: {

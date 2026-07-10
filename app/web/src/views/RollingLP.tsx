@@ -1,4 +1,4 @@
-// Rolling LP (role `lpRolling`) — the investor staying in. Signs its OWN wallet:
+// Rolling LP (role `lpRolling`) — the investor staying in. Its custodian signs:
 //   • Elect to roll     → create Continuum.Election:LPElection (rollNav = positionNav, peer-blind)
 //   • Accept delegation → EDP_Accept on its ExecDelegationProposal
 // Economically the mirror of the Exiting LP (roll instead of sell). The 5th seat
@@ -83,7 +83,7 @@ export default function RollingLP() {
         tag="INVESTOR — STAYING"
         role="Rolling LP"
         title="Roll into the new vehicle"
-        lede="You decide to stay in at the room's clearing price — signed by your own wallet, blind to every other LP. Your rolled units settle inside the GP's one atomic Close."
+        lede="You decide to stay in at the room's clearing price — signed by your custodian, blind to every other LP. Your rolled units settle inside the GP's one atomic Close."
       />
 
       <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>

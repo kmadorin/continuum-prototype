@@ -1,4 +1,4 @@
-// Shared building blocks for the five real-wallet persona views (Task 7).
+// Shared building blocks for the five custody-signed persona views.
 // Pure UI + a tiny async-action hook; no ledger specifics live here.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
