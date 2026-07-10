@@ -43,23 +43,24 @@ export const createDeal = (a: {
 
 // Continuum.Auction:SealedBid — with gp, buyer, dealId, pctOfNav, capacity
 // (Auction.daml:6-12). NOTE: the plan's sample used `price`/omitted `gp`; the
-// real template has neither a `price` field (it's `pctOfNav`) nor is `gp`
-// optional. `gp` defaults to '' here since the caller (test) doesn't supply
-// the deal's GP party — callers that know it should pass it explicitly.
+// real template has neither a `price` field (it's `pctOfNav`, a 0–1 NAV
+// fraction) nor is `gp` optional. `gp` is REQUIRED here: the Daml
+// `ensure buyer /= gp` self-dealing guard needs a real, distinct GP party, so
+// a default would silently defeat it and produce an invalid Party.
 export const sealedBid = (a: {
-  gp?: string;
+  gp: string;
   buyer: string;
   deal: string;
-  price: string;
+  pctOfNav: string;
   capacity: string;
 }): CreateCmd => ({
   CreateCommand: {
     templateId: `${PKG}:Continuum.Auction:SealedBid`,
     createArguments: {
-      gp: a.gp ?? '',
+      gp: a.gp,
       buyer: a.buyer,
       dealId: a.deal,
-      pctOfNav: a.price,
+      pctOfNav: a.pctOfNav,
       capacity: a.capacity,
     },
   },

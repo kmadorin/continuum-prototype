@@ -8,7 +8,7 @@ describe('ops builders', () => {
     expect((c.CreateCommand.createArguments as any).room).toEqual(['B', 'L']);
   });
   it('sealedBid has the buyer as the only structural signer', () => {
-    const c = sealedBid({ buyer: 'B', deal: 'd1', price: '0.96', capacity: '20000000.0' });
+    const c = sealedBid({ gp: 'GP', buyer: 'B', deal: 'd1', pctOfNav: '0.96', capacity: '20000000.0' });
     expect(c.CreateCommand.templateId).toContain(':Continuum.Auction:SealedBid');
   });
   it('setClearing is an ExerciseCommand carrying the price', () => {
