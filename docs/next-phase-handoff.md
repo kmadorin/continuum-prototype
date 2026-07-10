@@ -43,20 +43,39 @@ directly** (no Java backend); loop-sdk optional for wallet UX.
 ## Step 2 — Run the devnet DEPLOY GATING TEST (do this BEFORE writing specs)
 
 This is pass/fail for the whole submission. Prove a Continuum contract goes on-ledger on the
-shared validator, end to end:
-1. Build the DARs (`dpm build --all` in `continuum-daml/`). Toolchain already installed
+shared validator, end to end. **Endpoints/verbs verified against the Canton 3.5 JSON Ledger
+API v2 OpenAPI — use them as written:**
+1. Build the DARs (`dpm build --all` in `continuum-daml/`). Toolchain installed
    (`~/.local/bin/dpm`, SDK 3.4.11, JDK 17).
-2. Get an M2M access token (client_credentials → JWT; secret from the PDF, via env var).
-3. **Upload the DAR** to the validator — try the JSON Ledger API package-upload endpoint
-   (`/v2/packages` or the interactive-submission upload; check the API for the exact route) OR
-   the Seaport UI if the API path isn't available.
-4. **Allocate** at least 2 parties (`POST /v2/parties`) — e.g. a `gp` and a `buyer`.
-5. **Create** one contract via `POST /v2/commands/submit-and-wait` acting-as `gp` (e.g.
-   `RegistryAllocationFactory`, or mint a `RegistryHolding`).
-6. **Query** `/v2/state/active-contracts` to confirm it's on-ledger.
-7. If the **3.4.11 / LF-2.1 DAR is rejected** by the 3.5.7 validator: bump the packages to
-   **SDK 3.5.x**, rebuild, re-run (our Daml is standard — expect a clean bump; re-pin the
-   `splice-api-token-*-v1 0.6.11` DARs). Record whichever SDK works.
+2. Get an M2M access token (client_credentials → JWT; secret from the PDF, via env var). The
+   JWT `sub` is the ledger **user id** you'll act as.
+3. **FIRST validate the token's privilege level** — DAR upload (`POST /v2/dars`) and party
+   allocation (`POST /v2/parties`) require **`participant_admin`**; a shared M2M token may be
+   scoped to `daml_ledger_api` only and will **403** on these. Check `GET /v2/authenticated-user`.
+   **If it lacks admin, fall back to the Seaport UI for BOTH DAR upload AND party allocation**
+   (party-management), and use the API only for command submission + queries. Decide this on
+   day 1 — it changes Stream A's deploy automation.
+4. **Upload the DAR**: `POST /v2/dars` (`application/octet-stream`; NOT the deprecated
+   `/v2/packages`). Optionally `POST /v2/dars/validate` first to pre-check upgrade-compat.
+5. **Allocate** ≥2 parties (`POST /v2/parties`, body `{partyIdHint, userId, synchronizerId?}`)
+   — e.g. `gp`, `buyer`. **Pass `userId` = the token's `sub`** so that user gets `act_as` on
+   the new party. (Alt: `POST /v2/users/{id}/rights` with `CanActAs`.) **Without this bind,
+   step 7 returns PERMISSION_DENIED** — allocating a party does NOT by itself let your token
+   act as it. Confirm rights via `GET /v2/authenticated-user`.
+6. Read the current offset: `GET /v2/state/ledger-end` → `activeAtOffset`.
+7. **Create** one contract: `POST /v2/commands/submit-and-wait` with `JsCommands`
+   {`commandId`, `commands`, `actAs:[gp]`}; template ids use the `#package-name:Module:Entity`
+   form. Start simple — mint a `RegistryHolding` or create `RegistryAllocationFactory`.
+   **NOTE for the splice-token / `ExecDelegation` exercises later**: factory/allocation/interface
+   choices are exercised on contracts the actor may not be a stakeholder of → the command body
+   needs **`disclosedContracts`** (fetch each CID + its `createdEventBlob` from active-contracts).
+   This is the most likely reason a *correct-looking* submit still fails — bake it into the client.
+8. **Query** `POST /v2/state/active-contracts` (it's POST, body needs `activeAtOffset` + an
+   `eventFormat`; NOT a bare GET) to confirm the contract is on-ledger.
+9. If the **3.4.11 / LF-2.1 DAR is rejected** by the 3.5.7 validator (LOW risk — our DARs already
+   ran e2e on a 3.5.6 sandbox and the pinned splice DARs ARE the devnet 0.6.11 bundle): bump the
+   packages to **SDK 3.5.x**, **bump the package version** (vetting's upgrade-compat check rejects
+   a same-name/same-version package with a different hash), rebuild, re-run.
 Report the result. If it can't be made to pass, STOP and escalate — everything else depends on it.
 
 ## Step 3 — Produce specs + plans (superpowers)
@@ -67,17 +86,26 @@ only if a real ambiguity surfaces) to produce:
   ledger-client + token-proxy design, party/act-as handling, and the read models.
 - **Bite-sized, TDD-where-possible plans** carved into **independent workstreams so multiple
   agents can run in parallel** (the spec must define the seams that make this safe):
-  - **Stream A — chain/deploy**: DAR deploy automation, party allocation, token-exchange proxy,
-    the typed ledger client (codegen-js/`@c7/ledger` or hand-written JSON payloads), one
-    command + one query proven against devnet.
+  - **Stream A — chain/deploy**: DAR deploy + party allocation (API or Seaport UI per step 3),
+    the **reverse-proxy** (see below), the typed ledger client (codegen-js/`@c7/ledger` or
+    hand-written JSON payloads incl. `disclosedContracts` handling), one command + one query
+    proven against devnet.
   - **Stream B — frontend**: React+TS+Vite scaffold, port the 4 persona views from the HTML,
-    wire them to the ledger-client interface (mock the client first so B doesn't block on A).
+    wire them to the ledger-client **interface** (mock the client first so B doesn't block on A).
   - **Convergence**: end-to-end deal on devnet through the UI; verify conservation on-ledger.
-  - **Submission**: public repo (secret gitignored), deck, 3-min video, deployed live product
-    (host the React app + proxy).
-  Make the ledger-client **interface** the contract between A and B so they parallelize cleanly.
-- Sequence the streams: A's deploy-automation + B's scaffold/port can run in parallel from the
-  start; they converge at wiring. Flag anything that MUST be sequential.
+  - **Submission (floor-critical, not polish)**: public repo (secret gitignored), deck, 3-min
+    video, and a **hosted live product** — the "live product link" is a HARD requirement, so
+    host the React app + proxy (e.g. Vercel/Netlify + a small serverless proxy) as part of the floor.
+- **The A/B seam is TWO artifacts** (define both in the spec): (i) the TS ledger-client
+  *interface* (shape B mocks), and (ii) a generated **party-registry config** (real devnet party
+  IDs + which persona maps to which) that A emits after allocation. B must read party IDs from
+  (ii), NOT hard-code strings — a fake string passes the mock and breaks on wiring.
+- **The reverse-proxy is on the FLOOR, not optional**: a pure-browser app both leaks the shared
+  secret AND is likely CORS-blocked by the ledger API. So build a **thin reverse-proxy that
+  injects the Bearer token (handling 8h refresh) and forwards all `/v2/*` calls** — one box
+  solves secret-hiding + CORS. The browser talks only to the proxy.
+- Sequence: A's deploy-automation + B's scaffold/port run in parallel from the start; they
+  converge at wiring (which needs the party-registry + a live proxy). Flag anything sequential.
 
 ## Constraints / guardrails
 
