@@ -13,4 +13,6 @@ app/web/src/party-registry.json
 **/wallet-keys*.json
 **/*.privkey
 **/keystore*.json
+**/custody-keys*.json
+**/custody-users*.json
 app/**/party-registry*.json
