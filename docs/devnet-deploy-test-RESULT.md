@@ -131,3 +131,68 @@ gRPC-only limitation is irrelevant — we never need it against devnet. Scale to
   `createdEventBlob` from active-contracts with `includeCreatedEventBlob:true`). Most likely reason
   a correct-looking submit later fails. Not needed for the plain `CreateCommand` above.
 - Multi-party `Close` with the `ExecDelegation` / `Allocation_ExecuteTransfer` batch.
+
+---
+
+## ✅ ACHIEVED — minimal atomic `Close` proven live on devnet (Task 7)
+
+`app/scripts/close-minimal.ts` drives a fresh `ContinuationDeal` `Setup → Electing`, builds the
+antecedent DAG + `IssuanceBasis`, allocates **2 legs** (CV units → buyer, USDC → exiting LP) against
+the disclosed `RegistryAllocationFactory`, co-signs the `ExecDelegation`s + burn authority
+(`AcceptedParticipation` + `OldFundInterest`), then exercises `Deal.Close` in **ONE transaction**.
+
+Live run (all-or-nothing):
+
+| Fact | Value |
+|---|---|
+| **`Close` updateId** | `12209ce8f261d9c2b70a3ecdfc6d8afda3e2c28da20e8f627b9ae6a34fd89905ec5d` (single tx) |
+| **`SettlementReceipt`** | `009ca1e4da2b5d9bf0f…463ca9e05` — `totalUnits=4800000.0`, `clearingPct=0.96` |
+| buyer CV (`MERIDIAN-CV-I`) | `0 → 4800000` (Δ +4.8M) |
+| lp USDC | `0 → 4608000` (Δ +4.608M) |
+| lp `OldFundInterest` | **BURNED** |
+
+Balances move + interest burns **inside the single `Close` updateId** — malform any leg and the
+whole `Close` aborts (nested `exercise` failure rolls back the transaction). That is the clincher.
+
+### The `Close` command that worked
+
+`ExerciseCommand` on `#continuum-contracts:Continuum.Deal:ContinuationDeal`, choice `Close`,
+`actAs:[gp]`. gp is a stakeholder of every referenced contract (deal/basis signatory, allocation
+admin, ExecDelegation + AcceptedParticipation + OldFundInterest co-signatory, valuation/fairness/
+consent/PSA observer or signatory) ⇒ **no `disclosedContracts` needed on the `Close` itself**.
+Tuples serialize as `{"_1":…,"_2":…}`:
+
+```json
+{
+  "basisCid": "<IssuanceBasis cid>",
+  "legExecs": [
+    { "_1": "<ExecDelegation(gp,buyer) cid>", "_2": "<RegistryAllocation gp→buyer UNIT cid>" },
+    { "_1": "<ExecDelegation(gp,lp) cid>",    "_2": "<RegistryAllocation gp→lp USDC cid>" }
+  ],
+  "burns": [ { "_1": "<AcceptedParticipation(gp,lp) cid>", "_2": "<OldFundInterest(gp,lp) cid>" } ],
+  "fairnessHash": "continuum-fairness-v1"
+}
+```
+
+### On-ledger conservation guard
+
+`Close` enforces `sum(unit-leg amounts) == basis.psaPrice`. Minimal deal: `clearingPct 0.96 ×
+refNav 5,000,000 = psaPrice 4,800,000`, and the single unit leg delivers exactly `4,800,000` — so
+units are deal-price-backed (§5.4). `IssuanceBasis.ValidateIssuance` also gates the antecedent DAG
+(valuation range/freshness, fairness range, auction-cert clearing, LPAC granted, PSA price).
+
+### GOTCHAS learned building the `Close` (add to the list above)
+
+- **Daml `Int` → JSON string.** `maxAsOfDays: 120` (number) → `500 LEDGER_API_INTERNAL_ERROR
+  "Expected ujson.Str (data: 120)"`. Send `"120"`. (`Decimal`/`Text`/`Date`/`Time` are already strings.)
+- **`Decimal` reads back normalized to 10 dp** — ACS returns `amount:"4800000.0000000000"`, not
+  `"4800000.0"`. Compare `Number(a)===Number(b)`, never string-equal a decimal when matching contracts.
+- **Stage choices are consuming** — `SetClearing`/`RecordConsent`/`OpenElections` each archive the deal
+  and return a *new* cid. `submit-and-wait` returns only `updateId`, so re-query the ACS for the
+  successor (filter by a unique `cv`) after every stage transition.
+- **Recovering created cids without a tx-tree read:** snapshot the template's ACS cids before the
+  submit, diff after, then narrow with a field predicate — robust against stale devnet contracts
+  (prior runs leave duplicate factories/valuations/etc.).
+- **Party model:** `vehicle == gp` (collapsed in `party-registry.json`), so the deal is single-sig.
+  `ValuationReport.agent` and `FairnessOpinion.provider` **must ≠ gp** (Daml `ensure`) — the demo
+  plays both with the `lpac` party.
