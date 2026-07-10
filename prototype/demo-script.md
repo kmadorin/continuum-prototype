@@ -60,8 +60,10 @@ persona — but a single tab with the **"Viewing as"** switcher works fine solo.
 
 ### 8 · Prove it was fair — *as Oversight* (15s)
 - Finish a successful close. As Advisor, **Grant oversight window**. Switch to **Oversight — LPAC**.
-> "Before the close, the regulator saw only that a deal existed. **After, they get a scoped
+> "Before the close, the LPAC saw only that a deal existed. **After, they get a scoped
 > window to verify it was fair — without ever seeing the live private inputs.**"
+> *(Optional forward-looking line: "…and the same scoped view can be extended to an
+> external auditor or regulator.")*
 
 ### 9 · The flywheel — *as Advisor* (15s)
 - As Advisor, click **Start deal #2**. Switch to **Secondary Buyer** at the pricing step.
@@ -72,7 +74,7 @@ persona — but a single tab with the **"Viewing as"** switcher works fine solo.
 
 ### The one-line close
 > *"The price was set and fairness-validated up front, every leg settled together, no LP saw
-> another LP's hand, the cash was a real stablecoin, and the regulator can verify — all in
+> another LP's hand, the cash was a real stablecoin, and the LPAC can verify — all in
 > one private, atomic transaction."*
 
 *(Reminder: this is a UX simulation — no Canton, no wallets, no network. It exists to test

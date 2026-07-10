@@ -310,7 +310,7 @@ function vInvite() {
             ${rosterRow(d.staying.name, d.staying.type, `${fmtM(d.staying.committed)} committed · ${fmtM(d.staying.nav)} NAV · ${pct(d.staying.nav / d.fundNav)}`, "Joined", "ok")}
             ${rosterRow(d.leaving.name, d.leaving.type, `${fmtM(d.leaving.committed)} committed · ${fmtM(d.leaving.nav)} NAV · ${pct(d.leaving.nav / d.fundNav)}`, "Joined", "ok")}
             ${rosterRow(d.buyer.name, `Secondary buyer · AUM ${d.buyer.aum}`, esc(d.buyer.mandate), shared.buyerVerified ? "Verified ✓ reused" : "Verified ✓ once", "ok")}
-            ${rosterRow("LPAC / Regulator", "Oversight", "Post-close verification window", "Observer", "sealed")}
+            ${rosterRow("LPAC (Oversight)", "LP advisory committee", "Post-close verification window", "Observer", "sealed")}
           </div>
           <div class="actions"><button class="btn big" id="to-price">Price the deal</button></div>
         </div>
@@ -426,7 +426,7 @@ function vElect() {
   }
   return stageHead("A deal is underway",
     `Elections are in progress at the public price. Oversight has no window into live private inputs — only that a deal exists.`)
-    + locked("Sealed until close", "Per the rules, the regulator window opens only after the close, scoped to verify fairness.");
+    + locked("Sealed until close", "Per the rules, the LPAC oversight window opens only after the close, scoped to verify fairness.");
 }
 
 function electionRow(name, detail, val) {
