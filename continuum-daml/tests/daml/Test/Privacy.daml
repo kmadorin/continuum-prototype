@@ -5,11 +5,13 @@ import DA.Assert ((===))
 import DA.List (head)
 import Continuum.Deal (FairnessDisclosure(..))
 import Continuum.Election (LPElection(..))
-import Continuum.Auction (SealedBid(..))
+import Continuum.Auction (SealedBid(..), AuctionCertificate)
+import Continuum.Valuation (FairnessOpinion)
 import Continuum.Document (hashOf)
 import Continuum.Scenario
 
--- Matrix group 7: GP blind mid-window; regulator scoped, aggregate-only, post-close.
+-- Matrix group 7: GP blind mid-window; ILPA oversight body (LPAC) verifies fairness,
+-- with an optional regulator attestation — both aggregate-only, post-close.
 privacyScoped : Script ()
 privacyScoped = do
   gp  <- allocateParty "GP"
@@ -27,24 +29,33 @@ privacyScoped = do
   _ <- submit b1 do createCmd SealedBid with gp; buyer = b1; dealId = "D1"; pctOfNav = 0.9; capacity = 1000000.0
   b2v <- query @SealedBid b2
   b2v === []
-  -- regulator: nothing deal-related pre-close; exactly one FairnessDisclosure post-close
   prep <- setupPreClose
+  -- ILPA: the LPAC (oversight body) sees the fairness verification chain PRE-close —
+  -- the fairness opinion and the auction bid tabulation — to vote on conflict waivers.
+  lpacFo <- query @FairnessOpinion prep.lpac
+  assert (not (null lpacFo))
+  lpacAc <- query @AuctionCertificate prep.lpac
+  assert (not (null lpacAc))
+  -- neither the LPAC nor the regulator has any FairnessDisclosure pre-close
+  preLpac <- query @FairnessDisclosure prep.lpac
+  preLpac === []
   preReg <- query @FairnessDisclosure prep.regulator
   preReg === []
   -- elections DO exist mid-window (electing rollers filed them) ...
   r1Elec <- query @LPElection (head prep.rollers)
   assert (not (null r1Elec))
-  -- ... but the regulator cannot see any per-LP election contents
-  regElecPre <- query @LPElection prep.regulator
-  regElecPre === []
+  -- ... but neither the LPAC nor the regulator can see per-LP election contents
+  (query @LPElection prep.lpac) >>= \e -> e === []
+  (query @LPElection prep.regulator) >>= \e -> e === []
   _ <- submit prep.gp do runClose prep
-  -- post-close the regulator sees exactly one aggregate disclosure with REAL figures
-  postReg <- query @FairnessDisclosure prep.regulator
-  case map snd postReg of
-    [fd] -> do
-      fd.clearingPct === 0.96
-      fd.totalUnits === 49920000.0
-    _ -> abort "expected exactly one FairnessDisclosure"
-  -- and still NO per-LP election data
-  regElec <- query @LPElection prep.regulator
-  regElec === []
+  -- post-close: LPAC (ILPA) AND the optional regulator each see exactly one aggregate
+  -- disclosure with REAL figures, never per-LP data
+  let checkOne p = do
+        fds <- query @FairnessDisclosure p
+        case map snd fds of
+          [fd] -> do fd.clearingPct === 0.96; fd.totalUnits === 49920000.0
+          _ -> abort "expected exactly one FairnessDisclosure"
+  checkOne prep.lpac
+  checkOne prep.regulator
+  -- and still NO per-LP election data leaks to oversight
+  (query @LPElection prep.regulator) >>= \e -> e === []

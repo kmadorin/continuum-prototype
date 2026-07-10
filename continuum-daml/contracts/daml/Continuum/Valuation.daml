@@ -20,6 +20,7 @@ template FairnessOpinion
   with
     provider    : Party
     gp          : Party
+    lpac        : Party        -- ILPA: the LPAC reviews the fairness opinion
     dealId      : Text
     fairLow     : Decimal
     fairHigh    : Decimal
@@ -27,5 +28,5 @@ template FairnessOpinion
     contentHash : BytesHex
   where
     signatory provider
-    observer gp
+    observer gp, lpac
     ensure fairLow <= fairHigh && provider /= gp

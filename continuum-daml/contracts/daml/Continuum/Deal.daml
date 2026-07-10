@@ -90,18 +90,24 @@ template ContinuationDeal
          -- phase-2: execute every pre-authorised leg, then burn old interests
          forA_ legExecs \(d, a) -> exercise d ExecFor with allocCid = a
          forA_ burns \(p, oi) -> exercise p BurnFor with interestCid = oi
-         -- regulator sees ONLY aggregates + the fairness hash, never per-LP data
+         -- ILPA oversight: the LPAC verifies fairness post-close; the regulator is an
+         -- OPTIONAL external attestation (not an ILPA-required party). Both see ONLY
+         -- aggregates + the fairness hash, never per-LP data.
          create FairnessDisclosure with
-           gp; regulator; dealId = cv; clearingPct = basis.clearingPct; totalUnits = unitTotal; fairnessHash
-         -- the room (LPs + buyers) gets an aggregate settlement receipt
+           gp; lpac; regulator; dealId = cv; clearingPct = basis.clearingPct; totalUnits = unitTotal; fairnessHash
+         -- the room (all LPs + buyers) gets an aggregate settlement receipt (ILPA parity)
          create SettlementReceipt with
            gp; room; dealId = cv; clearingPct = basis.clearingPct; totalUnits = unitTotal
          create this with stage = Closed
 
--- Post-close regulator view: aggregates + fairness anchor, NO per-LP data.
+-- Post-close fairness view: aggregates + fairness anchor, NO per-LP data.
+-- Observed by the LPAC (ILPA oversight body) and, optionally, a regulator as a
+-- forward-looking external attestation (not required by ILPA; the SEC adviser-led
+-- secondary rule that mandated a fairness opinion was vacated by the 5th Cir. 2024).
 template FairnessDisclosure
   with
     gp          : Party
+    lpac        : Party
     regulator   : Party
     dealId      : Text
     clearingPct : Decimal
@@ -109,7 +115,7 @@ template FairnessDisclosure
     fairnessHash : Text
   where
     signatory gp
-    observer regulator
+    observer lpac, regulator
 
 -- Aggregate settlement receipt visible to the deal room.
 template SettlementReceipt

@@ -14,10 +14,10 @@ stdAntecedents : Party -> Party -> Party -> Date
 stdAntecedents gp fair lpac asOf = do
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
+      provider = fair; gp; lpac; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
   ac <- submit gp do
     createCmd AuctionCertificate with
-      gp; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+      gp; lpac; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
   lc <- submit lpac do createCmd LPACConsent with gp; lpac; dealId = "D"; recusals = []; granted = True
   psa <- submit gp do
     createCmd PurchaseAgreement with
@@ -61,9 +61,9 @@ clearingOutsideFairnessFails = do
   -- fairness range that EXCLUDES 0.96
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; dealId = "D"; fairLow = 0.90; fairHigh = 0.95; opinionDate = asOf; contentHash = hashOf "f"
+      provider = fair; gp; lpac; dealId = "D"; fairLow = 0.90; fairHigh = 0.95; opinionDate = asOf; contentHash = hashOf "f"
   ac <- submit gp do
-    createCmd AuctionCertificate with gp; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+    createCmd AuctionCertificate with gp; lpac; dealId = "D"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
   lc <- submit lpac do createCmd LPACConsent with gp; lpac; dealId = "D"; recusals = []; granted = True
   psa <- submit gp do
     createCmd PurchaseAgreement with
@@ -107,7 +107,7 @@ staleValuationFails = do
   (_, ac, lc, psa) <- stdAntecedents gp fair lpac closeD
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = closeD; contentHash = hashOf "f"
+      provider = fair; gp; lpac; dealId = "D"; fairLow = 0.92; fairHigh = 1.0; opinionDate = closeD; contentHash = hashOf "f"
   b <- submit gp do createCmd (mkBasis gp [vr] (fo, ac, lc, psa) closeD 120)  -- 180 > 120
   submitMustFail gp do exerciseCmd b ValidateIssuance
 

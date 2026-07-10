@@ -21,10 +21,10 @@ issuanceBasisValidates = do
       agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
+      provider = fair; gp; lpac; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
   ac <- submit gp do
     createCmd AuctionCertificate with
-      gp; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+      gp; lpac; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
   lc <- submit lpac do
     createCmd LPACConsent with
       gp; lpac; dealId = "D1"; recusals = []; granted = True

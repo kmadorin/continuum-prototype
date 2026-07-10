@@ -7,7 +7,8 @@ import Continuum.Document (hashOf)
 
 leadSetsClearingPrice : Script ()
 leadSetsClearingPrice = do
-  gp <- allocateParty "GP"
+  gp   <- allocateParty "GP"
+  lpac <- allocateParty "LPAC"
   b1 <- allocateParty "B1"
   b2 <- allocateParty "B2"
   bid1 <- submit b1 do createCmd SealedBid with gp; buyer = b1; dealId = "D1"; pctOfNav = 0.96; capacity = 20000000.0
@@ -17,7 +18,7 @@ leadSetsClearingPrice = do
   Some d2 <- queryDisclosure b2 bid2
   cert <- submit (actAs gp <> disclose d1 <> disclose d2) do
     createCmd AuctionCertificate with
-      gp; dealId = "D1"; clearingPct = 0.96; leadBuyer = b1
+      gp; lpac; dealId = "D1"; clearingPct = 0.96; leadBuyer = b1
       bidTabulationHash = hashOf "b1:0.96;b2:0.95"
   Some c <- queryContractId gp cert
   c.clearingPct === 0.96

@@ -98,11 +98,11 @@ setupPreClose = do
       asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; dealId = "M1"; fairLow = 0.92; fairHigh = 1.0
+      provider = fair; gp; lpac; dealId = "M1"; fairLow = 0.92; fairHigh = 1.0
       opinionDate = date 2026 Jun 30; contentHash = hashOf "f"
   ac <- submit gp do
     createCmd AuctionCertificate with
-      gp; dealId = "M1"; clearingPct = 0.96; leadBuyer = head buyers; bidTabulationHash = hashOf "b"
+      gp; lpac; dealId = "M1"; clearingPct = 0.96; leadBuyer = head buyers; bidTabulationHash = hashOf "b"
   lc <- submit lpac do
     createCmd LPACConsent with gp; lpac; dealId = "M1"; recusals = []; granted = True
   psa <- submit gp do

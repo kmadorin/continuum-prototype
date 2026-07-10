@@ -30,10 +30,12 @@ template BidFiled            -- contentless marker: GP + LPAC see THAT a bid is 
 template AuctionCertificate
   with
     gp                : Party
+    lpac              : Party        -- ILPA: the LPAC receives the bid tabulation
     dealId            : Text
     clearingPct       : Decimal
     leadBuyer         : Party
     bidTabulationHash : BytesHex
   where
     signatory gp
+    observer lpac
     ensure clearingPct > 0.0 && clearingPct <= 1.0
