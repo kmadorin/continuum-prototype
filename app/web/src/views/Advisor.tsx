@@ -1,14 +1,14 @@
 // portal/advisor.html — "Advisor / Organizer". Open the closing room
-// (Continuum.Deal:ContinuationDeal), set price & disclose (SetClearing), open
-// elections (OpenElections). "Record LPAC consent" and "Close" have NO
-// builder yet in app/web/src/lib/ops.ts (RecordConsent/Close assembly is
-// Stream C's job — Close needs real IssuanceBasis/ExecDelegation/Allocation
-// contract IDs this mock cannot fabricate). Those two are rendered as a
-// visible demo-stage toggle, NOT as a fabricated Daml command.
+// (Continuum.Deal:ContinuationDeal), record LPAC consent (RecordConsent), set
+// price & disclose (SetClearing), open elections (OpenElections) — all real
+// choices now on the devnet ledger. Only "Close" has NO builder: the atomic
+// Close needs real IssuanceBasis/ExecDelegation/Allocation contract IDs
+// assembled off-UI (see app/scripts/close-minimal.ts), so it stays a visible
+// demo-stage toggle, NOT a fabricated Daml command.
 import { useEffect, useState } from 'react';
 import type { ActiveContract, LedgerClient } from '../../../ledger-client/src/types';
 import { useParty } from '../state/PartyContext';
-import { createDeal, openElections, setClearing } from '../lib/ops';
+import { createDeal, openElections, recordConsent, setClearing } from '../lib/ops';
 import { Card, StageHead, fmtM, fmtPct, readDeal } from './shared';
 
 const DEAL_DEFAULTS = {
@@ -50,6 +50,19 @@ export default function Advisor({ client }: { client: LedgerClient }) {
       commands: [createDeal({ gp: current, vehicle: personas.vehicle, room, ...DEAL_DEFAULTS })],
     });
     await refresh();
+    setBusy(false);
+  };
+
+  const recordLpacConsent = async () => {
+    if (!deal) return;
+    setBusy(true);
+    await client.submit({
+      commandId: `consent-${Date.now()}`,
+      actAs: [current],
+      commands: [recordConsent(deal.contractId)],
+    });
+    await refresh();
+    setLpacConsented(true);
     setBusy(false);
   };
 
@@ -104,10 +117,10 @@ export default function Advisor({ client }: { client: LedgerClient }) {
         <button className="btn" type="button" disabled={busy || !!deal} onClick={openRoom}>
           Open closing room
         </button>
-        <button className="btn" type="button" disabled={busy || !deal || lpacConsented} onClick={() => setLpacConsented(true)}>
+        <button className="btn" type="button" disabled={busy || !deal || lpacConsented} onClick={recordLpacConsent}>
           Record LPAC consent
         </button>
-        {lpacConsented && <span className="chip ok">LPAC consented (demo stage)</span>}
+        {lpacConsented && <span className="chip ok">LPAC consented</span>}
       </div>
 
       <div className="stack g3">
@@ -134,10 +147,10 @@ export default function Advisor({ client }: { client: LedgerClient }) {
         </button>
       </div>
       <p className="hint">
-        "Record LPAC consent" and "Close" have no ledger builder in this stream yet — Stream C
-        wires the real <span className="mono">RecordConsent</span> and <span className="mono">Close</span> choices (Close
-        needs pre-authorized ExecDelegation/Allocation contract IDs this mock cannot fabricate).
-        These two buttons only advance a visible demo stage; no Daml command is submitted for them.
+        "Record LPAC consent" now submits the real <span className="mono">RecordConsent</span> choice on
+        the devnet ledger (moving the deal to <span className="mono">Consented</span> so elections can open).
+        "Close" is still a visible demo stage only — the atomic <span className="mono">Close</span> needs
+        pre-authorized ExecDelegation/Allocation contract IDs assembled off-UI (see close-minimal.ts).
       </p>
     </div>
   );

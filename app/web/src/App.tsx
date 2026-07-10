@@ -4,8 +4,8 @@
 // re-renders the active view against that party's ledger projection. THIS is
 // the privacy demo.
 import { useMemo, useState } from 'react';
-import { MockLedgerClient } from './ledger/mock';
-import { partyRegistry } from './ledger/party-registry.mock';
+import { HttpLedgerClient } from '../../ledger-client/src/client';
+import registry from './party-registry.json';
 import { PartyProvider, useParty } from './state/PartyContext';
 import Advisor from './views/Advisor';
 import Buyer from './views/Buyer';
@@ -17,8 +17,9 @@ import './styles.css';
 
 // Single shared instance for the whole app's lifetime — NOT re-created per
 // view or per persona switch, so contracts created as one party are visible
-// (subject to projection) when viewing as another.
-const client = new MockLedgerClient();
+// (subject to projection) when viewing as another. Talks to the real Canton
+// 5N devnet through the Vite dev-proxy (/api → reverse-proxy → ledger API).
+const client = new HttpLedgerClient('/api');
 
 const TABS = [
   { key: 'gp', label: 'Advisor' },
@@ -93,8 +94,8 @@ function Shell() {
       <main>{view}</main>
 
       <p className="sim-note">
-        Simulation — no Canton, no wallets, no network. State is in-memory (MockLedgerClient); the
-        privacy is real: each persona only ever reads its own ledger projection.
+        Live on the Canton 5N devnet — every action drives real contracts through the reverse-proxy,
+        and the privacy is real: each persona only ever reads its own per-party ledger projection.
       </p>
     </div>
   );
@@ -104,7 +105,7 @@ export default function App() {
   // Registry.parties is typed as a plain Record<string, string> (loadRegistry
   // validates every value at runtime but can't narrow the type per-key); the
   // mock registry always defines `gp`, so this cast is safe here.
-  const personas = useMemo(() => partyRegistry.parties as { gp: string } & Record<string, string>, []);
+  const personas = useMemo(() => registry.parties as { gp: string } & Record<string, string>, []);
   return (
     <PartyProvider personas={personas}>
       <Shell />

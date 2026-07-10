@@ -4,8 +4,9 @@ import { HttpLedgerClient } from '../ledger-client/src/client';
 const BASE = 'http://localhost:8788';
 const NS = process.env.FN_NAMESPACE!;
 const P = (hint: string) => `${hint}::${NS}`;
-const personas = { gp: 'continuum-gp-demo', buyer: 'continuum-buyer-demo', lp: 'continuum-lp-demo',
-  lpac: 'continuum-lpac-demo', vehicle: 'continuum-gp-demo' /* collapsed */ };
+const personas = { gp: 'continuum-gp-demo', buyer: 'continuum-buyer-demo', buyer2: 'continuum-buyer2-demo',
+  lp: 'continuum-lp-demo', lp2: 'continuum-lp2-demo', lpac: 'continuum-lpac-demo',
+  vehicle: 'continuum-gp-demo' /* collapsed */ };
 
 async function allocate(hint: string) {
   // party allocation goes through the proxy too; pass userId='6' to bind act-as (VERIFIED requirement)

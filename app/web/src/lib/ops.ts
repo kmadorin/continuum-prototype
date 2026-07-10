@@ -94,6 +94,18 @@ export const election = (a: {
   },
 });
 
+// Continuum.Deal:ContinuationDeal.RecordConsent — no choice args (Deal.daml:43-46).
+// Moves the deal to the Consented stage; OpenElections is gated on stage==Consented,
+// so this must be exercised before elections can open. Consuming → returns a new cid.
+export const recordConsent = (dealCid: string): ExerciseCmd => ({
+  ExerciseCommand: {
+    templateId: `${PKG}:Continuum.Deal:ContinuationDeal`,
+    contractId: dealCid,
+    choice: 'RecordConsent',
+    choiceArgument: {},
+  },
+});
+
 // Continuum.Deal:ContinuationDeal.SetClearing — with p : Decimal (Deal.daml:49-53).
 export const setClearing = (dealCid: string, p: string): ExerciseCmd => ({
   ExerciseCommand: {
