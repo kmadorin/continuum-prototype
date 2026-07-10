@@ -2,29 +2,36 @@
 // into ONE tab with its own Canton external-party wallet, and that tab is locked
 // to that role for the whole session. The demo opens SEPARATE tabs, one per role.
 //
-// Not signed in → the SignIn gate. Signed in → that role's workspace. The real
-// role workspaces land in Task 7; for now a placeholder confirms the signed-in
-// role + allocated party so the gate + per-tab lock are demonstrable end to end.
-import { HttpLedgerClient } from '../../ledger-client/src/client';
-import { WalletClient } from '../../ledger-client/src/wallet';
-import registry from './party-registry.json';
-import { WalletSessionProvider, useSession } from './state/WalletSession';
+// Not signed in → the SignIn gate. Signed in → that role's real workspace (Task
+// 7), which drives its OWN on-ledger actions by signing with the logged-in role's
+// wallet key. The role→view routing lives here; every view reads/writes through
+// `useLedger()` (session-signed submitSigned + per-party ACS reads).
+import type { ReactNode } from 'react';
+import { walletClient } from './lib/useLedger';
+import { WalletSessionProvider, useSession, type Role } from './state/WalletSession';
 import SignIn from './views/SignIn';
+import Advisor from './views/Advisor';
+import Buyer from './views/Buyer';
+import ExitingLP from './views/ExitingLP';
+import RollingLP from './views/RollingLP';
+import LPAC from './views/LPAC';
 import './styles.css';
 
-// Single shared wallet client for the tab's lifetime. Reads + interactive
-// submission go through the Vite dev-proxy (/api → reverse-proxy → ledger API).
-// The synchronizer id is pinned from the registry so the first onboard needs no
-// discovery round-trip.
-const reads = new HttpLedgerClient('/api');
-const walletClient = new WalletClient('/api', reads, undefined, registry.synchronizerId);
+// Each seat's human label + the workspace it unlocks. One tab = one role.
+const SEATS: Record<Role, { label: string; view: () => ReactNode }> = {
+  gp: { label: 'Advisor', view: () => <Advisor /> },
+  buyer: { label: 'Secondary Buyer', view: () => <Buyer /> },
+  lpExiting: { label: 'Exiting LP', view: () => <ExitingLP /> },
+  lpRolling: { label: 'Rolling LP', view: () => <RollingLP /> },
+  lpac: { label: 'LPAC Oversight', view: () => <LPAC /> },
+};
 
 function Gate() {
-  const { isSignedIn, role, party, fingerprint, signOut } = useSession();
+  const { isSignedIn, role, signOut } = useSession();
 
-  if (!isSignedIn) return <SignIn />;
+  if (!isSignedIn || !role) return <SignIn />;
 
-  // Placeholder workspace (Task 7 replaces this with the real role views).
+  const seat = SEATS[role];
   return (
     <div className="stack g4">
       <header className="topbar">
@@ -33,33 +40,13 @@ function Gate() {
         </span>
         <span className="deal-badge">Confidential closing room</span>
         <span className="spacer" />
-        <span className="view-label">Signed in as {role}</span>
+        <span className="view-label">{seat.label}</span>
         <button type="button" className="btn ghost" onClick={signOut}>
           Sign out
         </button>
       </header>
 
-      <main className="portal-wrap">
-        <div className="portal-lede">
-          <span className="eyebrow accent">Connected</span>
-          <h1>Signed in as {role}.</h1>
-          <p>
-            This tab is locked to the <strong>{role}</strong> seat for the rest of the session. Open another
-            seat in a separate tab to act as a different role. The real role workspace lands in the next step.
-          </p>
-        </div>
-        <p className="section-label">Wallet</p>
-        <div className="stack g2">
-          <div className="acc-role">Party</div>
-          <code className="acc-org" style={{ wordBreak: 'break-all' }}>
-            {party}
-          </code>
-          <div className="acc-role">Key fingerprint</div>
-          <code className="acc-org" style={{ wordBreak: 'break-all' }}>
-            {fingerprint}
-          </code>
-        </div>
-      </main>
+      <main className="portal-wrap">{seat.view()}</main>
     </div>
   );
 }
