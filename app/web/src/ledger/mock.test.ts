@@ -14,4 +14,16 @@ describe('MockLedgerClient projection', () => {
       templateId: '#continuum-contracts:Continuum.Deal:ContinuationDeal', createArguments: { gp: 'gp' } } }] });
     expect(r.updateId).toBeTruthy();
   });
+  it('a continuation deal is visible to owner + room members but not outsiders', async () => {
+    const m = new MockLedgerClient();
+    await m.submit({ commandId: '3', actAs: ['gp'], commands: [{ CreateCommand: {
+      templateId: '#continuum-contracts:Continuum.Deal:ContinuationDeal',
+      createArguments: { owner: 'gp', room: ['buyerA', 'lpX'] } } }] });
+    expect((await m.activeContracts('gp')).length).toBe(1);
+    expect((await m.activeContracts('buyerA')).length).toBe(1);
+    expect((await m.activeContracts('lpX')).length).toBe(1);
+    expect((await m.activeContracts('outsider')).length).toBe(0);
+    // guards the projection-set strip: stakeholders must not leak to views
+    expect((await m.activeContracts('gp'))[0]).not.toHaveProperty('stakeholders');
+  });
 });

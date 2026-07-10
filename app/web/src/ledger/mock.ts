@@ -33,7 +33,8 @@ export class MockLedgerClient implements LedgerClient {
   ): Promise<ActiveContract[]> {
     return this.store
       .filter((c) => c.stakeholders.includes(party))
-      .filter((c) => !opts.templateId || c.templateId.endsWith(opts.templateId));
+      .filter((c) => !opts.templateId || c.templateId.endsWith(opts.templateId))
+      .map(({ stakeholders, ...c }) => c);
   }
 
   async fetchDisclosed(_party: string, contractId: string) {
