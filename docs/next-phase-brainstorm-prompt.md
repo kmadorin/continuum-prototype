@@ -98,6 +98,35 @@ Continuum's edge vs the criteria: real on-ledger atomic settlement, privacy (sea
 private elections), token issuance, and the ILPA governance story — a credible institutional
 capital-markets use case (track 1). The gap is purely **devnet deploy + a live product UI**.
 
+## DEVNET WIRING — RESOLVED (from the official "Seaport Sandbox Validator Access" PDF)
+
+The team has access to a **shared 5North devnet validator with a real, reachable Canton
+JSON Ledger API v2** — so an external frontend can talk to the ledger directly (NO Java
+backend required). This de-risks architecture (B).
+- **Ledger REST**: `https://ledger-api.validator.devnet.sandbox.fivenorth.io/` (standard
+  Canton JSON Ledger API v2 — e.g. `GET /v2/state/ledger-end`, `/v2/state/active-contracts`,
+  `POST /v2/commands/...`). **WebSocket**: `wss://ledger-api.validator.devnet.sandbox.fivenorth.io`
+  (subprotocols `jwt.token.<token>` + `daml.ws.auth`).
+- **Auth = OIDC client_credentials (M2M)**: POST to `https://auth.sandbox.fivenorth.io/application/o/token/`
+  with `grant_type=client_credentials`, `client_id=validator-devnet-m2m`, the shared
+  `client_secret` (in the PDF), `audience=validator-devnet-m2m`, `scope=daml_ledger_api` →
+  a **JWT that expires every 8h** (build refresh). Pass as `Authorization: Bearer <token>`.
+- ⚠️ **SECURITY**: the client secret is a **shared plaintext credential** and the submission
+  repo must be **PUBLIC** — so keep the secret OUT of git (env var / server-side proxy /
+  gitignored `.env`). A pure-browser app would expose it; consider a tiny token-exchange proxy
+  or inject at build time for the demo, and note the production answer is per-user wallet auth.
+- **Deploy path**: build the DAR in Seaport → upload/deploy to the provided validator (Seaport
+  UI). The `Jatinp26/Seaport-Guide` repo is the **11-step UI walkthrough** (wallet → auth →
+  project → build DAR → deploy → instantiate → exercise choices); helpful video
+  `youtu.be/uFi9meqpr3c`. Guide also references **`@c7/ledger` TS SDK + codegen-js bindings**
+  for programmatic ledger access.
+- **Party model**: you get **Party IDs from a Loop wallet** (devnet); parties are allocated on
+  the validator (Seaport party-management / ledger API). One M2M app credential can **act-as**
+  our hosted parties — so our ~15-party topology likely works on this single validator.
+
+Net: the two hardest unknowns (devnet access + a reachable ledger API for a custom frontend)
+are BOTH solved. Remaining real work is deploy-the-DAR + build-the-thin-frontend.
+
 ## Research already done — Canton's frontend/deploy options (from ../cf-docs)
 
 - **cn-quickstart** (github.com/digital-asset/cn-quickstart) — DA's full-stack reference:
@@ -179,25 +208,24 @@ capital-markets use case (track 1). The gap is purely **devnet deploy + a live p
    `OpenElections`, `Close`, `allocateFor`, credential issuance). Any missing choice/endpoint
    the UI implies that the contracts don't yet expose?
 
-## Spikes to run early (not answerable from the docs — schedule as tasks)
+## Spikes to run early (day 1 — mostly deploy-validation now; wiring is answered by the PDF)
 
-- **Version skew**: our DAR is LF 2.1 / SDK 3.4.11; devnet is Canton 3.5.7 / splice 0.6.11.
-  No published 3.4↔3.5 compat matrix. Confirm our `splice-api-token-*-v1` 0.6.11 DARs vet +
-  run against a **3.5.x participant on LocalNet** first. (Our 3.5.6-sandbox e2e is encouraging
-  evidence, not proof of DAR upload/vetting on a 3.5 participant.)
-- **codegen-js × interfaces**: our `Registry` implements token interfaces. Docs don't cover
-  codegen behavior for Daml interfaces — spike it: generate TS bindings from our DAR and
-  confirm interface choices (e.g. `Allocation_ExecuteTransfer`) are callable. If not, the
-  mediated Java backend is the fallback (de-risks decision #1).
-- **Auth / multi-party demo**: how do we drive ~15 distinct parties from one browser for the
-  demo (party switching, act-as, disclosure), and what token/JWT does the 5N Seaport
-  validator's ledger API require?
-- **5N Seaport capabilities spike (day 1)**: upload our `continuum-contracts` DAR via
-  "Upload DAR to Validator", create a `RegistryAllocationFactory`/deal contract via "Deploy
-  DAR & Create Contract", and confirm (a) our LF-2.1/3.4.11 DAR is accepted, (b) whether we
-  can allocate multiple parties, (c) whether there's a reachable ledger/JSON API endpoint +
-  auth for an external frontend, (d) whether Connect-GitHub builds our repo. This replaces
-  the old "apply for a validator" risk.
+- **THE gating spike — deploy our DAR on the shared devnet validator**: build
+  `continuum-contracts` (+scripts) in Seaport (or upload our existing DAR) and deploy to the
+  provided validator; then hit `GET /v2/state/ledger-end` with a Bearer token to confirm it's
+  live. This is the pass/fail for the whole submission — do it FIRST.
+- **Version skew** (still open): our DAR is LF 2.1 / SDK 3.4.11; devnet is Canton 3.5.7 /
+  splice 0.6.11. No published 3.4↔3.5 compat matrix. If the 3.4.11 DAR is rejected by the 3.5
+  validator, rebuild the contracts on **SDK 3.5.x** (our Daml is standard; likely a clean
+  bump). Confirm the pinned `splice-api-token-*-v1 0.6.11` DARs still resolve.
+- **Command submission for custom choices**: confirm we can `POST /v2/commands/submit-and-wait`
+  our deal choices (`SealedBid`, `Close`, …) via the JSON Ledger API with the M2M token +
+  act-as our parties. (loop-sdk's custom-DAR limit doesn't bite here — we're using the raw
+  ledger API, not loop-sdk, for custom choices; loop-sdk is optional for wallet/token UX.)
+- **codegen-js × interfaces**: generate TS bindings from our DAR (or use `@c7/ledger`) and
+  confirm interface choices are callable. Fallback: hand-write the JSON command payloads.
+- **Party allocation**: allocate our ~15 parties on the validator (Seaport party-management /
+  ledger API) and confirm one M2M token can act-as them.
 
 ## Constraints
 
