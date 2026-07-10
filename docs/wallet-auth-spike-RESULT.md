@@ -51,6 +51,30 @@ wallets weren't feasible in the timeframe.
 Reference spike: `scratchpad/wallet-spike.mjs`. Endpoints all live on
 `https://ledger-api.validator.devnet.sandbox.fivenorth.io`.
 
+## ✅ FULL WALLET CLOSE PROVEN — 26 txs, every one a single-party wallet signature (2026-07-10)
+
+`app/scripts/close-wallets.ts` ran the entire continuation-fund close on live devnet with **4 real
+external-party wallets** (gp, buyer, lpExiting, lpac), each holding its own Ed25519 key. Every one of
+26 transactions was signed by the correct party's OWN key (no act-as):
+- gp: factory, deal, SetClearing, OpenElections, AuctionCertificate, PSA, IssuanceBasis, mint+allocate 2 legs, the ExecDelegationProposals/OldFundInterestOffer, Accept participation, and the final **Close**.
+- buyer: its own `SealedBid`; `EDP_Accept` (authorizing gp to execute its leg).
+- lpExiting: its own `LPElection`; `EDP_Accept`; `OFI_Accept`; `DealParticipation`.
+- lpac: `RecordConsent` (now lpac-controlled), `ValuationReport`, `FairnessOpinion`, `LPACConsent`.
+
+Multi-party authority built via **propose-accept** (single-signer each): `ExecDelegationProposal→EDP_Accept`,
+`OldFundInterestOffer→OFI_Accept`, `DealParticipation→Accept`. The gp-only `Close` consumed it. Result
+(one atomic tx): Close updateId `12201d7c7422…`; `SettlementReceipt` created; buyer **+4,800,000 CV units**;
+lpExiting **+4,608,000 USDC**; lpExiting `OldFundInterest` **BURNED** — all in one updateId.
+
+Two client hardenings this required:
+- **`executeAndWaitForTransaction`** instead of fire-and-forget `execute` — blocks until committed, returns
+  the real updateId, and surfaces async Daml/sequencer rejections (a plain `execute` hides them).
+- **Backpressure retry**: the shared devnet sequencer caps ~26 tx/60s per validator across ~113 validators;
+  `WalletClient.post` retries `SEQUENCER_OVERLOADED`/409 (category 2) with backoff.
+
+Reference: `app/scripts/close-wallets.ts`. Keys go to gitignored `app/wallet-keys.json`; party IDs to
+public `app/party-registry.json`.
+
 ## Architecture consequence (see the new app spec)
 Real wallets → the close is ~16 single-signer txs across 5 wallets (gp, buyer, lpExiting, lpRolling, lpac).
 Daml delta needed (~30 lines, one redeploy): `ExecDelegationProposal` + `OldFundInterestOffer`

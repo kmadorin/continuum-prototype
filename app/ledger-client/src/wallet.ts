@@ -46,15 +46,24 @@ export class WalletClient {
     private synchronizerId?: string,
   ) {}
 
-  private async post(path: string, body: unknown): Promise<any> {
-    const r = await this.fetchImpl(`${this.base}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const txt = await r.text();
-    if (!r.ok) throw new Error(`${path} → ${r.status}: ${txt}`);
-    return txt ? JSON.parse(txt) : {};
+  private async post(path: string, body: unknown, retries = 8): Promise<any> {
+    for (let attempt = 0; ; attempt++) {
+      const r = await this.fetchImpl(`${this.base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const txt = await r.text();
+      if (r.ok) return txt ? JSON.parse(txt) : {};
+      // Shared devnet sequencer rate-limits (~26 tx/60s/validator). Retry contention
+      // (category 2 / SEQUENCER_OVERLOADED / backpressure) with backoff.
+      const contention = r.status === 409 || /SEQUENCER_OVERLOADED|BACKPRESSURE|"errorCategory":2/.test(txt);
+      if (contention && attempt < retries) {
+        await sleep(1500 + attempt * 1200);
+        continue;
+      }
+      throw new Error(`${path} → ${r.status}: ${txt}`);
+    }
   }
 
   private resolveSync(override?: string): string {
@@ -147,7 +156,10 @@ export class WalletClient {
     const prep = await this.post('/v2/interactive-submission/prepare', prepBody);
 
     const sig = signature(signHash(key.priv, prep.preparedTransactionHash), fingerprint);
-    const exec = await this.post('/v2/interactive-submission/execute', {
+    // executeAndWaitForTransaction blocks until the tx is committed and surfaces
+    // async rejections as non-200 errors (plain `execute` is fire-and-forget and
+    // hides Daml validation failures). It also returns the real updateId.
+    const exec = await this.post('/v2/interactive-submission/executeAndWaitForTransaction', {
       preparedTransaction: prep.preparedTransaction,
       partySignatures: { signatures: [{ party, signatures: [sig] }] },
       submissionId: `${commandId}-sub`,
@@ -155,7 +167,7 @@ export class WalletClient {
       deduplicationPeriod: { Empty: {} },
     });
 
-    const result: SubmitResult = { updateId: exec?.updateId };
+    const result: SubmitResult = { updateId: exec?.transaction?.updateId ?? exec?.updateId };
     if (opts.awaitTemplate) {
       const contract = await this.pollForContract(party, opts.awaitTemplate, opts.tries, opts.delayMs);
       if (contract) result.contract = contract;

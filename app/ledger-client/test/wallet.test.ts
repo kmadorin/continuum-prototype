@@ -112,8 +112,8 @@ describe('WalletClient.submitSigned', () => {
     expect(prepBody.commands).toEqual(commands);
     expect(prepBody.disclosedContracts).toBeUndefined();
 
-    // call 1: execute
-    expect(f.mock.calls[1][0]).toBe('http://p/v2/interactive-submission/execute');
+    // call 1: execute (synchronous variant — surfaces async Daml rejections + returns updateId)
+    expect(f.mock.calls[1][0]).toBe('http://p/v2/interactive-submission/executeAndWaitForTransaction');
     const execBody = JSON.parse((f.mock.calls[1][1] as any).body);
     expect(execBody.preparedTransaction).toBe('PREP_TX_BLOB');
     expect(execBody.hashingSchemeVersion).toBe('HASHING_SCHEME_VERSION_V2');
