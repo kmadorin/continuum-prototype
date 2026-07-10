@@ -22,7 +22,24 @@ export class MockLedgerClient implements LedgerClient {
           stakeholders: [...new Set([...cmd.actAs, ...observers])],
         });
       }
-      // ExerciseCommand: no-op for now (YAGNI) — must not throw.
+      else {
+        // ExerciseCommand: apply the small set of choices the UI actually
+        // issues (SetClearing / OpenElections) so a live activeContracts()
+        // read reflects the new stage/price. Any other choice is a no-op —
+        // must not throw. This mirrors Continuum.Deal:ContinuationDeal's
+        // choices just enough for the demo; it does not replicate the real
+        // Daml assertions/gating (that lives on the actual ledger).
+        const { contractId, choice, choiceArgument } = c.ExerciseCommand;
+        const item = this.store.find((s) => s.contractId === contractId);
+        if (item) {
+          const a = choiceArgument as Record<string, unknown>;
+          if (choice === 'SetClearing') {
+            item.args = { ...item.args, clearingPrice: a.p };
+          } else if (choice === 'OpenElections') {
+            item.args = { ...item.args, stage: 'Electing' };
+          }
+        }
+      }
     }
     return { updateId: `u-${++this.seq}`, completionOffset: this.store.length };
   }
