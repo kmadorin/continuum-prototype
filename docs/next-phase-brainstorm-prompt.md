@@ -37,6 +37,16 @@ oversight/verification). Decide the fastest credible path and scope it to the de
 - **Toolchain installed**: dpm 1.0.21, Daml SDK 3.4.11, JDK 17. `~/.local/bin/dpm` wrapper.
 - **Docs**: plan + spec under `continuum-prototype/docs/superpowers/`; ILPA source PDF at
   repo root; Canton docs mirror at `../cf-docs` (use it, don't guess APIs).
+- **DEVNET ACCESS IS ALREADY SOLVED** — the team is authorized on **5N Seaport**
+  (https://app.devnet.seaport.to/), a **hosted Canton Network web-IDE + validator**. It
+  supports: **Upload DAR → deploy to validator → create contract in one step**, "Upload DAR
+  to Validator" (deploy custom packages), Connect-GitHub (import repo), and templates for
+  **CIP-56 Token** and **Allocation Factory (swap/payment settlement)** — our exact domain.
+  A Canton **party is already provisioned** (`41319a…::1220c6…`). So the classic devnet
+  onboarding path (apply for + run our own validator, SV sponsor, VPN, 1-hr secret) is NOT
+  needed. NOTE: "5N Seaport" is unrelated to OpenSea's EVM "Seaport" — same name, different
+  thing; the correct docs are the in-app Documentation / "How to use seaport" user guide, not
+  the ProjectOpenSea GitHub repo.
 
 ## Hackathon target
 
@@ -86,14 +96,15 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
    does "issue tokens" and "connect wallet" need to mean for a credible submission?
    (Known devnet facts: there IS a rate-limited `tap` faucet for free test Canton Coin, and
    self-featuring an app on devnet needs no CF approval.)
-4. **Devnet deploy path — treat access lead time as a first-class schedule risk.** Being an
-   app provider on DevNet requires **applying for + running our OWN validator node** (apply
-   form at canton.foundation), a **sponsoring Super Validator for VPN credentials**, and a
-   **1-hour onboarding secret** — a multi-day, partly out-of-our-control process that may
-   exceed the hackathon deadline. So the LocalNet-vs-devnet call must weigh that lead time up
-   front, AND we should check whether **HackCanton/Encode provide a shared devnet validator
-   or SV sponsor for teams**. Beyond access: party allocation for our ~15 parties, DAR
-   vetting/upload, OAuth2/auth, app-provider identity.
+4. **Devnet deploy path — access is SOLVED via 5N Seaport; the decision is how to use it.**
+   We already have an authorized hosted validator (upload-DAR + create-contract + a
+   provisioned party). Open questions: does 5N Seaport let us **allocate our ~15 distinct
+   parties** on its validator (multi-hosted parties), or is it one-party-per-account (then
+   how do we model GP/LPs/buyers/LPAC)? Can our external React app **reach that validator's
+   ledger/JSON API** (endpoint + auth/token), or is 5N Seaport only an in-browser IDE (then
+   the app talks to a separate participant)? Does the GitHub-import path build our
+   `continuum-daml` repo as-is? These gate whether 5N Seaport is just the deploy tool or also
+   the runtime our frontend connects to.
 5. **Multi-party topology on one node**: our design needs many distinct parties. Can they all
    live on one devnet participant (multi-hosted parties) for the demo, or do we need multiple
    validators? What's the cheapest topology that still shows privacy (sub-transaction
@@ -117,10 +128,15 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
   codegen behavior for Daml interfaces — spike it: generate TS bindings from our DAR and
   confirm interface choices (e.g. `Allocation_ExecuteTransfer`) are callable. If not, the
   mediated Java backend is the fallback (de-risks decision #1).
-- **Auth / multi-party demo**: does devnet require OAuth2/JWT per party, and how do we drive
-  ~15 distinct parties from one browser for the demo (party switching, act-as, disclosure)?
-- **Validator access**: kick off the devnet validator application / find a shared team
-  validator on day 1 — its lead time gates everything downstream (see decision #4).
+- **Auth / multi-party demo**: how do we drive ~15 distinct parties from one browser for the
+  demo (party switching, act-as, disclosure), and what token/JWT does the 5N Seaport
+  validator's ledger API require?
+- **5N Seaport capabilities spike (day 1)**: upload our `continuum-contracts` DAR via
+  "Upload DAR to Validator", create a `RegistryAllocationFactory`/deal contract via "Deploy
+  DAR & Create Contract", and confirm (a) our LF-2.1/3.4.11 DAR is accepted, (b) whether we
+  can allocate multiple parties, (c) whether there's a reachable ledger/JSON API endpoint +
+  auth for an external frontend, (d) whether Connect-GitHub builds our repo. This replaces
+  the old "apply for a validator" risk.
 
 ## Constraints
 
