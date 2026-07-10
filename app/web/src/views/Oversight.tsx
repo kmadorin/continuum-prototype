@@ -16,11 +16,19 @@ export default function Oversight({ client }: { client: LedgerClient }) {
   const [disclosures, setDisclosures] = useState<ActiveContract[]>([]);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
-      setDeal(await readDeal(client, current));
-      setReceipts(await client.activeContracts(current, { templateId: 'SettlementReceipt' }));
-      setDisclosures(await client.activeContracts(current, { templateId: 'FairnessDisclosure' }));
+      const d = await readDeal(client, current);
+      const r = await client.activeContracts(current, { templateId: 'SettlementReceipt' });
+      const f = await client.activeContracts(current, { templateId: 'FairnessDisclosure' });
+      if (!alive) return;
+      setDeal(d);
+      setReceipts(r);
+      setDisclosures(f);
     })();
+    return () => {
+      alive = false;
+    };
   }, [client, current]);
 
   const stage = (deal?.args.stage as string) ?? null;

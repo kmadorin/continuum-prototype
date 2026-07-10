@@ -70,14 +70,23 @@ export function LPElectionView({
   const [busy, setBusy] = useState(false);
   const [sealedProofCount, setSealedProofCount] = useState<number | null>(null);
 
-  const refresh = async () => {
-    setDeal(await readDeal(client, lpParty));
+  // `alive` guards against a setState after the view unmounts (persona switch)
+  // while an ACS fetch is still in flight — benign with the sync mock, a
+  // footgun once HttpLedgerClient adds real latency.
+  const refresh = async (alive: () => boolean = () => true) => {
+    const d = await readDeal(client, lpParty);
     const mine = await client.activeContracts(lpParty, { templateId: 'LPElection' });
+    if (!alive()) return;
+    setDeal(d);
     setFiled(mine.length > 0);
   };
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    refresh(() => alive);
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lpParty]);
 
@@ -107,6 +116,10 @@ export function LPElectionView({
   const cv = (deal?.args.cv as string) ?? null;
   const clearingPrice = deal?.args.clearingPrice as string | null | undefined;
   const label = intent === 'sell' ? 'Sell' : 'Roll over';
+  // Match the real Daml gating: LPs can only elect once the advisor has run
+  // OpenElections (stage == Electing). Filing during Bidding would break the
+  // honest demo sequence.
+  const electionsOpen = deal?.args.stage === 'Electing';
 
   return (
     <div className="stack g4">
@@ -126,10 +139,13 @@ export function LPElectionView({
       </Card>
       {!filed ? (
         <div className="actions">
-          <button className="btn" type="button" disabled={busy || !deal} onClick={fileElection}>
+          <button className="btn" type="button" disabled={busy || !electionsOpen} onClick={fileElection}>
             {label}
           </button>
           {!deal && <span className="hint">Waiting for the advisor to open the closing room.</span>}
+          {deal && !electionsOpen && (
+            <span className="hint">Waiting for elections to open — the advisor sets the price and clicks Open elections first.</span>
+          )}
         </div>
       ) : (
         <div className="actions">

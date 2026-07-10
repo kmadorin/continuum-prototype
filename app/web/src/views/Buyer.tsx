@@ -17,14 +17,21 @@ export default function Buyer({ client }: { client: LedgerClient }) {
   const [busy, setBusy] = useState(false);
   const [peerCheck, setPeerCheck] = useState<{ party: string; count: number } | null>(null);
 
-  const refresh = async () => {
-    setDeal(await readDeal(client, current));
-    setMyBid(latest(await client.activeContracts(current, { templateId: 'SealedBid' })));
+  const refresh = async (alive: () => boolean = () => true) => {
+    const d = await readDeal(client, current);
+    const bid = latest(await client.activeContracts(current, { templateId: 'SealedBid' }));
+    if (!alive()) return;
+    setDeal(d);
+    setMyBid(bid);
   };
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    refresh(() => alive);
     setPeerCheck(null);
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 

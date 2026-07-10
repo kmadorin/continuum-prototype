@@ -27,11 +27,18 @@ export default function Advisor({ client }: { client: LedgerClient }) {
   const [lpacConsented, setLpacConsented] = useState(false); // demo stage only — no builder
   const [busy, setBusy] = useState(false);
 
-  const refresh = async () => setDeal(await readDeal(client, current));
+  const refresh = async (alive: () => boolean = () => true) => {
+    const d = await readDeal(client, current);
+    if (alive()) setDeal(d);
+  };
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    refresh(() => alive);
     setLpacConsented(false);
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
