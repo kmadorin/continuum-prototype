@@ -1,7 +1,11 @@
 // app/ledger-client/src/client.ts
 import type { LedgerClient, SubmitReq, ActiveContract, Disclosed } from './types';
 export class HttpLedgerClient implements LedgerClient {
-  constructor(private base: string, private fetchImpl: typeof fetch = fetch) {}
+  // NOTE: default to a globalThis-bound fetch. A bare `= fetch` default loses its
+  // `this` binding when invoked as `this.fetchImpl(...)`, which throws
+  // "Illegal invocation" in the browser (native fetch must be called with
+  // `this === window`). Node's fetch tolerates it, so this only bites in-browser.
+  constructor(private base: string, private fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)) {}
   private async post(path: string, body: unknown) {
     const r = await this.fetchImpl(`${this.base}${path}`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
