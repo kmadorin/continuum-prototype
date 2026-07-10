@@ -3,7 +3,7 @@
 // "Viewing as" control that drives PartyContext.setCurrent — switching party
 // re-renders the active view against that party's ledger projection. THIS is
 // the privacy demo.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { MockLedgerClient } from './ledger/mock';
 import { partyRegistry } from './ledger/party-registry.mock';
 import { PartyProvider, useParty } from './state/PartyContext';
@@ -12,6 +12,7 @@ import Buyer from './views/Buyer';
 import ExitingLP from './views/ExitingLP';
 import RollingLP from './views/RollingLP';
 import Oversight from './views/Oversight';
+import { PrivacyProof } from './views/PrivacyProof';
 import './styles.css';
 
 // Single shared instance for the whole app's lifetime — NOT re-created per
@@ -29,15 +30,23 @@ const TABS = [
 
 function Shell() {
   const { current, setCurrent, personas } = useParty();
+  // Privacy proof is not persona-scoped (it renders every party's projection
+  // at once), so it's a separate toggle layered on top of the persona
+  // stepper rather than another TABS entry driven by `current`.
+  const [showPrivacyProof, setShowPrivacyProof] = useState(false);
 
-  const view = (() => {
-    if (current === personas.gp) return <Advisor client={client} />;
-    if (current === personas.buyer) return <Buyer client={client} />;
-    if (current === personas.lp) return <ExitingLP client={client} />;
-    if (current === personas.lp2) return <RollingLP client={client} />;
-    if (current === personas.lpac) return <Oversight client={client} />;
-    return null;
-  })();
+  const view = showPrivacyProof ? (
+    <PrivacyProof client={client} parties={personas} />
+  ) : (
+    (() => {
+      if (current === personas.gp) return <Advisor client={client} />;
+      if (current === personas.buyer) return <Buyer client={client} />;
+      if (current === personas.lp) return <ExitingLP client={client} />;
+      if (current === personas.lp2) return <RollingLP client={client} />;
+      if (current === personas.lpac) return <Oversight client={client} />;
+      return null;
+    })()
+  );
 
   return (
     <div className="stack g4">
@@ -63,12 +72,22 @@ function Shell() {
           <button
             key={t.key}
             type="button"
-            className={`stp${personas[t.key] === current ? ' active' : ''}`}
-            onClick={() => setCurrent(personas[t.key])}
+            className={`stp${!showPrivacyProof && personas[t.key] === current ? ' active' : ''}`}
+            onClick={() => {
+              setShowPrivacyProof(false);
+              setCurrent(personas[t.key]);
+            }}
           >
             <span className="sl">{t.label}</span>
           </button>
         ))}
+        <button
+          type="button"
+          className={`stp${showPrivacyProof ? ' active' : ''}`}
+          onClick={() => setShowPrivacyProof(true)}
+        >
+          <span className="sl">Privacy proof</span>
+        </button>
       </nav>
 
       <main>{view}</main>

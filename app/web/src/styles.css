@@ -368,3 +368,16 @@ table.calc .c-out { color: var(--accent); font-size: 14px; white-space: nowrap; 
 .stack.g3 > * + * { margin-top: var(--sp-3); }
 .fail-toggle { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--dim); letter-spacing: 0.03em; cursor: pointer; }
 .fail-toggle input { width: 15px; height: 15px; accent-color: var(--fail); cursor: pointer; }
+
+/* privacy-proof view — one column per party, the money shot */
+.privacy-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px; background: var(--border); border: 1px solid var(--border);
+}
+.privacy-col { background: var(--bg); border: 0; border-radius: 0; }
+.privacy-col h3 { text-transform: capitalize; }
+.privacy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.privacy-list li {
+  border: 1px solid var(--accent-dim); background: var(--accent-soft); color: var(--accent);
+  padding: 8px 12px; font-size: 13px;
+}
