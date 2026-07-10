@@ -55,11 +55,12 @@ function Shell() {
         <span className="wordmark">
           Continuum<span className="dot">.</span>
         </span>
+        <span className="deal-badge">Confidential closing room</span>
         <span className="spacer" />
-        <label className="mono" htmlFor="viewing-as" style={{ fontSize: 12, color: 'var(--mute)' }}>
+        <label className="view-label" htmlFor="viewing-as">
           Viewing as
         </label>
-        <select id="viewing-as" className="input" value={current} onChange={(e) => setCurrent(e.target.value)}>
+        <select id="viewing-as" className="persona" value={current} onChange={(e) => setCurrent(e.target.value)}>
           {TABS.map((t) => (
             <option key={t.key} value={personas[t.key]}>
               {t.label}
