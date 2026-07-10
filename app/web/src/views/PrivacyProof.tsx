@@ -33,7 +33,12 @@ export function PrivacyProof({
     return () => {
       alive = false;
     };
-  }, [client, parties]);
+    // Key on a stable string, not the `parties` object identity: a caller that
+    // passes an inline object literal would otherwise re-fire this effect every
+    // render (setAcs → re-render → new literal → loop). App memoizes personas,
+    // but this keeps the component safe for any caller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, JSON.stringify(parties)]);
 
   return (
     <div className="stack g4">
@@ -51,9 +56,7 @@ export function PrivacyProof({
               <h3>
                 {key} <span className="mute mono">sees</span>
               </h3>
-              <p className="mono mute" style={{ fontSize: 12 }}>
-                {party}
-              </p>
+              <p className="mono mute privacy-party">{party}</p>
               {contracts.length === 0 ? (
                 <p className="hint">Nothing here — nothing private to see in this column.</p>
               ) : (
