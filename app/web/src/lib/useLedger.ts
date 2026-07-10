@@ -192,7 +192,7 @@ export function useLedger() {
           }
           const body = txt ? JSON.parse(txt) : {};
           const updateId: string | undefined = body?.updateId;
-          toast.update(tid, `committed · updateId ${shortId(updateId)}`, 'success');
+          toast.update(tid, `committed · updateId ${shortId(updateId)}`, 'success', updateId);
           const result: SubmitResult = { updateId };
           if (awaitTemplate) {
             const contract = await pollForContract(me, awaitTemplate);

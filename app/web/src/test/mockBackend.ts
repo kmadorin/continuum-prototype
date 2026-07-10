@@ -13,6 +13,10 @@ export type BackendState = {
   users?: Record<string, { role: string; party: string; custodianName: string; password: string }>;
   /** Canned /action response. */
   action?: { updateId?: string; status?: number; error?: string };
+  /** Canned /audit response (the session tenant's signature entries). */
+  audit?: unknown[];
+  /** Canned /ledger/update/:id response, or a map keyed by updateId. */
+  update?: unknown | Record<string, unknown>;
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -40,6 +44,15 @@ export function installBackend(state: BackendState) {
       const a = state.action ?? { updateId: 'update-abc123' };
       if (a.status && a.status >= 400) return json({ error: a.error ?? 'action failed' }, a.status);
       return json({ updateId: a.updateId ?? 'update-abc123' });
+    }
+    if (path === '/audit') {
+      return state.me ? json(state.audit ?? []) : json({ error: 'unauthenticated' }, 401);
+    }
+    if (path.startsWith('/ledger/update/')) {
+      const id = decodeURIComponent(path.slice('/ledger/update/'.length));
+      const u = state.update;
+      const body = u && typeof u === 'object' && !Array.isArray(u) && id in (u as Record<string, unknown>) ? (u as Record<string, unknown>)[id] : u;
+      return json(body ?? { error: 'not found' }, body ? 200 : 404);
     }
     return json({ error: `unrouted ${path}` }, 404);
   });

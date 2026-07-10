@@ -4,17 +4,19 @@
 // no-op) so persona views can be unit-tested without wrapping in ToastProvider.
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useInspector } from './Inspector';
 
 export type ToastKind = 'pending' | 'success' | 'error';
 
 export type ToastApi = {
   /** Show a toast; returns its id (use with `update`). */
   show: (message: string, kind?: ToastKind) => number;
-  /** Replace a toast's message/kind (e.g. pending → success). */
-  update: (id: number, message: string, kind: ToastKind) => void;
+  /** Replace a toast's message/kind (e.g. pending → success). Pass the committed
+   *  `updateId` to make the toast an "Inspect" affordance opening the Ledger Inspector. */
+  update: (id: number, message: string, kind: ToastKind, updateId?: string) => void;
 };
 
-type ToastItem = { id: number; message: string; kind: ToastKind };
+type ToastItem = { id: number; message: string; kind: ToastKind; updateId?: string };
 
 // Default is a working no-op so `useToast()` never throws outside a provider.
 const C = createContext<ToastApi>({ show: () => 0, update: () => {} });
@@ -26,6 +28,7 @@ const AUTO_DISMISS_MS: Record<ToastKind, number | null> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const inspector = useInspector();
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -57,8 +60,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         arm(id, kind);
         return id;
       },
-      update(id, message, kind) {
-        setItems((xs) => xs.map((x) => (x.id === id ? { ...x, message, kind } : x)));
+      update(id, message, kind, updateId) {
+        setItems((xs) => xs.map((x) => (x.id === id ? { ...x, message, kind, updateId } : x)));
         arm(id, kind);
       },
     }),
@@ -70,9 +73,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-stack" aria-live="polite" aria-atomic="false">
         {items.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`} role="status" onClick={() => dismiss(t.id)}>
+          <div key={t.id} className={`toast toast-${t.kind}`} role="status">
             {t.kind === 'pending' ? <span className="toast-spinner" aria-hidden="true" /> : null}
-            <span className="toast-msg">{t.message}</span>
+            <span className="toast-msg" onClick={() => dismiss(t.id)}>
+              {t.message}
+            </span>
+            {t.updateId ? (
+              <button
+                type="button"
+                className="toast-inspect"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  inspector.open(t.updateId!);
+                }}
+              >
+                Inspect
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
