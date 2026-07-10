@@ -6,3 +6,11 @@ app/.env
 app/node_modules/
 app/party-registry.json
 app/web/src/party-registry.json
+# wallet key material — NEVER commit private keys / mnemonics / seeds
+*.mnemonic
+*.seed
+**/wallet-keys.json
+**/wallet-keys*.json
+**/*.privkey
+**/keystore*.json
+app/**/party-registry*.json
