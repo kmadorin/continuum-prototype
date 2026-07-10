@@ -9,7 +9,7 @@
 **Tech Stack:** Node 22, TypeScript, Vitest, `undici`/`fetch`. Proxy as a Cloudflare Worker (repo already has `.wrangler/`) or a tiny Express server. All JSON shapes are VERIFIED — see `docs/devnet-deploy-test-RESULT.md`.
 
 **Ground truth (do not re-derive):**
-- Auth: `POST https://auth.sandbox.fivenorth.io/application/o/token/`, `grant_type=client_credentials`, `client_id=validator-devnet-m2m`, `audience=validator-devnet-m2m`, `scope=daml_ledger_api`, secret from env `FN_SECRET` (correct chars end `…<REDACTED-SECRET-FRAGMENT>…`, capital I). JWT `sub="6"`, TTL 28800s.
+- Auth: `POST https://auth.sandbox.fivenorth.io/application/o/token/`, `grant_type=client_credentials`, `client_id=validator-devnet-m2m`, `audience=validator-devnet-m2m`, `scope=daml_ledger_api`, secret from env `FN_SECRET` (extract with `pdftotext`, not the visual PDF — one char is an ambiguous capital `I`, not lowercase `l`). Secret only in gitignored `app/.env`. JWT `sub="6"`, TTL 28800s.
 - Ledger base: `https://ledger-api.validator.devnet.sandbox.fivenorth.io`. Token has `ParticipantAdmin`.
 - Namespace: `1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8`. Synchronizer: `global-domain::1220b…`.
 - `templateId` form: `#continuum-contracts:Continuum.Registry:RegistryHolding`. `TextMap` → `{}` not `[]`.

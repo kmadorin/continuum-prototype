@@ -14,7 +14,7 @@ raw JSON Ledger API v2 with the M2M token. This is the pass/fail gate for the wh
 |---|---|
 | Token privilege level | **`ParticipantAdmin`** present (rights kinds: `CanActAs`, `CanReadAs`, `CanExecuteAs`, `CanExecuteAsAnyParty`, `CanReadAsAnyParty`, `ParticipantAdmin`). **DAR upload + party allocation via API work — NO Seaport-UI fallback needed.** |
 | Version skew (LF-2.1 / SDK 3.4.11 DAR on 3.5.7 validator) | **Non-issue.** `POST /v2/dars/validate` → 200, upload → 200, create → 200. No rebuild to 3.5.x required. |
-| OIDC secret | PDF glyph trap: correct secret has **`...<REDACTED-SECRET-FRAGMENT>...`** (capital `I`), NOT `Uljy` (lowercase L). `pdftotext` gives the exact chars; the visual PDF render is ambiguous. |
+| OIDC secret | PDF glyph trap: one char in the secret is an ambiguous **capital `I`** where the visual PDF render looks like a lowercase `l`. Extract the exact string with `pdftotext` (not the visual render). Secret value lives ONLY in gitignored `app/.env` — never in docs. |
 | Token TTL | `expires_in` = 28800 s (8h). Build refresh. |
 | Ledger user | JWT `sub` = `"6"`, username `otc-canton-fund-oauth`, primaryParty `5nsandbox-devnet-2::1220a14…acf8`. |
 | Participant namespace | `1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8` — every party allocated here gets this suffix. |

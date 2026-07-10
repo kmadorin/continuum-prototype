@@ -6,6 +6,8 @@
 
 **Architecture:** No new components — wire A→B and host. The live-product link + on-ledger devnet contracts are the two HARD hackathon bars; both are satisfied here.
 
+**Convergence status (2026-07-10):** Streams A + B are both COMPLETE and already merged into the `integration` branch. The sole seam conflict (`app/ledger-client/src/types.ts`) was resolved to Stream A's superset; `tsc --noEmit` on `app/web` passes (B compiles against A's types); both suites green; A's `vitest.config.ts` now excludes `web/**`. So Task 1 below reduces to: install deps, swap `MockLedgerClient`→`HttpLedgerClient('/api')` in `App.tsx`, add the Vite `/api` proxy, copy `app/party-registry.json` into `app/web/src/`. The branch-merge steps are done.
+
 **Runs AFTER:** Stream A Tasks 1–6 (proxy + client + seed + registry) and Stream B Tasks 1–5 (views on the mock). Stream A Task 7 (atomic Close) can land in parallel and is required for the "close" step of the full run.
 
 ---
@@ -75,7 +77,7 @@ Expected: conservation holds; a `SettlementReceipt` exists on devnet.
 
 - [ ] **Step 3:** Open the hosted URL in a clean browser, run the demo flow end-to-end against devnet. THIS URL is the submission's "live product link."
 
-Expected: a public URL where a judge clicks through the deal on real devnet. Confirm the secret is NOT in any client bundle (`grep -r r69FQ dist/` → no matches).
+Expected: a public URL where a judge clicks through the deal on real devnet. Confirm the secret is NOT in any client bundle: `gitleaks detect --no-git --source dist/` → no findings (do NOT paste the secret literal into a grep pattern — that IS a leak; scan by tool/shape, keep the literal only in gitignored `.env`).
 
 - [ ] **Step 4: Commit**
 
@@ -88,7 +90,8 @@ git commit -m "chore(deploy): host reverse-proxy (Worker) + web (Pages); live-pr
 
 ## Task 4: Submission package (public repo, deck, 3-min video)
 
-- [ ] **Step 1: Repo hygiene for PUBLIC release** — final scan: `git log -p | grep -i <REDACTED-SECRET-FRAGMENT>` returns NOTHING; `.env`, `party-registry.json` gitignored; `.env.example` present. Add a top-level `README.md`: what Continuum is, the devnet deploy proof (`docs/devnet-deploy-test-RESULT.md`), how to run (proxy + seed + web), the live-product URL.
+- [ ] **Step 1: Repo hygiene for PUBLIC release — SEED THE PUBLIC REPO FROM A FRESH TREE, not this local history.** The local integration history contains partial secret fragments in intermediate commits (harmless — unpushed, and never the full secret — but don't ship the 18-commit sausage). Instead: `git init` a new dir, copy the integration working tree (which is scrubbed), make one or a few curated commits, and push THAT as the public repo. Gates before first push: (i) `gitleaks detect --source .` → no findings; (ii) `.env` + `party-registry.json` gitignored, `.env.example` present; (iii) no secret literal anywhere in the tree (scan by tool, never by pasting the literal). Add a top-level `README.md`: what Continuum is, the devnet deploy proof (`docs/devnet-deploy-test-RESULT.md`), how to run (proxy + seed + web), the live-product URL.
+- [ ] **Step 1b: Rotate the 5N devnet M2M secret after the event** — it's a shared credential; rotating post-hackathon retires the fragment-exposure question permanently. (Coordinate with whoever owns the 5N validator access.)
 
 - [ ] **Step 2: Deck** — 8–10 slides: problem (continuation-fund close takes weeks of lawyers/wires), solution (private atomic on-ledger close), the ILPA governance story, the Canton-essential properties (projection privacy / atomic multilateral settlement / selective disclosure), the live devnet proof + screenshots, team.
 
