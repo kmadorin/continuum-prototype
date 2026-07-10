@@ -264,6 +264,52 @@ export function createApp(deps: AppDeps) {
     });
   });
 
+  // ── GET /registry ── PUBLIC party ids + custodian names (no keys, no session) ──
+  // The frontend needs every party id (the deal room references buyer/lpExiting/…),
+  // and party ids are public. Key material is never included.
+  app.get('/registry', (c) => {
+    const parties: Record<string, string> = {};
+    const custodians: Record<string, string> = {};
+    for (const t of deps.tenants.byParty.values()) {
+      parties[t.role] = t.party;
+      custodians[t.role] = t.custodianName;
+    }
+    return c.json({ parties, custodians });
+  });
+
+  // ── GET /ledger/update/:updateId ── the Ledger Inspector proof ────────────────
+  // Fetch the committed transaction by updateId as the SESSION party (privacy-scoped)
+  // and return the raw tree: signatory parties, created/exercised events, record time.
+  app.get('/ledger/update/:updateId', async (c) => {
+    const s = session(c);
+    if (!s) return c.json({ error: 'unauthenticated' }, 401);
+    const updateId = c.req.param('updateId');
+    const token = await deps.token();
+    const updateFormat = {
+      includeTransactions: {
+        eventFormat: {
+          filtersByParty: {
+            [s.party]: {
+              cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }],
+            },
+          },
+          verbose: true,
+        },
+        transactionShape: 'TRANSACTION_SHAPE_LEDGER_EFFECTS',
+      },
+    };
+    const r = await fetchImpl(`${deps.ledgerBase}/v2/updates/update-by-id`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updateId, updateFormat }),
+    });
+    const txt = await r.text();
+    return new Response(txt, {
+      status: r.status,
+      headers: { 'Content-Type': r.headers.get('content-type') ?? 'application/json' },
+    });
+  });
+
   // ── static SPA (single deployable) ── registered LAST so API routes win ────────
   if (deps.staticRoot) {
     const root = deps.staticRoot;
