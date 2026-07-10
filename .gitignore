@@ -5,3 +5,4 @@ node_modules/
 app/.env
 app/node_modules/
 app/party-registry.json
+app/web/src/party-registry.json
