@@ -56,10 +56,10 @@ oversight/verification). Decide the fastest credible path and scope it to the de
   DevNet"). Deploy flow: write Daml → **Build** (→ DAR) → **Deploy** → select the DAR → select
   the provided validator. Multi-package file needed for multiple modules. Seaport's UI also
   **creates contracts + exercises choices** (auto-generated "Smart Choice Exercise" forms) and
-  **tracks contract IDs/disclosures + full history**. Implication: a **minimal demo can run
-  entirely inside Seaport** (deploy our DARs, drive the deal via its choice-exercise UI) with
-  NO custom frontend — that's the safe MVP floor; the custom React app is polish/stretch. The
-  workshop did NOT cover external frontends or wallet-connect — that's our own integration.
+  **tracks contract IDs/disclosures + full history**. BUT — see HARD REQUIREMENTS below — a
+  Seaport-only mock-up does NOT qualify; Seaport is the build+deploy tool, and we ALSO need a
+  separate "live product" link. The workshop did NOT cover external frontends or wallet-connect
+  — that's our own integration.
 - **loop-sdk** (`@fivenorth/loop-sdk`, `github.com/fivenorth-io/loop-sdk`) — the JS client for
   a dApp/React frontend to connect the **5N Loop wallet** and hit the Canton ledger:
   `init(network:'devnet')` → `connect()` (QR) → `getActiveContracts` (query by template/
@@ -72,12 +72,31 @@ oversight/verification). Decide the fastest credible path and scope it to the de
 - **id-sdk** (`github.com/fivenorth-io/id-sdk`) — 5N identity/credential SDK; maps to our
   `EligibilityCredential` / KYC flywheel (reusable QP credential across deals).
 
-## Hackathon target
+## Hackathon target + HARD REQUIREMENTS (from the Encode programme page — verified)
 
-Two events (keep one codebase): **HackCanton (NODERS)** and **Encode "Build on Canton"**.
-Submission credibility needs a **deployed, wallet-connected app on devnet** actually driving
-the contracts — not a mock. Judges value: real on-ledger atomic settlement, privacy
-(sealed bids / private elections), wallet + token issuance, and the ILPA governance story.
+Encode **"Build on Canton"** (also targeting HackCanton/NODERS on one codebase). Our project
+**"Continuum"** is already registered (team of 2, tracks **1 Private DeFi & Capital Markets**
++ **2 TradeFi/RWA & Tokenized Assets** — track 1 is the bullseye).
+
+- ⏰ **DEADLINE: Monday 13 July 2026, 12:59 BST. No extensions.** (This prompt is being
+  written ~10 July — roughly **3 days left**. Scope must be brutal.)
+- 🏆 **Prize pool $7,000**, top-3 teams across all tracks.
+- ⚠️ **MANDATORY: contracts deployed and RUNNING ON-LEDGER on Canton DEVNET.** LocalNet, local
+  sandbox, or a **Seaport-only mock-up DO NOT QUALIFY** — "use Seaport to build, then deploy to
+  the Devnet validator and confirm your contracts run on-ledger."
+- **Submission checklist**: (1) public repo, (2) presentation deck, (3) **3-minute video pitch
+  w/ demo**, (4) **link to a live product**, (5) **deployed live on Canton Devnet**.
+- **Judging criteria**: technical execution (works? clean, documented code?), originality/
+  creativity, **UX & design (could a real user use it? clear interface?)**, real-world
+  applicability (genuine problem, would someone use it?).
+- 📎 **There is an official PDF in the Encode Discord (#general and #resources)**: "all major
+  info for using validator-deployed contracts on your frontend" + links (Seaport
+  `devnet.seaport.to`, a helpful video). **GET THAT PDF FIRST** — it is the authoritative guide
+  for wiring a frontend to the devnet-deployed contracts and likely answers most of our spikes.
+
+Continuum's edge vs the criteria: real on-ledger atomic settlement, privacy (sealed bids /
+private elections), token issuance, and the ILPA governance story — a credible institutional
+capital-markets use case (track 1). The gap is purely **devnet deploy + a live product UI**.
 
 ## Research already done — Canton's frontend/deploy options (from ../cf-docs)
 
@@ -106,16 +125,20 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
 
 ## Key decisions to explore (the heart of the brainstorm)
 
-1. **Architecture — three real options** (weigh hackathon speed, demo polish, HTML reuse):
-   - **(A) All-in-Seaport**: deploy our DARs to the pre-configured DevNet validator and drive
-     the whole deal via Seaport's contract-create + Smart-Choice-Exercise UI. No frontend
-     code. Safest MVP floor; least "product" polish.
-   - **(B) Custom React → ledger** directly via **loop-sdk** (wallet connect + token reads +
-     transfers) and/or the **JSON Ledger API + `dpm codegen-js`** bindings for our custom
-     choices. Best story; carries the loop-sdk custom-DAR limitation + auth/party risk.
-   - **(C) Fork cn-quickstart** (Java backend + React + auth + PQS), swap Licensing→Continuum
-     Daml, deploy the DAR via Seaport. Most infra, most robust mediated path.
-   Reuse of our bespoke HTML/UX is a cross-cutting factor for (B) and (C).
+1. **Architecture — under a ~3-day clock, and Seaport-deploy is MANDATORY but not sufficient**
+   (submission needs BOTH on-ledger devnet contracts AND a separate live-product link):
+   - **(A) Seaport-only**: build+deploy DARs to the devnet validator and drive the deal via
+     Seaport's Smart-Choice-Exercise UI. **Satisfies the on-ledger requirement but NOT the
+     "live product" one on its own** — insufficient as the whole submission.
+   - **(B) Deploy via Seaport + thin custom React frontend** talking to the deployed contracts
+     via **loop-sdk** (wallet connect + token reads/transfers) and/or the **JSON Ledger API +
+     `dpm codegen-js`** bindings for our custom choices. **Most likely the right target** given
+     the deadline: reuses our HTML/UX, gives the live-product link, keeps infra light. Risk:
+     loop-sdk custom-DAR limitation + party/auth wiring.
+   - **(C) Fork cn-quickstart** (Java backend + React + auth + PQS). Most robust, but a Java
+     backend is **probably too heavy for 3 days** — likely out unless a teammate owns it.
+   The brainstorm should pick the fastest path to "devnet-deployed contracts + a clickable live
+   product" and treat (C) as a stretch only if time allows.
 2. **Template reuse vs. rebuild**: can our multi-persona HTML be ported into cn-quickstart's
    React app, or is it faster to rebuild the 4 persona views in React against the generated
    bindings? What's genuinely reusable (copy/layout/flow) vs. throwaway?
@@ -139,15 +162,17 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
    live on one devnet participant (multi-hosted parties) for the demo, or do we need multiple
    validators? What's the cheapest topology that still shows privacy (sub-transaction
    visibility) convincingly?
-6. **Scope triage / MVP for the deadline** — three tiers:
-   - **Floor**: DARs deployed to the Seaport DevNet validator, deal #1 close driven via
-     Seaport's choice-exercise UI, oversight/LPAC view shown. Proves "real on-ledger atomic
-     settlement on devnet" with zero frontend risk.
-   - **Target**: custom React app (ported from our HTML) reading contracts + submitting the
-     deal choices against the deployed contracts; wallet connect via loop-sdk for the
-     token/cash side.
-   - **Stretch**: real Splice/Canton-Coin cash leg + flywheel deal #2 + full multi-persona
-     switching. Decide explicitly what's cut.
+6. **Scope triage / MVP for the ~3-day deadline** — the FLOOR must satisfy BOTH mandatory
+   requirements (on-ledger devnet + live product link):
+   - **Floor (must-have to qualify)**: our DARs **deployed + running on the Seaport DevNet
+     validator (on-ledger, verifiable)** AND a **minimal live product** — even a thin React
+     view that reads our deployed contracts and submits ONE flow (e.g. the deal-#1 close or a
+     sealed bid) — plus the repo, deck, and 3-min video. Seaport-UI alone is NOT enough.
+   - **Target**: the ported multi-persona React app driving the full deal (bids → elections →
+     close → oversight) against the deployed contracts; loop-sdk wallet connect for the token
+     side.
+   - **Stretch**: real Splice/Canton-Coin cash leg + flywheel deal #2. Decide what's cut FIRST
+     given the clock — don't gold-plate before the floor is green on devnet.
 7. **Contracts-as-source-of-truth**: the Daml is done and tested; the app should wrap it, not
    fork its logic. Confirm the app only needs read models (PQS/JSON queries) + command
    submission for the existing choices (`SubmitBid`/`SealedBid`, `LPElection`, `SetClearing`,
@@ -176,10 +201,13 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
 
 ## Constraints
 
-- Hackathon deadline (short). Optimize for a **judge-clickable, credible, deployed** demo
-  over completeness. Prefer the path with the least new infrastructure risk.
+- **Hard deadline: Mon 13 July 12:59 BST (~3 days out). No extensions.** Every scope call is
+  dominated by this. Get the qualifying floor (on-ledger devnet + live product) green FIRST,
+  then improve. Prefer the path with the least new infrastructure risk.
+- **Grab the Encode Discord PDF ("using validator-deployed contracts on your frontend")
+  before designing** — it likely answers the endpoint/auth/party spikes directly.
 - Keep the tested Daml as the source of truth. Don't reinvent settlement logic in the app.
-- Keep it one codebase serving both events.
+- Team of 2 — parallelize (one on devnet-deploy + contract wiring, one on the frontend).
 
 ## Deliverable from this brainstorm
 
