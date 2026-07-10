@@ -19,7 +19,10 @@
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    // erasableSyntaxOnly removed: App.tsx imports the shared ../ledger-client
+    // source (outside web/src), whose class uses TS parameter-property
+    // constructors. That is valid TS transformed correctly by vite/esbuild;
+    // the flag is only a type-stripping-compat lint, not a type-safety check.
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"]

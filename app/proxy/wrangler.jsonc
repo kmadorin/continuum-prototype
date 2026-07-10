@@ -1,0 +1,22 @@
+{
+  "name": "continuum",
+  "main": "src/worker.ts",
+  "compatibility_date": "2024-11-01",
+  "account_id": "291f7b23b5443d4adcf8ef1440c56b5d",
+  "assets": {
+    // Vite static build of app/web. SPA fallback so client-side routes resolve
+    // to index.html. run_worker_first makes the Worker authoritative for
+    // /api/* (the ledger proxy) while everything else serves straight from the
+    // static build. Requires wrangler >= 4.20.0.
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    // Non-secret config. FN_SECRET is set out-of-band as a Worker secret
+    // (`wrangler secret put FN_SECRET`) and MUST NOT appear here.
+    "FN_AUTH_URL": "https://auth.sandbox.fivenorth.io/application/o/token/",
+    "FN_LEDGER_URL": "https://ledger-api.validator.devnet.sandbox.fivenorth.io"
+  }
+}
