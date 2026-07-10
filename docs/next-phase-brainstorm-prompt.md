@@ -46,7 +46,31 @@ oversight/verification). Decide the fastest credible path and scope it to the de
   onboarding path (apply for + run our own validator, SV sponsor, VPN, 1-hr secret) is NOT
   needed. NOTE: "5N Seaport" is unrelated to OpenSea's EVM "Seaport" — same name, different
   thing; the correct docs are the in-app Documentation / "How to use seaport" user guide, not
-  the ProjectOpenSea GitHub repo.
+  the ProjectOpenSea GitHub repo. Seaport is a 5North (Five North Digital) product; its docs
+  are `docs.fivenorth.io` (has `5n-dashboard` → **dar-management** + **party-management**,
+  `hosted-node`, `sandbox`, `sponsored-node`). GitHub org: `github.com/fivenorth-io`
+  (Seaport itself is closed-source; relevant public repos below).
+- **Sanctioned hackathon deploy path (from the "Canton Tech Deep Dive" workshop, Encode
+  Build-on-Canton)**: Seaport IS the recommended tool, and **a shared DevNet validator is
+  pre-configured inside Seaport for teams** ("select this validator … configured for you on
+  DevNet"). Deploy flow: write Daml → **Build** (→ DAR) → **Deploy** → select the DAR → select
+  the provided validator. Multi-package file needed for multiple modules. Seaport's UI also
+  **creates contracts + exercises choices** (auto-generated "Smart Choice Exercise" forms) and
+  **tracks contract IDs/disclosures + full history**. Implication: a **minimal demo can run
+  entirely inside Seaport** (deploy our DARs, drive the deal via its choice-exercise UI) with
+  NO custom frontend — that's the safe MVP floor; the custom React app is polish/stretch. The
+  workshop did NOT cover external frontends or wallet-connect — that's our own integration.
+- **loop-sdk** (`@fivenorth/loop-sdk`, `github.com/fivenorth-io/loop-sdk`) — the JS client for
+  a dApp/React frontend to connect the **5N Loop wallet** and hit the Canton ledger:
+  `init(network:'devnet')` → `connect()` (QR) → `getActiveContracts` (query by template/
+  interface id), `submitTransaction`/`submitAndWaitForTransaction`, `signMessage`, `transfer`,
+  `getHolding`. Works on devnet. **IMPORTANT limitation (README)**: "we only support DAML
+  transaction from the Splice built-in DAR files and Utility app DAR files" — so it may NOT
+  yet submit our **custom** deal choices (Close/SealedBid/LPElection). Spike this: it can
+  likely READ our token-standard `Holding`/`Allocation` (interface queries) + do wallet/token
+  transfers, but custom-choice submission may need Seaport's UI or the raw JSON Ledger API.
+- **id-sdk** (`github.com/fivenorth-io/id-sdk`) — 5N identity/credential SDK; maps to our
+  `EligibilityCredential` / KYC flywheel (reusable QP credential across deals).
 
 ## Hackathon target
 
@@ -82,10 +106,16 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
 
 ## Key decisions to explore (the heart of the brainstorm)
 
-1. **Architecture**: fork cn-quickstart (get backend+frontend+localnet+auth+wallet "for
-   free", swap Licensing→Continuum Daml) vs. keep our bespoke prototype and bolt on the
-   **JSON API + codegen-js + Wallet SDK** directly (no Java backend). Weigh hackathon speed,
-   demo polish, and how much of our HTML/UX we can reuse.
+1. **Architecture — three real options** (weigh hackathon speed, demo polish, HTML reuse):
+   - **(A) All-in-Seaport**: deploy our DARs to the pre-configured DevNet validator and drive
+     the whole deal via Seaport's contract-create + Smart-Choice-Exercise UI. No frontend
+     code. Safest MVP floor; least "product" polish.
+   - **(B) Custom React → ledger** directly via **loop-sdk** (wallet connect + token reads +
+     transfers) and/or the **JSON Ledger API + `dpm codegen-js`** bindings for our custom
+     choices. Best story; carries the loop-sdk custom-DAR limitation + auth/party risk.
+   - **(C) Fork cn-quickstart** (Java backend + React + auth + PQS), swap Licensing→Continuum
+     Daml, deploy the DAR via Seaport. Most infra, most robust mediated path.
+   Reuse of our bespoke HTML/UX is a cross-cutting factor for (B) and (C).
 2. **Template reuse vs. rebuild**: can our multi-persona HTML be ported into cn-quickstart's
    React app, or is it faster to rebuild the 4 persona views in React against the generated
    bindings? What's genuinely reusable (copy/layout/flow) vs. throwaway?
@@ -109,9 +139,15 @@ the contracts — not a mock. Judges value: real on-ledger atomic settlement, pr
    live on one devnet participant (multi-hosted parties) for the demo, or do we need multiple
    validators? What's the cheapest topology that still shows privacy (sub-transaction
    visibility) convincingly?
-6. **Scope triage / MVP for the deadline**: define the thinnest end-to-end slice that still
-   wins — e.g. LocalNet + mediated backend + deal-#1 close + oversight view — vs. the
-   stretch (real devnet + real wallet + flywheel deal #2). What's cut, what's kept.
+6. **Scope triage / MVP for the deadline** — three tiers:
+   - **Floor**: DARs deployed to the Seaport DevNet validator, deal #1 close driven via
+     Seaport's choice-exercise UI, oversight/LPAC view shown. Proves "real on-ledger atomic
+     settlement on devnet" with zero frontend risk.
+   - **Target**: custom React app (ported from our HTML) reading contracts + submitting the
+     deal choices against the deployed contracts; wallet connect via loop-sdk for the
+     token/cash side.
+   - **Stretch**: real Splice/Canton-Coin cash leg + flywheel deal #2 + full multi-persona
+     switching. Decide explicitly what's cut.
 7. **Contracts-as-source-of-truth**: the Daml is done and tested; the app should wrap it, not
    fork its logic. Confirm the app only needs read models (PQS/JSON queries) + command
    submission for the existing choices (`SubmitBid`/`SealedBid`, `LPElection`, `SetClearing`,
