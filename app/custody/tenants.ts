@@ -52,6 +52,9 @@ export function tenantsFromRecords(records: TenantRecord[]): TenantStore {
 }
 
 export function loadTenants(path: string): TenantStore {
-  const records = JSON.parse(readFileSync(path, 'utf8')) as TenantRecord[];
+  // Prefer an injected secret (PaaS inject secrets as env, not files); fall back to the
+  // gitignored file for local dev. Either way the JSON never touches git.
+  const raw = process.env.CUSTODY_KEYS_JSON ?? readFileSync(path, 'utf8');
+  const records = JSON.parse(raw) as TenantRecord[];
   return tenantsFromRecords(records);
 }
