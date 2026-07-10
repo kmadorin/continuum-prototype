@@ -101,6 +101,14 @@ POST /v2/state/active-contracts
 
 ---
 
+## Redeploy — continuum-contracts 1.1.0 (real-wallet propose-accept delta) ✅
+
+2026-07-10: rebuilt + redeployed as **1.1.0** (added `ExecDelegationProposal` + `OldFundInterestOffer`
+propose-accept wrappers + `RecordConsent` recontrolled to `lpac` — see the wallet-portal spec). Package
+version bumped 1.0.0→1.1.0 so vetting accepts the new hash. `POST /v2/dars/validate` → 200,
+`POST /v2/dars` → 200; verified `#continuum-contracts:Continuum.Registry:ExecDelegationProposal` creates
+on-ledger (updateId `1220c7c2e7c5…`). Both 1.0.0 and 1.1.0 now vetted on the validator.
+
 ## De-risk spikes — the atomic Close is feasible over pure JSON ✅
 
 Fable (advisor) flagged the single architecture unknown: can one M2M token do multi-party
