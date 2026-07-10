@@ -1,128 +1,175 @@
-// portal/buyer.html — "Secondary Buyer". Submits a sealed bid
-// (Continuum.Auction:SealedBid) and DEMONSTRATES peer-blindness by reading the
-// OTHER buyer's ledger projection and showing it does not contain this bid.
-import { useEffect, useState } from 'react';
-import type { ActiveContract, LedgerClient } from '../../../ledger-client/src/types';
-import { useParty } from '../state/PartyContext';
-import { sealedBid } from '../lib/ops';
-import { Card, StageHead, fmtM, fmtPct, latest, readDeal } from './shared';
+// Secondary Buyer (role `buyer`). Signs its OWN transactions with its wallet key:
+//   • Submit sealed bid       → create Continuum.Auction:SealedBid   (buyer-signed, peer+GP-blind)
+//   • Accept exec delegation  → EDP_Accept on its ExecDelegationProposal (once gp proposes it)
+// Reads its own SealedBid + post-close CV-unit RegistryHolding from its own
+// per-party ACS projection. Every write is submitSigned(session.party, ...).
+import { useState } from 'react';
+import type { ActiveContract } from '../../../ledger-client/src/types';
+import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
+import { Card, StageHead, fmtM, fmtPct } from './shared';
+import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-export default function Buyer({ client }: { client: LedgerClient }) {
-  const { current, personas } = useParty();
+export default function Buyer() {
+  const L = useLedger();
+  const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
-  const [myBid, setMyBid] = useState<ActiveContract | null>(null);
-  const [pct, setPct] = useState('0.96');
-  const [capacity, setCapacity] = useState('20000000.0');
-  const [busy, setBusy] = useState(false);
-  const [peerCheck, setPeerCheck] = useState<{ party: string; count: number } | null>(null);
+  const [bid, setBid] = useState<ActiveContract | null>(null);
+  const [prop, setProp] = useState<ActiveContract | null>(null);
+  const [deleg, setDeleg] = useState<ActiveContract | null>(null);
+  const [units, setUnits] = useState<number>(0);
+  const [pct, setPct] = useState<string>(DEMO.clearingPct);
+  const [capacity, setCapacity] = useState('6000000.0');
 
   const refresh = async (alive: () => boolean = () => true) => {
-    const d = await readDeal(client, current);
-    const bid = latest(await client.activeContracts(current, { templateId: 'SealedBid' }));
+    const [d, b, p, dg, h] = await Promise.all([
+      L.myAcs(R.deal),
+      L.myAcs(R.sealedBid),
+      L.myAcs(R.execDelegProp),
+      L.myAcs(R.execDeleg),
+      L.myAcs(R.holding),
+    ]);
     if (!alive()) return;
-    setDeal(d);
-    setMyBid(bid);
+    setDeal(pick(d));
+    setBid(pick(b, (c) => c.args.buyer === L.me));
+    setProp(pick(p, (c) => c.args.party === L.me));
+    setDeleg(pick(dg, (c) => c.args.party === L.me));
+    setUnits(
+      h
+        .filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit)
+        .reduce((s, c) => s + Number(c.args.amount), 0),
+    );
   };
+  useRefresh(refresh, [L.me]);
 
-  useEffect(() => {
-    let alive = true;
-    refresh(() => alive);
-    setPeerCheck(null);
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current]);
-
-  const submitBid = async () => {
-    if (!deal) return;
-    setBusy(true);
-    await client.submit({
-      commandId: `bid-${current}-${Date.now()}`,
-      actAs: [current],
-      commands: [
-        sealedBid({
-          gp: personas.gp,
-          buyer: current,
-          deal: deal.args.cv as string,
-          pctOfNav: pct,
-          capacity,
-        }),
-      ],
+  const submitBid = () =>
+    run('bid', async () => {
+      await L.submit(
+        [
+          {
+            CreateCommand: {
+              templateId: T.sealedBid,
+              createArguments: {
+                gp: counter.gp,
+                buyer: L.me,
+                dealId: DEAL_ID,
+                pctOfNav: pct,
+                capacity,
+              },
+            },
+          },
+        ],
+        R.sealedBid,
+      );
+      await refresh();
+      return 'Sealed bid signed and submitted — blind to every other buyer and to the GP until select.';
     });
-    await refresh();
-    // Peer-blindness proof: query the OTHER buyer's activeContracts() and show
-    // it doesn't contain (isn't even aware of) this bid. SealedBid's sole
-    // signatory is `buyer` — MockLedgerClient's stakeholders for SealedBid are
-    // actAs-only (peer-blind by construction), so this count is always 0.
-    const otherBuyer = current === personas.buyer ? personas.buyer2 : personas.buyer;
-    const peerBids = await client.activeContracts(otherBuyer, { templateId: 'SealedBid' });
-    setPeerCheck({ party: otherBuyer, count: peerBids.length });
-    setBusy(false);
-  };
 
-  const cv = (deal?.args.cv as string) ?? null;
+  const acceptDelegation = () =>
+    run('accept', async () => {
+      if (!prop) throw new Error('No ExecDelegationProposal addressed to you yet — the GP proposes it first.');
+      await L.submit(
+        [
+          {
+            ExerciseCommand: {
+              templateId: T.execDelegProp,
+              contractId: prop.contractId,
+              choice: 'EDP_Accept',
+              choiceArgument: {},
+            },
+          },
+        ],
+        R.execDeleg,
+      );
+      await refresh();
+      return 'Execution delegation accepted — the GP may now settle your unit leg atomically at Close.';
+    });
 
   return (
     <div className="stack g4">
       <StageHead
         tag="SECONDARY BUYER"
         role="Buy-side"
-        title="Set the price and bid, sealed"
-        lede="The buy side sets one price — validated by a fairness opinion — and it becomes public to the whole room. Your bid stays blind to every other buyer until then."
+        title="Bid sealed, buy the units"
+        lede="Your bid is signed by your own wallet and stays blind to every other buyer. You separately pre-authorize the GP to settle your leg — you never hand over your key."
       />
-      <Card title={cv ?? 'No deal open yet'}>
+
+      <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
         <dl className="kv">
-          <dt>Fairness-checked deal</dt>
-          <dd>{cv ? cv : <span className="chip pending">waiting on the advisor to open the room</span>}</dd>
+          <dt>Signed in as</dt>
+          <dd className="mono">{shortParty(L.me)}</dd>
+          <dt>Clearing price</dt>
+          <dd>
+            {deal?.args.clearingPrice ? (
+              `${fmtPct(deal.args.clearingPrice)} of NAV`
+            ) : (
+              <span className="chip sealed">sealed — set by the room</span>
+            )}
+          </dd>
         </dl>
       </Card>
 
-      {!myBid ? (
-        <div className="stack g3">
-          <div className="form-row">
-            <label htmlFor="bp">Bid — % of NAV</label>
-            <div className="input-group">
-              <input className="input" id="bp" type="number" step="0.01" min="0" max="1" value={pct} onChange={(e) => setPct(e.target.value)} />
-              <span className="suffix">of NAV</span>
-            </div>
-          </div>
-          <div className="form-row">
-            <label htmlFor="bc">Capacity — NAV you'll absorb</label>
-            <div className="input-group">
-              <span className="prefix">$</span>
-              <input className="input" id="bc" type="number" step="0.5" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
-            </div>
-          </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={busy || !deal} onClick={submitBid}>
-              Submit sealed bid
-            </button>
-            <span className="cant-see">Blind to other buyers — they can't see yours, and you can't see theirs.</span>
-          </div>
-        </div>
-      ) : (
-        <div className="stack g3">
-          <div className="actions">
+      <Card title="Sealed bid">
+        {bid ? (
+          <div className="stack g3">
             <span className="chip ok">Your bid is in</span>
-          </div>
-          <Card title="Your sealed bid">
             <dl className="kv">
               <dt>Bid</dt>
-              <dd>{fmtPct(myBid.args.pctOfNav)} of NAV</dd>
+              <dd>{fmtPct(bid.args.pctOfNav)} of NAV</dd>
               <dt>Capacity</dt>
-              <dd>{fmtM(myBid.args.capacity)}</dd>
+              <dd>{fmtM(bid.args.capacity)}</dd>
             </dl>
-          </Card>
-          {peerCheck && (
-            <p className="hint">
-              Proof of peer-blindness: querying the other buyer's ledger view (
-              <span className="mono">{peerCheck.party}</span>) for SealedBid returns{' '}
-              <b>{peerCheck.count}</b> contract(s) — none of them is this bid.
-            </p>
-          )}
-        </div>
-      )}
+            <span className="cant-see">No other buyer — and not the GP — can see this until the lead is selected.</span>
+          </div>
+        ) : (
+          <div className="stack g3">
+            <div className="form-row">
+              <label htmlFor="bp">Bid — % of NAV</label>
+              <div className="input-group">
+                <input className="input" id="bp" type="number" step="0.01" min="0" max="1" value={pct} onChange={(e) => setPct(e.target.value)} />
+                <span className="suffix">of NAV</span>
+              </div>
+            </div>
+            <div className="form-row">
+              <label htmlFor="bc">Capacity — NAV you'll absorb</label>
+              <div className="input-group">
+                <span className="prefix">$</span>
+                <input className="input" id="bc" type="number" step="0.5" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+              </div>
+            </div>
+            <div className="actions">
+              <button className="btn" type="button" disabled={!!busy} onClick={submitBid}>
+                {busy === 'bid' ? 'Signing…' : 'Submit sealed bid'}
+              </button>
+              <span className="cant-see">Signed with your wallet — blind to other buyers.</span>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Execution delegation">
+        <p className="hint" style={{ marginTop: 0 }}>
+          Pre-authorize the GP to move your unit leg at Close — a propose/accept, not a key handover.
+        </p>
+        {deleg ? (
+          <span className="chip ok">Delegation accepted</span>
+        ) : (
+          <div className="actions">
+            <button className="btn" type="button" disabled={!!busy || !prop} onClick={acceptDelegation}>
+              {busy === 'accept' ? 'Signing…' : 'Accept execution delegation'}
+            </button>
+            {!prop && <span className="hint">Waiting on the GP to propose the delegation.</span>}
+          </div>
+        )}
+      </Card>
+
+      <Card title="Post-close holding">
+        <dl className="kv">
+          <dt>CV units ({DEMO.unit})</dt>
+          <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
+        </dl>
+      </Card>
+
+      <ErrNote err={err} note={note} />
     </div>
   );
 }
