@@ -132,6 +132,20 @@ returnToSender admin spec reserved = do
 -- Fix: each such party pre-signs a co-signed delegation to gp BEFORE the close.
 -- Inside ExecFor's body the authorizers are signatories(ExecDelegation)={gp,party}
 -- ∪ controllers={gp} = {gp,party}, which covers a leg needing {party, gp}.
+-- Propose-accept wrapper for ExecDelegation. Canton 3.5 interactive submission is
+-- single-party-only, so the co-signed ExecDelegation cannot be created via a
+-- multi-actAs shortcut: gp proposes here, and `party` accepts in its own tx.
+template ExecDelegationProposal
+  with
+    admin : Party
+    party : Party
+  where
+    signatory admin
+    observer party
+    choice EDP_Accept : ContractId ExecDelegation
+      controller party
+      do create ExecDelegation with admin; party
+
 template ExecDelegation
   with
     admin : Party   -- gp / executor

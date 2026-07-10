@@ -1,0 +1,48 @@
+module Test.RealWallet where
+
+import Daml.Script
+import DA.Assert ((===))
+import Continuum.Registry (ExecDelegation(..), ExecDelegationProposal(..), EDP_Accept(..))
+import Continuum.Participation (OldFundInterest(..), OldFundInterestOffer(..), OFI_Accept(..))
+import Continuum.Deal
+
+-- (a) Propose-accept for ExecDelegation: gp proposes, buyer alone accepts in its
+-- own transaction (Canton 3.5 single-party interactive submission).
+execDelegationProposeAccept : Script ()
+execDelegationProposeAccept = do
+  gp    <- allocateParty "GP"
+  buyer <- allocateParty "Buyer"
+  prop <- submit gp do createCmd ExecDelegationProposal with admin = gp; party = buyer
+  _    <- submit buyer do exerciseCmd prop EDP_Accept
+  eds  <- query @ExecDelegation gp
+  case map snd eds of
+    [ed] -> do ed.admin === gp; ed.party === buyer
+    _    -> abort "expected exactly one ExecDelegation"
+
+-- (b) Propose-accept for OldFundInterest: oldFund proposes, lp alone accepts.
+oldFundInterestProposeAccept : Script ()
+oldFundInterestProposeAccept = do
+  oldFund <- allocateParty "OldFund"
+  lp      <- allocateParty "LP"
+  offer <- submit oldFund do
+    createCmd OldFundInterestOffer with oldFund; lp; nav = 5000000.0
+  _   <- submit lp do exerciseCmd offer OFI_Accept
+  ois <- query @OldFundInterest lp
+  case map snd ois of
+    [oi] -> do oi.oldFund === oldFund; oi.lp === lp; oi.nav === 5000000.0
+    _    -> abort "expected exactly one OldFundInterest"
+
+-- (c) RecordConsent is lpac-controlled: gp cannot record consent; lpac can, and it
+-- moves the deal to the Consented stage.
+recordConsentIsLpacControlled : Script ()
+recordConsentIsLpacControlled = do
+  gp   <- allocateParty "GP"
+  lpac <- allocateParty "LPAC"
+  reg  <- allocateParty "Regulator"
+  deal <- submit gp do createCmd (mkDeal gp lpac reg)
+  -- gp (the previous controller) can no longer record consent
+  submitMustFail gp do exerciseCmd deal RecordConsent
+  -- lpac records consent -> Consented
+  consented <- submit lpac do exerciseCmd deal RecordConsent
+  Some d <- queryContractId lpac consented
+  d.stage === Consented

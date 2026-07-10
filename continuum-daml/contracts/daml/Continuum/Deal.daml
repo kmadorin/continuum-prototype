@@ -31,7 +31,7 @@ template ContinuationDeal
     stage            : Stage
   where
     signatory gp, vehicle
-    observer room, regulator
+    observer room, regulator, lpac
 
     choice Break : ContractId ContinuationDeal
       with reason : Text
@@ -39,9 +39,10 @@ template ContinuationDeal
       do assertMsg "already terminal" (stage /= Closed && stage /= Broken)
          create this with stage = Broken
 
-    -- Record LPAC consent (moves the deal to the Consented stage).
+    -- Record LPAC consent (moves the deal to the Consented stage). lpac-signed:
+    -- with real external-party wallets the oversight body itself records consent.
     choice RecordConsent : ContractId ContinuationDeal
-      controller gp
+      controller lpac
       do assertMsg "terminal" (stage /= Closed && stage /= Broken)
          create this with stage = Consented
 

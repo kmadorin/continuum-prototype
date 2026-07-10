@@ -17,7 +17,7 @@ sequencingGates = do
   -- OpenElections before consent -> fails
   submitMustFail gp do exerciseCmd deal0 OpenElections
   -- consent recorded, but clearing not yet published -> still fails
-  d1 <- submit gp do exerciseCmd deal0 RecordConsent
+  d1 <- submit lpac do exerciseCmd deal0 RecordConsent
   submitMustFail gp do exerciseCmd d1 OpenElections
   -- clearing published -> OpenElections succeeds
   d2 <- submit gp do exerciseCmd d1 SetClearing with p = 0.96

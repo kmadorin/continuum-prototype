@@ -10,6 +10,21 @@ template OldFundInterest
   where
     signatory oldFund, lp
 
+-- Propose-accept wrapper for OldFundInterest. Canton 3.5 interactive submission is
+-- single-party-only: oldFund proposes here, and lp accepts in its own tx to form
+-- the co-signed OldFundInterest.
+template OldFundInterestOffer
+  with
+    oldFund : Party
+    lp      : Party
+    nav     : Decimal
+  where
+    signatory oldFund
+    observer lp
+    choice OFI_Accept : ContractId OldFundInterest
+      controller lp
+      do create OldFundInterest with oldFund; lp; nav
+
 -- LP proposes; GP accepts -> co-signed authority the Close exercises.
 template DealParticipation
   with
