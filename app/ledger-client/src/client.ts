@@ -11,7 +11,9 @@ export class HttpLedgerClient implements LedgerClient {
   }
   async ledgerEnd() {
     const r = await this.fetchImpl(`${this.base}/v2/state/ledger-end`);
-    return JSON.parse(await r.text());
+    const txt = await r.text();
+    if (!r.ok) throw new Error(`/v2/state/ledger-end → ${r.status}: ${txt}`);
+    return JSON.parse(txt);
   }
   async submit(cmd: SubmitReq) { return this.post('/v2/commands/submit-and-wait', cmd); }
   async activeContracts(party: string, opts: { templateId?: string; includeBlob?: boolean } = {}) {

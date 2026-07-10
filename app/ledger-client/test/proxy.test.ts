@@ -27,4 +27,13 @@ describe('handleProxy', () => {
     expect(tm.get).toHaveBeenCalledWith(true); // forced refresh
     expect(upstream).toHaveBeenCalledTimes(2);
   });
+  it('rejects non-/v2 paths without touching the ledger', async () => {
+    const upstream = vi.fn() as any;
+    const tm = { get: vi.fn(async () => 'TOK') } as any;
+    const res = await handleProxy({ method: 'GET', path: '/admin/secrets', body: '' },
+      { ledgerUrl: 'https://L', tm, fetchImpl: upstream });
+    expect(res.status).toBe(404);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(res.headers['Access-Control-Allow-Origin']).toBe('*');
+  });
 });

@@ -4,6 +4,12 @@ type Opts = { ledgerUrl: string; tm: { get(f?: boolean): Promise<string> }; fetc
 const CORS = { 'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
 export async function handleProxy(req: Req, o: Opts) {
+  // SECURITY: this injects a privileged M2M bearer server-side and allows any origin.
+  // It is a local devnet demo relay, NOT a hardened gateway. Only forward the ledger
+  // API surface — reject anything outside `/v2/` so it can't be steered elsewhere.
+  if (!req.path.startsWith('/v2/')) {
+    return { status: 404, body: '{"error":"only /v2/* is proxied"}', headers: { ...CORS } };
+  }
   const f = o.fetchImpl ?? fetch;
   const call = async (tok: string) => f(`${o.ledgerUrl}${req.path}`, {
     method: req.method,
