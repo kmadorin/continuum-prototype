@@ -876,3 +876,61 @@ table.data tfoot .num { color: var(--accent); }
 }
 @keyframes toast-spin { to { transform: rotate(360deg); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ===========================================================================
+   CUSTODY GOVERNANCE UI — approval queue, ledger inspector drawer, audit trail,
+   inspect affordances. Built on the same tokens as the portal.
+   =========================================================================== */
+
+/* clickable ledger update id (audit rows) */
+.link-mono {
+  font-family: var(--mono); font-size: 13px; color: var(--accent);
+  background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: 0.02em;
+  border-bottom: 1px dashed var(--accent-dim);
+}
+.link-mono:hover { color: var(--text); border-bottom-color: var(--text); }
+
+/* small ghost button variant */
+.btn.ghost.sm { padding: 6px 12px; font-size: 12px; }
+
+/* toast "Inspect" affordance */
+.toast-inspect {
+  margin-left: auto; flex: none; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent);
+  background: transparent; border: 1px solid var(--accent-dim); padding: 4px 9px; cursor: pointer;
+}
+.toast-inspect:hover { color: var(--text); border-color: var(--accent); }
+
+/* ---------- approval queue cards ---------- */
+.approval-card .approval-top { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; flex-wrap: wrap; }
+.approval-card .approval-top h2 { font-size: 17px; }
+.approval-card .approval-officer {
+  font-size: 13px; color: var(--dim); border-left: 2px solid var(--warn);
+  background: var(--warn-soft); padding: 10px 14px; margin: 4px 0 2px;
+}
+.approval-card .approval-officer b { color: var(--warn); font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em; }
+
+/* ---------- ledger inspector drawer ---------- */
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 90; background: color-mix(in oklch, #000 55%, transparent);
+  display: flex; justify-content: flex-end; animation: toast-in 140ms ease-out;
+}
+.drawer {
+  width: min(560px, 96vw); height: 100%; background: var(--bg-2);
+  border-left: 1px solid var(--border-hi); box-shadow: -12px 0 40px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.drawer-head {
+  display: flex; align-items: flex-start; gap: 14px; padding: 20px 24px;
+  border-bottom: 1px solid var(--border); background: var(--bg-2);
+}
+.drawer-titles { min-width: 0; flex: 1; }
+.drawer-eyebrow { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.drawer-title { font-size: 16px; margin: 5px 0 0; word-break: break-all; }
+.drawer-body { padding: 22px 24px 60px; overflow-y: auto; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.raw-json {
+  margin: 0; padding: 16px; max-height: 340px; overflow: auto;
+  background: var(--surface); border-top: 1px solid var(--border);
+  font-size: 12px; line-height: 1.5; color: var(--dim); white-space: pre;
+}

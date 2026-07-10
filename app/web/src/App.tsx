@@ -7,6 +7,8 @@
 import type { ReactNode } from 'react';
 import { SessionProvider, useSession, type Role } from './state/WalletSession';
 import { ToastProvider } from './state/Toast';
+import { InspectorProvider } from './state/Inspector';
+import RoleWorkspace from './views/RoleWorkspace';
 import SignIn from './views/SignIn';
 import Advisor from './views/Advisor';
 import Buyer from './views/Buyer';
@@ -62,7 +64,9 @@ function Gate() {
         </button>
       </header>
 
-      <main className="portal-wrap">{seat.view()}</main>
+      <main className="portal-wrap">
+        <RoleWorkspace>{seat.view()}</RoleWorkspace>
+      </main>
 
       {/* Overlays the workspace with a full-screen SETTLED takeover once this
           party's own projection sees the atomic close. */}
@@ -74,10 +78,12 @@ function Gate() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <SessionProvider>
-        <Gate />
-      </SessionProvider>
-    </ToastProvider>
+    <InspectorProvider>
+      <ToastProvider>
+        <SessionProvider>
+          <Gate />
+        </SessionProvider>
+      </ToastProvider>
+    </InspectorProvider>
   );
 }
