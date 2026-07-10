@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react';
 import type { ActiveContract, LedgerClient } from '../../../ledger-client/src/types';
 import { useParty } from '../state/PartyContext';
-import { partyRegistry } from '../ledger/party-registry.mock';
 import { sealedBid } from '../lib/ops';
 import { Card, StageHead, fmtM, fmtPct, latest, readDeal } from './shared';
 
@@ -56,7 +55,7 @@ export default function Buyer({ client }: { client: LedgerClient }) {
     // it doesn't contain (isn't even aware of) this bid. SealedBid's sole
     // signatory is `buyer` — MockLedgerClient's stakeholders for SealedBid are
     // actAs-only (peer-blind by construction), so this count is always 0.
-    const otherBuyer = current === partyRegistry.parties.buyer ? partyRegistry.parties.buyer2 : partyRegistry.parties.buyer;
+    const otherBuyer = current === personas.buyer ? personas.buyer2 : personas.buyer;
     const peerBids = await client.activeContracts(otherBuyer, { templateId: 'SealedBid' });
     setPeerCheck({ party: otherBuyer, count: peerBids.length });
     setBusy(false);

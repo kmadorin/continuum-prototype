@@ -8,7 +8,6 @@
 import { useEffect, useState } from 'react';
 import type { ActiveContract, LedgerClient } from '../../../ledger-client/src/types';
 import { useParty } from '../state/PartyContext';
-import { partyRegistry } from '../ledger/party-registry.mock';
 import { createDeal, openElections, setClearing } from '../lib/ops';
 import { Card, StageHead, fmtM, fmtPct, readDeal } from './shared';
 
@@ -48,7 +47,7 @@ export default function Advisor({ client }: { client: LedgerClient }) {
     await client.submit({
       commandId: `deal-${Date.now()}`,
       actAs: [current],
-      commands: [createDeal({ gp: current, vehicle: partyRegistry.parties.vehicle, room, ...DEAL_DEFAULTS })],
+      commands: [createDeal({ gp: current, vehicle: personas.vehicle, room, ...DEAL_DEFAULTS })],
     });
     await refresh();
     setBusy(false);
@@ -123,7 +122,7 @@ export default function Advisor({ client }: { client: LedgerClient }) {
           <button className="btn" type="button" disabled={busy || !deal} onClick={setPriceAndDisclose}>
             Set price & disclose to room
           </button>
-          <button className="btn" type="button" disabled={busy || !deal || !lpacConsented} onClick={openElectionsNow}>
+          <button className="btn" type="button" disabled={busy || !deal || !lpacConsented || !clearingPrice} onClick={openElectionsNow}>
             Open elections
           </button>
         </div>
