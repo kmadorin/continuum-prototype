@@ -1017,3 +1017,99 @@ table.data tfoot .num { color: var(--accent); }
 .activity .a-dot { width: 7px; height: 7px; flex: none; margin-top: 6px; background: var(--mute); }
 .activity li.ok .a-dot { background: var(--accent); }
 .activity .a-text { line-height: 1.4; }
+
+/* ======================================================================== */
+/* VALUATION TAB + DOCUMENTS ACCORDION (independent valuer + on-ledger hash) */
+/* ======================================================================== */
+
+/* ---------- valuer identity card ---------- */
+.val-identity { gap: 14px; }
+.val-id-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.val-badge { align-self: flex-start; }
+.val-id-figs { display: flex; gap: 0; border: 1px solid var(--border); flex: none; }
+.val-id-figs .vif { padding: 10px 16px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.val-id-figs .vif:last-child { border-right: 0; }
+.vif-lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--mute); }
+.vif-val { font-size: 14px; color: var(--text); }
+@media (max-width: 640px) { .val-id-figs { width: 100%; } }
+
+/* ---------- NAV range bar ---------- */
+.nrb { padding: 8px 12px 0; }
+.nrb-lane { position: relative; height: 34px; }
+.nrb-lane-top { display: flex; align-items: flex-end; }
+.nrb-lane-bot { display: flex; align-items: flex-start; }
+.nrb-mark { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; }
+.nrb-lane-bot .nrb-mark { justify-content: flex-start; }
+.nrb-lane-top .nrb-mark { justify-content: flex-end; }
+.nrb-stem { width: 1px; height: 8px; background: var(--border-hi); }
+.nrb-clear .nrb-stem { background: var(--accent); }
+.nrb-nav .nrb-stem { background: var(--dim); }
+.nrb-tag { position: absolute; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 7px; }
+.nrb-lane-top .nrb-tag { bottom: 10px; }
+.nrb-lane-bot .nrb-tag { top: 10px; }
+.nrb-tag-lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--mute); }
+.nrb-tag-val { font-size: 15px; color: var(--text); font-weight: 600; }
+.nrb-tag-val.accent { color: var(--accent); }
+
+.nrb-track { position: relative; height: 8px; margin: 2px 0; }
+.nrb-range { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-hi); }
+.nrb-node { position: absolute; top: 50%; width: 3px; height: 16px; transform: translate(-50%, -50%); }
+.nrb-node-nav { background: var(--dim); }
+.nrb-node-clear { background: var(--accent); box-shadow: 0 0 6px var(--accent-dim); }
+
+.nrb-axis { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; }
+.nrb-end { font-size: 12px; color: var(--dim); }
+.nrb-cap { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); text-align: center; }
+
+/* ---------- hash chip (copyable sha256) ---------- */
+.hash-chip {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 12px; letter-spacing: 0.02em; color: var(--dim);
+  background: var(--surface); border: 1px solid var(--border-hi); padding: 4px 9px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.hash-chip:hover { border-color: var(--accent-dim); color: var(--text); }
+.hash-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hash-chip .hc-hash { font-family: var(--mono); }
+.hash-chip svg { opacity: 0.7; flex: none; }
+.hash-chip:hover svg { opacity: 1; color: var(--accent); }
+
+/* ---------- signed document card (Valuation tab) ---------- */
+.doc-card { display: flex; align-items: flex-start; gap: 16px; }
+.doc-icon { color: var(--accent); flex: none; margin-top: 2px; }
+.doc-glyph { display: block; }
+.doc-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.doc-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.doc-meta { font-size: 12px; color: var(--mute); letter-spacing: 0.02em; }
+.doc-hash-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+.doc-hash-lab { font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--mute); }
+.doc-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+
+.val-provenance p { font-size: 15px; }
+.val-provenance .link-mono { font-size: 14px; }
+
+/* ---------- documents accordion ---------- */
+.doc-group-head { width: 100%; text-align: left; cursor: pointer; font: inherit; }
+.doc-group-head:hover { background: var(--surface); }
+.doc-group-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dg-caret { width: 8px; height: 8px; flex: none; border-right: 1.5px solid var(--mute); border-bottom: 1.5px solid var(--mute); transform: rotate(-45deg); transition: transform 0.15s ease; margin-right: 4px; }
+.dg-caret.open { transform: rotate(45deg); }
+
+.doc-row {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center;
+  gap: 16px; padding: 15px 18px; border-top: 1px solid var(--border);
+}
+.doc-row:first-child { border-top: 0; }
+.doc-row .dr-icon { color: var(--dim); }
+.doc-row.greyed { opacity: 0.55; }
+.doc-row .dr-body { min-width: 0; }
+.doc-row .dr-title { font-size: 15px; color: var(--text); font-weight: 500; }
+.doc-row .dr-sub { font-size: 11px; color: var(--mute); letter-spacing: 0.02em; margin-top: 3px; }
+.doc-row .dr-hash { display: flex; justify-content: flex-end; }
+.doc-row .dr-actions { display: flex; align-items: center; gap: 8px; }
+.doc-row .dr-verify { grid-column: 2 / -1; margin-top: 2px; }
+@media (max-width: 720px) {
+  .doc-row { grid-template-columns: 22px 1fr; }
+  .doc-row .dr-hash, .doc-row .dr-actions { grid-column: 2 / -1; justify-content: flex-start; }
+  .doc-row .dr-verify { grid-column: 1 / -1; }
+}

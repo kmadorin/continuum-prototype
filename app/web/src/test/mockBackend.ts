@@ -17,6 +17,10 @@ export type BackendState = {
   audit?: unknown[];
   /** Canned /ledger/update/:id response, or a map keyed by updateId. */
   update?: unknown | Record<string, unknown>;
+  /** Canned /docs/manifest response (array of manifest entries). */
+  docsManifest?: unknown[];
+  /** Canned /verify/:name response, or a map keyed by document name. */
+  verify?: unknown | Record<string, unknown>;
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -47,6 +51,19 @@ export function installBackend(state: BackendState) {
     }
     if (path === '/audit') {
       return state.me ? json(state.audit ?? []) : json({ error: 'unauthenticated' }, 401);
+    }
+    if (path === '/docs/manifest') {
+      return json(state.docsManifest ?? []);
+    }
+    if (path.startsWith('/verify/')) {
+      if (!state.me) return json({ error: 'unauthenticated' }, 401);
+      const name = decodeURIComponent(path.slice('/verify/'.length));
+      const v = state.verify;
+      const body =
+        v && typeof v === 'object' && !Array.isArray(v) && name in (v as Record<string, unknown>)
+          ? (v as Record<string, unknown>)[name]
+          : v;
+      return json(body ?? { docSha256: '', onChainHash: null, matches: false, note: 'not yet anchored' });
     }
     if (path.startsWith('/ledger/update/')) {
       const id = decodeURIComponent(path.slice('/ledger/update/'.length));

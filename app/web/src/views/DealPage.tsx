@@ -32,6 +32,8 @@ import RollingLP from './RollingLP';
 import LPAC from './LPAC';
 import AuditTrail from './AuditTrail';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
+import ValuationTab from './ValuationTab';
+import DocumentsTab from './DocumentsTab';
 
 // Independent NAV shown in the KPI row. Placeholder until the Valuation build reads
 // the anchored ValuationReport; the clearing $ figure is derived from it so the row
@@ -142,23 +144,6 @@ function buildFeed(s: {
     f.push({ text: `Settlement receipt issued — ${String(r.args.totalUnits)} CV units`, tone: 'ok' });
   }
   return f.reverse(); // newest lifecycle event first
-}
-
-// ── scaffold panel for tabs that later tasks fill ─────────────────────────────
-function Scaffold({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>{title}</h2>
-        <span className="ph-meta">coming soon</span>
-      </div>
-      <div className="panel-body">
-        <p className="hint" style={{ margin: 0 }}>
-          {note}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 export default function DealPage() {
@@ -305,18 +290,11 @@ export default function DealPage() {
         )}
 
         {tab === 'valuation' && (
-          <TabActions
-            title="Independent valuation"
-            note="The NAV range bar, valuer identity, and the signed Valuation Report (hash + Verify-on-ledger) land in the Valuation build. Below: the contextual action for your seat at this stage."
-          >
+          <div className="stack g4">
+            <ValuationTab report={pick(valuations)} onNavigate={setTab} />
             {role === 'gp' && <Advisor embedded={['clearing']} />}
             {role === 'lpac' && <LPAC embedded={['governance']} />}
-            {role !== 'gp' && role !== 'lpac' && (
-              <p className="hint" style={{ margin: 0 }}>
-                No action for your seat here — the GP sets the clearing price and the LPAC attests the valuation.
-              </p>
-            )}
-          </TabActions>
+          </div>
         )}
 
         {tab === 'auction' && (
@@ -349,12 +327,7 @@ export default function DealPage() {
           </TabActions>
         )}
 
-        {tab === 'documents' && (
-          <Scaffold
-            title="Documents"
-            note="Deal Formation · Process Certifications · Settlement — each row with signer, date, sha256 hash chip, and Verify-on-ledger. Populated by the Documents build."
-          />
-        )}
+        {tab === 'documents' && <DocumentsTab />}
 
         {tab === 'ledger' && <AuditTrail />}
       </div>

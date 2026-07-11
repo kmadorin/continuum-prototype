@@ -18,6 +18,10 @@ export default defineConfig({
       '/me': { target: 'http://localhost:8787', changeOrigin: true },
       '/audit': { target: 'http://localhost:8787', changeOrigin: true },
       '/ledger': { target: 'http://localhost:8787', changeOrigin: true },
+      // Anchored documents: the manifest + byte-exact document serving + the
+      // on-ledger sha256 verify endpoint (Valuation + Documents tabs).
+      '/docs': { target: 'http://localhost:8787', changeOrigin: true },
+      '/verify': { target: 'http://localhost:8787', changeOrigin: true },
     },
   },
   test: {
