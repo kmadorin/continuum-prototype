@@ -1,0 +1,28 @@
+app = "continuum-custody"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  # Single instance: in-memory audit/sessions are not shared across machines.
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/registry"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

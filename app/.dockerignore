@@ -1,0 +1,15 @@
+# NEVER bake secrets/keys into the image — they are injected as fly secrets at runtime.
+custody-keys.json
+custody-keys*.json
+wallet-keys.json
+wallet-keys*.json
+.env
+*.mnemonic
+*.seed
+party-registry.json
+# build/vendor artifacts (rebuilt inside the image)
+node_modules
+web/node_modules
+web/dist
+.git
+*.log

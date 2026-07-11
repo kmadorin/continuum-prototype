@@ -39,8 +39,15 @@ function sessionSecret(): string {
 
 function main() {
   const tenants = loadTenants(resolve(APP_DIR, 'custody-keys.json'));
-  const registry = JSON.parse(readFileSync(resolve(APP_DIR, 'party-registry.json'), 'utf8'));
-  const synchronizerId: string = registry.synchronizerId;
+  // Synchronizer id: from env in prod (no file needed); fall back to party-registry.json for local dev.
+  let synchronizerId = process.env.SYNCHRONIZER_ID;
+  if (!synchronizerId) {
+    try {
+      synchronizerId = JSON.parse(readFileSync(resolve(APP_DIR, 'party-registry.json'), 'utf8')).synchronizerId;
+    } catch {
+      throw new Error('synchronizer id missing: set SYNCHRONIZER_ID or provide app/party-registry.json');
+    }
+  }
 
   const tokenManager = new TokenManager({ authUrl: AUTH, secret: m2mSecret() });
   // Transport auth-fetch: inject the M2M Bearer + a timeout guard (anti-hang).
