@@ -30,6 +30,7 @@ import Buyer from './Buyer';
 import ExitingLP from './ExitingLP';
 import RollingLP from './RollingLP';
 import LPAC from './LPAC';
+import Valuer from './Valuer';
 import AuditTrail from './AuditTrail';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
 import ValuationTab from './ValuationTab';
@@ -82,7 +83,8 @@ function whatNext(role: Role, activeLabel: string | null): string {
   const m: Record<string, Partial<Record<Role, string>>> = {
     Valuation: {
       gp: 'Open the closing room, then set the clearing price once the independent valuation is in.',
-      lpac: 'Attest the valuation report and fairness opinion on the Valuation tab.',
+      valuer: 'Sign and anchor the independent valuation on the Valuation tab — your hash is the reference every seat verifies.',
+      lpac: 'Review and verify the valuation + fairness documents on the Valuation tab.',
       buyer: 'Review the independent valuation, then ready your sealed bid.',
       lpExiting: 'Await the independent valuation — your sell decision comes after the price is set.',
       lpRolling: 'Await the independent valuation — weigh roll vs sell once the price is set.',
@@ -291,6 +293,7 @@ export default function DealPage() {
 
         {tab === 'valuation' && (
           <div className="stack g4">
+            {role === 'valuer' && <Valuer />}
             <ValuationTab report={pick(valuations)} onNavigate={setTab} />
             {role === 'gp' && <Advisor embedded={['clearing']} />}
             {role === 'lpac' && <LPAC embedded={['governance']} />}
@@ -309,6 +312,12 @@ export default function DealPage() {
             {role === 'lpac' && (
               <p className="hint" style={{ margin: 0 }}>
                 Oversight seat — you verify the cleared result after Close, never the live sealed inputs.
+              </p>
+            )}
+            {role === 'valuer' && (
+              <p className="hint" style={{ margin: 0 }}>
+                Independent valuation agent — your role ends once the valuation is anchored. The auction and
+                elections are not in your scope.
               </p>
             )}
           </TabActions>
