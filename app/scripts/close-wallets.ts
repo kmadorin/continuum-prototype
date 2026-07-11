@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process';
 import { HttpLedgerClient } from '../ledger-client/src/client';
 import { WalletClient } from '../ledger-client/src/wallet';
 import { keyFromMnemonic, generateMnemonic, type Ed25519Key } from '../ledger-client/src/ed25519';
+import { VALUATION_SHA256, FAIRNESS_SHA256, PSA_SHA256 } from '../custody/docs/hashes';
 
 const API = 'https://ledger-api.validator.devnet.sandbox.fivenorth.io';
 const AUTH = 'https://auth.sandbox.fivenorth.io/application/o/token/';
@@ -83,7 +84,8 @@ async function main() {
 
   // ── onboard 4 external wallets, each its own key ────────────────────────────
   const W: Record<string, Wallet> = {};
-  for (const role of ['gp', 'buyer', 'lpExiting', 'lpac']) {
+  // 6 wallets now: the independent VALUER (Kroll) signs the ValuationReport (agent ≠ gp ≠ lpac).
+  for (const role of ['gp', 'buyer', 'lpExiting', 'lpac', 'valuer']) {
     console.log(`onboarding ${role}...`);
     const mnemonic = generateMnemonic();
     const key = keyFromMnemonic(mnemonic);
@@ -91,12 +93,12 @@ async function main() {
     W[role] = { party: partyId, key, fp: fingerprint, mnemonic };
     console.log(`  ${role} = ${partyId}`);
   }
-  const gp = W.gp.party, buyer = W.buyer.party, lp = W.lpExiting.party, lpac = W.lpac.party;
+  const gp = W.gp.party, buyer = W.buyer.party, lp = W.lpExiting.party, lpac = W.lpac.party, valuer = W.valuer.party;
 
   // ── SECURITY: party ids → public registry; keys → gitignored file (never commit) ──
   writeFileSync(new URL('../party-registry.json', import.meta.url),
     JSON.stringify({ namespace: NS, synchronizerId: sync, packageName: 'continuum-contracts',
-      parties: { gp, buyer, lpExiting: lp, lpac } }, null, 2));
+      parties: { gp, buyer, lpExiting: lp, lpac, valuer } }, null, 2));
   const keysPath = new URL('../wallet-keys.json', import.meta.url);
   const ignored = execSync('git check-ignore app/wallet-keys.json || true', { cwd: `${process.cwd()}/..` }).toString().trim();
   if (!ignored.endsWith('wallet-keys.json')) throw new Error('REFUSING to write keys: app/wallet-keys.json is NOT gitignored');
@@ -146,8 +148,10 @@ async function main() {
 
   // ── antecedent DAG (lpac signs valuation/fairness/consent; gp signs cert/psa/basis) ──
   console.log('\n--- antecedent DAG + IssuanceBasis ---');
-  const vrCid = await act('lpac', 'ValuationReport', [{ CreateCommand: { templateId: T.valuation, createArguments: { agent: lpac, gp, dealId: DEAL_ID, navLow: '4000000.0', navHigh: '6000000.0', asOfDate: CLOSE_DATE, contentHash } } }], T.valuation, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
-  const foCid = await act('lpac', 'FairnessOpinion', [{ CreateCommand: { templateId: T.opinion, createArguments: { provider: lpac, gp, lpac, dealId: DEAL_ID, fairLow: '0.9', fairHigh: '1.0', opinionDate: CLOSE_DATE, contentHash } } }], T.opinion, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
+  // The independent VALUER (Kroll) signs the ValuationReport — agent = valuer (≠ gp ≠ lpac);
+  // contentHash = the REAL sha256 of the served valuation-report.html (the on-chain anchor).
+  const vrCid = await act('valuer', 'ValuationReport', [{ CreateCommand: { templateId: T.valuation, createArguments: { agent: valuer, gp, dealId: DEAL_ID, navLow: '4000000.0', navHigh: '6000000.0', asOfDate: CLOSE_DATE, contentHash: VALUATION_SHA256 } } }], T.valuation, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
+  const foCid = await act('lpac', 'FairnessOpinion', [{ CreateCommand: { templateId: T.opinion, createArguments: { provider: lpac, gp, lpac, dealId: DEAL_ID, fairLow: '0.9', fairHigh: '1.0', opinionDate: CLOSE_DATE, contentHash: FAIRNESS_SHA256 } } }], T.opinion, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
   const acCid = await act('gp', 'AuctionCertificate', [{ CreateCommand: { templateId: T.cert, createArguments: { gp, lpac, dealId: DEAL_ID, clearingPct, leadBuyer: buyer, bidTabulationHash: contentHash } } }], T.cert, gp, (a: any) => a.args.dealId === DEAL_ID);
   const lcCid = await act('lpac', 'LPACConsent', [{ CreateCommand: { templateId: T.consent, createArguments: { gp, lpac, dealId: DEAL_ID, recusals: [], granted: true } } }], T.consent, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
   const psaCid = await act('gp', 'PurchaseAgreement', [{ CreateCommand: { templateId: T.psa, createArguments: { oldFund: gp, vehicle: gp, dealId: DEAL_ID, price: psaPrice, refNav, clearingPct, asOfDate: CLOSE_DATE } } }], T.psa, gp, (a: any) => a.args.dealId === DEAL_ID);
@@ -155,12 +159,16 @@ async function main() {
 
   // ── allocate 2 legs (gp mints + allocates against ITS OWN factory) ──────────
   console.log('\n--- allocate legs (gp signs) ---');
-  const allocateLeg = async (receiver: string, instId: string, amount: string, legId: string): Promise<string> => {
-    const holdingCid = await act('gp', `mint ${legId}`, [{ CreateCommand: { templateId: T.holding, createArguments: { admin: gp, owner: gp, instId, amount, locked: false, meta_: {} } } }], T.holding, gp, (a: any) => a.args.owner === gp && a.args.instId === instId && Number(a.args.amount) === Number(amount));
-    const spec = { settlement: { executor: gp, settlementRef: { id: legId, cid: null }, requestedAt: NOW, allocateBefore: NOW, settleBefore: NOW, meta: { values: {} } }, transferLegId: legId, transferLeg: { sender: gp, receiver, amount, instrumentId: { admin: gp, id: instId }, meta: { values: {} } } };
+  const allocateLeg = async (receiver: string, instId: string, amount: string, legId: string, meta_: Record<string, string> = {}): Promise<string> => {
+    const holdingCid = await act('gp', `mint ${legId}`, [{ CreateCommand: { templateId: T.holding, createArguments: { admin: gp, owner: gp, instId, amount, locked: false, meta_ } } }], T.holding, gp, (a: any) => a.args.owner === gp && a.args.instId === instId && Number(a.args.amount) === Number(amount));
+    // The receiver's SETTLED holding takes meta_ from transferLeg.meta.values (Registry.daml),
+    // so carry the provenance meta on the leg too — not only on the pre-settlement mint.
+    const spec = { settlement: { executor: gp, settlementRef: { id: legId, cid: null }, requestedAt: NOW, allocateBefore: NOW, settleBefore: NOW, meta: { values: {} } }, transferLegId: legId, transferLeg: { sender: gp, receiver, amount, instrumentId: { admin: gp, id: instId }, meta: { values: meta_ } } };
     return act('gp', `alloc ${legId}`, [{ ExerciseCommand: { templateId: T.allocFactoryIface, contractId: factoryCid, choice: 'AllocationFactory_Allocate', choiceArgument: { expectedAdmin: gp, allocation: spec, requestedAt: NOW, inputHoldingCids: [holdingCid], extraArgs: { context: { values: {} }, meta: { values: {} } } } } }], T.alloc, gp, (a: any) => a.args?.spec?.transferLegId === legId);
   };
-  const allocUnitCid = await allocateLeg(buyer, UNIT, unitAmt, 'unit-buyer');
+  // PROVENANCE: the CV-units mint carries the on-chain link Holding → valuation + issuance basis.
+  const mintMeta = { 'continuum/valuation-sha256': VALUATION_SHA256, 'continuum/issuance-basis': basisCid };
+  const allocUnitCid = await allocateLeg(buyer, UNIT, unitAmt, 'unit-buyer', mintMeta);
   const allocCashCid = await allocateLeg(lp, USDC, cashAmt, 'cash-lp');
 
   // ── authority via PROPOSE-ACCEPT (each acceptor signs with its OWN key) ─────
@@ -198,14 +206,22 @@ async function main() {
   const buyerUnitsAfter = await bal(buyer, UNIT), lpCashAfter = await bal(lp, USDC);
   const interestsLeft = (await reads.activeContracts(gp, { templateId: 'Participation:OldFundInterest' })).filter(a => a.contractId === interestLpCid).length;
 
+  // PROVENANCE proof: the buyer's settled CV-units holding carries the valuation link in meta_.
+  const buyerUnitHolding = (await reads.activeContracts(gp, { templateId: 'Registry:RegistryHolding' }))
+    .filter(a => a.args.owner === buyer && a.args.instId === UNIT).slice(-1)[0];
+  const mintedMeta = buyerUnitHolding?.args?.meta_ ?? {};
+
   console.log('\n=== RESULT ===');
   console.log(`Close updateId    : ${closeRes.updateId}`);
   console.log(`SettlementReceipt : ${receiptCid || 'NOT FOUND'}`);
   console.log(`buyer CV units    : ${buyerUnitsBefore} → ${buyerUnitsAfter} (Δ ${buyerUnitsAfter - buyerUnitsBefore})`);
   console.log(`lp   USDC         : ${lpCashBefore} → ${lpCashAfter} (Δ ${lpCashAfter - lpCashBefore})`);
   console.log(`lp   OldFundInt   : ${interestsLeft === 0 ? 'BURNED' : 'STILL PRESENT'}`);
-  const ok = receiptCid && (buyerUnitsAfter - buyerUnitsBefore === Number(unitAmt)) && (lpCashAfter - lpCashBefore === Number(cashAmt)) && interestsLeft === 0;
-  if (!ok) throw new Error('atomic movement assertion FAILED');
+  console.log(`ValuationReport   : signed by VALUER ${valuer.split('::')[0]} · contentHash ${VALUATION_SHA256.slice(0, 12)}…`);
+  console.log(`mint meta_        : ${JSON.stringify(mintedMeta)}`);
+  const metaOk = mintedMeta['continuum/valuation-sha256'] === VALUATION_SHA256 && !!mintedMeta['continuum/issuance-basis'];
+  const ok = receiptCid && (buyerUnitsAfter - buyerUnitsBefore === Number(unitAmt)) && (lpCashAfter - lpCashBefore === Number(cashAmt)) && interestsLeft === 0 && metaOk;
+  if (!ok) throw new Error(`atomic movement assertion FAILED (metaOk=${metaOk})`);
   console.log('\n✅ FULL WALLET CLOSE PROVEN: every authority signed by its own party key; atomic close in ONE updateId.');
 }
 main().catch(e => { console.error('\n❌ FAILED:', e?.message ?? e); process.exit(1); });
