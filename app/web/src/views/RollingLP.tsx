@@ -8,10 +8,13 @@ import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import HoldingReceipt from '../components/HoldingReceipt';
+import SellVsRoll from '../components/SellVsRoll';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-const POSITION_NAV = '1000000.0';
+// $100.0M position — matches the exiting LP and the $500M institutional scale.
+const POSITION_NAV = DEMO.interestNav;
+const CLEARING = Number(DEMO.clearingPct);
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -110,20 +113,36 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
       )}
 
       {show('election') && (
-      <Card title="Elect: roll over">
-        {election ? (
-          <div className="stack g3">
-            <span className="chip ok">Election filed — Roll {fmtM(election.args.rollNav)}</span>
-            <span className="cant-see">Peer-blind: no other LP's projection contains this election.</span>
-          </div>
-        ) : (
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy} onClick={electRoll}>
-              {busy === 'elect' ? 'Signing…' : 'Elect to roll over'}
-            </button>
-          </div>
-        )}
-      </Card>
+        <div className="stack g4">
+          <Card title="My position">
+            <dl className="kv">
+              <dt>Stake (independent NAV)</dt>
+              <dd className="mono">{fmtM(POSITION_NAV)}</dd>
+              <dt>If you roll</dt>
+              <dd className="mono">~{Number(POSITION_NAV).toLocaleString()} CV units @ $1.00</dd>
+              <dt>If you sell</dt>
+              <dd className="mono">{fmtM(Number(POSITION_NAV) * CLEARING)} cash</dd>
+            </dl>
+          </Card>
+
+          <SellVsRoll stakeNav={Number(POSITION_NAV)} clearingPct={CLEARING} />
+
+          <Card title="Elect: roll over">
+            {election ? (
+              <div className="stack g3">
+                <span className="chip ok">Election filed — Roll {fmtM(election.args.rollNav)}</span>
+                <span className="cant-see">Peer-blind: no other LP's projection contains this election.</span>
+              </div>
+            ) : (
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy} onClick={electRoll}>
+                  {busy === 'elect' ? 'Signing…' : 'Elect to roll'}
+                </button>
+                <span className="cant-see">Signed by your custodian — blind to every other LP.</span>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {show('preauth') && (
