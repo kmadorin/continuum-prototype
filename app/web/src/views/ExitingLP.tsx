@@ -11,7 +11,8 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-const POSITION_NAV = DEMO.interestNav; // $1.0M — matches the close-wallets flow
+const POSITION_NAV = DEMO.interestNav; // $100.0M — matches the $500M institutional scale
+const CLEARING = Number(DEMO.clearingPct);
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -141,20 +142,40 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
       )}
 
       {show('election') && (
-      <Card title="Elect: sell">
-        {election ? (
-          <div className="stack g3">
-            <span className="chip ok">Election filed — Sell {fmtM(election.args.sellNav)}</span>
-            <span className="cant-see">Peer-blind: no other LP's projection contains this, and the GP sees only that you filed.</span>
-          </div>
-        ) : (
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy} onClick={electSell}>
-              {busy === 'elect' ? 'Signing…' : 'Elect to sell'}
-            </button>
-          </div>
-        )}
-      </Card>
+        <div className="stack g4">
+          <Card title="My position">
+            <dl className="kv">
+              <dt>Stake (independent NAV)</dt>
+              <dd className="mono">{fmtM(POSITION_NAV)}</dd>
+              <dt>Implied proceeds</dt>
+              <dd className="mono">
+                {fmtM(Number(POSITION_NAV) * CLEARING)} <span className="hint">= stake × {Math.round(CLEARING * 100)}%</span>
+              </dd>
+              <dt>Valuation</dt>
+              <dd>
+                <a className="link-mono" href="/docs/valuation-report" target="_blank" rel="noopener noreferrer">
+                  Independent valuation summary →
+                </a>
+              </dd>
+            </dl>
+          </Card>
+
+          <Card title="Elect: sell">
+            {election ? (
+              <div className="stack g3">
+                <span className="chip ok">Election filed — Sell {fmtM(election.args.sellNav)}</span>
+                <span className="cant-see">Peer-blind: no other LP's projection contains this, and the GP sees only that you filed.</span>
+              </div>
+            ) : (
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy} onClick={electSell}>
+                  {busy === 'elect' ? 'Signing…' : 'Elect to sell'}
+                </button>
+                <span className="cant-see">Signed by your custodian — blind to every other LP.</span>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {show('preauth') && (
@@ -184,8 +205,16 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
       {show('holding') && (
         <Card title="Post-close cash">
           <dl className="kv">
-            <dt>USDC</dt>
-            <dd className="mono">{usdc ? fmtM(String(usdc)) : <span className="chip pending">none yet — settles at Close</span>}</dd>
+            <dt>Proceeds received</dt>
+            <dd className="mono">
+              {usdc ? (
+                <>
+                  {fmtM(String(usdc))} <span className="chip ok">settled</span>
+                </>
+              ) : (
+                <span className="chip pending">none yet — settles at Close</span>
+              )}
+            </dd>
           </dl>
         </Card>
       )}
