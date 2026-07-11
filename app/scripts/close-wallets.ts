@@ -64,8 +64,9 @@ const T = {
 const RUN = Date.now();
 const CV = `Meridian CV I ${RUN}`;
 const DEAL_ID = 'M1';
-const clearingPct = '0.96', refNav = '5000000.0', reconciledNav = '5000000.0';
-const psaPrice = '4800000.0', unitAmt = '4800000.0', cashAmt = '4608000.0', interestNav = '1000000.0';
+// $500M institutional scale — matches the Kroll valuation report ($500M NAV, $480–520M range).
+const clearingPct = '0.96', refNav = '500000000.0', reconciledNav = '500000000.0';
+const psaPrice = '480000000.0', unitAmt = '480000000.0', cashAmt = '460800000.0', interestNav = '100000000.0';
 const fairnessHash = 'continuum-fairness-v1', contentHash = 'deadbeef';
 const NOW = new Date().toISOString(), CLOSE_DATE = '2026-06-30', ELECTION_DEADLINE = '2026-12-31T00:00:00Z';
 const USDC = 'USDC', UNIT = 'MERIDIAN-CV-I';
@@ -143,14 +144,14 @@ async function main() {
 
   // ── visible per-role economic decisions: buyer signs a real SealedBid, lp a real LPElection ──
   console.log('\n--- per-role signed economic decisions ---');
-  await act('buyer', 'SealedBid', [{ CreateCommand: { templateId: T.sealedBid, createArguments: { gp, buyer, dealId: DEAL_ID, pctOfNav: clearingPct, capacity: '6000000.0' } } }], T.sealedBid, buyer, (a: any) => a.args.buyer === buyer);
+  await act('buyer', 'SealedBid', [{ CreateCommand: { templateId: T.sealedBid, createArguments: { gp, buyer, dealId: DEAL_ID, pctOfNav: clearingPct, capacity: '600000000.0' } } }], T.sealedBid, buyer, (a: any) => a.args.buyer === buyer);
   await act('lpExiting', 'LPElection(sell)', [{ CreateCommand: { templateId: T.election, createArguments: { lp, dealId: DEAL_ID, positionNav: interestNav, rollNav: '0.0', sellNav: interestNav, disclosureHash: contentHash } } }], T.election, lp, (a: any) => a.args.lp === lp);
 
   // ── antecedent DAG (lpac signs valuation/fairness/consent; gp signs cert/psa/basis) ──
   console.log('\n--- antecedent DAG + IssuanceBasis ---');
   // The independent VALUER (Kroll) signs the ValuationReport — agent = valuer (≠ gp ≠ lpac);
   // contentHash = the REAL sha256 of the served valuation-report.html (the on-chain anchor).
-  const vrCid = await act('valuer', 'ValuationReport', [{ CreateCommand: { templateId: T.valuation, createArguments: { agent: valuer, gp, dealId: DEAL_ID, navLow: '4000000.0', navHigh: '6000000.0', asOfDate: CLOSE_DATE, contentHash: VALUATION_SHA256 } } }], T.valuation, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
+  const vrCid = await act('valuer', 'ValuationReport', [{ CreateCommand: { templateId: T.valuation, createArguments: { agent: valuer, gp, dealId: DEAL_ID, navLow: '480000000.0', navHigh: '520000000.0', asOfDate: CLOSE_DATE, contentHash: VALUATION_SHA256 } } }], T.valuation, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
   const foCid = await act('lpac', 'FairnessOpinion', [{ CreateCommand: { templateId: T.opinion, createArguments: { provider: lpac, gp, lpac, dealId: DEAL_ID, fairLow: '0.9', fairHigh: '1.0', opinionDate: CLOSE_DATE, contentHash: FAIRNESS_SHA256 } } }], T.opinion, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
   const acCid = await act('gp', 'AuctionCertificate', [{ CreateCommand: { templateId: T.cert, createArguments: { gp, lpac, dealId: DEAL_ID, clearingPct, leadBuyer: buyer, bidTabulationHash: contentHash } } }], T.cert, gp, (a: any) => a.args.dealId === DEAL_ID);
   const lcCid = await act('lpac', 'LPACConsent', [{ CreateCommand: { templateId: T.consent, createArguments: { gp, lpac, dealId: DEAL_ID, recusals: [], granted: true } } }], T.consent, gp, (a: any) => a.args.dealId === DEAL_ID && a.args.gp === gp);
