@@ -12,6 +12,7 @@
 import { useMemo } from 'react';
 import { HttpLedgerClient } from '../../../ledger-client/src/client';
 import type { ActiveContract, JsCommand } from '../../../ledger-client/src/types';
+import { VALUATION_SHA256, FAIRNESS_SHA256 } from '../../../custody/docs/hashes';
 import { useSession } from '../state/WalletSession';
 import { useToast } from '../state/Toast';
 
@@ -111,13 +112,19 @@ export const DEMO = {
   fund: 'Meridian Growth Fund III',
   asset: 'Project Atlas',
   clearingPct: '0.96',
-  refNav: '5000000.0',
-  reconciledNav: '5000000.0',
-  psaPrice: '4800000.0',
-  unitAmt: '4800000.0',
-  cashAmt: '4608000.0',
-  interestNav: '1000000.0',
-  contentHash: 'deadbeef',
+  // $500M institutional scale — matches the Kroll valuation report ($500M NAV, $480–520M range)
+  // and the headless close-wallets.ts. 96% × $500M = $480M PSA = 480,000,000 units @ $1.00.
+  refNav: '500000000.0',
+  reconciledNav: '500000000.0',
+  psaPrice: '480000000.0',
+  unitAmt: '480000000.0',
+  cashAmt: '460800000.0',
+  interestNav: '100000000.0',
+  navLow: '480000000.0',
+  navHigh: '520000000.0',
+  // Real sha256 of the anchored documents (so the Valuation tab's Verify matches on-ledger).
+  contentHash: VALUATION_SHA256,
+  fairnessContentHash: FAIRNESS_SHA256,
   fairnessHash: 'continuum-fairness-v1',
   closeDate: '2026-06-30',
   electionDeadline: '2026-12-31T00:00:00Z',
