@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
+import HoldingReceipt from '../components/HoldingReceipt';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
@@ -26,6 +27,7 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
   const [prop, setProp] = useState<ActiveContract | null>(null);
   const [deleg, setDeleg] = useState<ActiveContract | null>(null);
   const [units, setUnits] = useState<number>(0);
+  const [holding, setHolding] = useState<ActiveContract | null>(null);
 
   const refresh = async (alive: () => boolean = () => true) => {
     const [d, el, p, dg, h] = await Promise.all([
@@ -40,11 +42,9 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
     setElection(pick(el, (c) => c.args.lp === L.me));
     setProp(pick(p, (c) => c.args.party === L.me));
     setDeleg(pick(dg, (c) => c.args.party === L.me));
-    setUnits(
-      h
-        .filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit)
-        .reduce((s, c) => s + Number(c.args.amount), 0),
-    );
+    const mine = h.filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit);
+    setUnits(mine.reduce((s, c) => s + Number(c.args.amount), 0));
+    setHolding(pick(mine));
   };
   useRefresh(refresh, [L.me]);
 
@@ -137,14 +137,24 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
         </Card>
       )}
 
-      {show('holding') && (
-        <Card title="Post-close holding">
-          <dl className="kv">
-            <dt>Rolled CV units ({DEMO.unit})</dt>
-            <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
-          </dl>
-        </Card>
-      )}
+      {show('holding') &&
+        (units > 0 && holding ? (
+          <HoldingReceipt
+            amount={units}
+            clearingPct={Number(deal?.args.clearingPrice ?? DEMO.clearingPct)}
+            metaHash={(holding.args.meta_ as Record<string, string> | undefined)?.['continuum/valuation-sha256'] ?? ''}
+            title="My rolled holding"
+          />
+        ) : (
+          <Card title="My rolled holding">
+            <dl className="kv">
+              <dt>Rolled CV units ({DEMO.unit})</dt>
+              <dd className="mono">
+                <span className="chip pending">none yet — settles at Close</span>
+              </dd>
+            </dl>
+          </Card>
+        ))}
 
       <ErrNote err={err} note={note} />
     </div>
