@@ -1,0 +1,35 @@
+[
+  {
+    "name": "valuation-report",
+    "file": "valuation-report.html",
+    "title": "Independent Valuation — Project Continuum CV I, L.P.",
+    "group": "Deal Formation",
+    "signer": "Kroll Valuation Services",
+    "date": "2026-06-30",
+    "sha256": "ab5a539d8b780626370a095f2eb5f1c245abe242a772462e644706b73607de09",
+    "templateSuffix": "Continuum.Valuation:ValuationReport",
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "name": "fairness-opinion",
+    "file": "fairness-opinion.html",
+    "title": "Fairness Opinion — Project Continuum CV I, L.P.",
+    "group": "Deal Formation",
+    "signer": "State Street Digital — LPAC",
+    "date": "2026-06-30",
+    "sha256": "9a3ca06cd71f318717500357625d414f2d052611244b2826f0c1ce506dd42f8c",
+    "templateSuffix": "Continuum.Valuation:FairnessOpinion",
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "name": "purchase-agreement",
+    "file": "purchase-agreement.html",
+    "title": "Purchase & Sale Agreement — Project Continuum CV I, L.P.",
+    "group": "Settlement",
+    "signer": "Fireblocks — GP Treasury",
+    "date": "2026-06-30",
+    "sha256": "83edf119cf090fe56d1a69507018dae2108fbdde88f9ba7c596ae30fbf5f185e",
+    "templateSuffix": "Continuum.Issuance:PurchaseAgreement",
+    "contentType": "text/html; charset=utf-8"
+  }
+]

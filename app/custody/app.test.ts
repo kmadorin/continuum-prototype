@@ -1,8 +1,12 @@
 // app/custody/app.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { createApp, type AuditEntry, type Signer } from './app';
 import { tenantsFromRecords, type TenantRecord } from './tenants';
 import { keyFromMnemonic } from '../ledger-client/src/ed25519';
+import { VALUATION_SHA256 } from './docs/hashes';
+
+const DOCS_ROOT = fileURLToPath(new URL('./docs', import.meta.url));
 
 // Two throwaway demo wallets: A (gp) and B (buyer). Deterministic mnemonics — TEST ONLY.
 const MNEM_A = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
@@ -30,6 +34,7 @@ function makeDeps(overrides: Partial<Parameters<typeof createApp>[0]> = {}) {
     ledgerBase: 'https://ledger.example',
     token: async () => 'M2M-TOKEN',
     audit,
+    docsRoot: DOCS_ROOT,
     ...overrides,
   });
   return { app, audit, submitSigned };
@@ -204,6 +209,95 @@ describe('audit', () => {
     expect(await res.json()).toEqual([]); // buyer sees none of gp's entries
     const gpRes = await app.request('/audit', { method: 'GET', headers: { Cookie: gpCookie } });
     expect((await gpRes.json())).toHaveLength(1);
+  });
+});
+
+describe('anchored documents', () => {
+  it('GET /docs/manifest is public and lists docs with real sha256 + templateSuffix', async () => {
+    const { app } = makeDeps();
+    const res = await app.request('/docs/manifest', { method: 'GET' }); // no session
+    expect(res.status).toBe(200);
+    const manifest = await res.json();
+    expect(Array.isArray(manifest)).toBe(true);
+    const val = manifest.find((m: any) => m.name === 'valuation-report');
+    expect(val).toBeTruthy();
+    expect(val.sha256).toBe(VALUATION_SHA256);
+    expect(val.templateSuffix).toBe('Continuum.Valuation:ValuationReport');
+    expect(val.group).toBe('Deal Formation');
+  });
+
+  it('GET /docs/:name serves bytes whose sha256 equals the manifest hash', async () => {
+    const { app } = makeDeps();
+    const res = await app.request('/docs/valuation-report', { method: 'GET' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const { createHash } = await import('node:crypto');
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    expect(digest).toBe(VALUATION_SHA256);
+  });
+
+  it('GET /docs/:name → 404 for an unknown document', async () => {
+    const { app } = makeDeps();
+    const res = await app.request('/docs/nope', { method: 'GET' });
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /verify without a session → 401', async () => {
+    const { app } = makeDeps();
+    const res = await app.request('/verify/valuation-report', { method: 'GET' });
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /verify → matches:true when the on-ledger contentHash equals the doc sha256', async () => {
+    const fetchImpl = vi.fn(async (url: any, init: any) => {
+      if (String(url).endsWith('/v2/state/ledger-end')) {
+        return new Response(JSON.stringify({ offset: 42 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      // active-contracts: return a ValuationReport anchored with the REAL doc hash
+      return new Response(
+        JSON.stringify([
+          {
+            contractEntry: {
+              JsActiveContract: {
+                createdEvent: {
+                  contractId: 'cid-val-1',
+                  templateId: '#pkg:Continuum.Valuation:ValuationReport',
+                  createArgument: { dealId: 'M1', contentHash: VALUATION_SHA256 },
+                },
+              },
+            },
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    const { app } = makeDeps({ fetchImpl: fetchImpl as any });
+    const cookie = await login(app, 'gp', 'gp-demo');
+    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.docSha256).toBe(VALUATION_SHA256);
+    expect(body.onChainHash).toBe(VALUATION_SHA256);
+    expect(body.matches).toBe(true);
+    expect(body.contractId).toBe('cid-val-1');
+  });
+
+  it('GET /verify → matches:false, "not yet anchored" when no contract exists', async () => {
+    const fetchImpl = vi.fn(async (url: any) => {
+      if (String(url).endsWith('/v2/state/ledger-end')) {
+        return new Response(JSON.stringify({ offset: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    const { app } = makeDeps({ fetchImpl: fetchImpl as any });
+    const cookie = await login(app, 'gp', 'gp-demo');
+    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.matches).toBe(false);
+    expect(body.note).toBe('not yet anchored');
+    expect(body.onChainHash).toBeNull();
   });
 });
 

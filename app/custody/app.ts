@@ -12,7 +12,9 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join, normalize } from 'node:path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, normalize, resolve } from 'node:path';
 import type { JsCommand } from '../ledger-client/src/types';
 import type { Ed25519Key } from '../ledger-client/src/ed25519';
 import { SESSION_COOKIE, signSession, verifySession, type SessionData } from './session';
@@ -56,6 +58,24 @@ export type AppDeps = {
   staticRoot?: string;
   /** Mark the session cookie Secure (set true behind HTTPS in prod). */
   secureCookie?: boolean;
+  /**
+   * Absolute path to the anchored-documents directory (default: ./docs next to app.ts).
+   * Holds the sample docs + manifest.json served by /docs/* and re-hashed by /verify.
+   */
+  docsRoot?: string;
+};
+
+/** One row of the documents manifest (public metadata + the real sha256 of the served bytes). */
+export type DocManifestEntry = {
+  name: string;
+  file: string;
+  title: string;
+  group: string;
+  signer: string;
+  date: string;
+  sha256: string;
+  templateSuffix: string;
+  contentType?: string;
 };
 
 const suffix = (tid: string | undefined): string => {
@@ -307,6 +327,102 @@ export function createApp(deps: AppDeps) {
     return new Response(txt, {
       status: r.status,
       headers: { 'Content-Type': r.headers.get('content-type') ?? 'application/json' },
+    });
+  });
+
+  // ── anchored documents: manifest + byte-exact serving + on-ledger verify ───────
+  // docsRoot holds the sample docs (Kroll valuation, fairness, PSA) and manifest.json.
+  const docsRoot = deps.docsRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), 'docs');
+  const loadManifest = (): DocManifestEntry[] => {
+    try {
+      return JSON.parse(readFileSync(join(docsRoot, 'manifest.json'), 'utf8')) as DocManifestEntry[];
+    } catch {
+      return [];
+    }
+  };
+  // Resolve a manifest name to an absolute file path inside docsRoot (no traversal).
+  const docPath = (entry: DocManifestEntry): string | null => {
+    const candidate = normalize(join(docsRoot, entry.file));
+    if (!candidate.startsWith(docsRoot) || !existsSync(candidate) || !statSync(candidate).isFile()) return null;
+    return candidate;
+  };
+
+  // GET /docs/manifest — PUBLIC (metadata + hashes; no session). Registered before /docs/:name.
+  app.get('/docs/manifest', (c) => c.json(loadManifest()));
+
+  // GET /docs/:name — serve the exact bytes that were hashed (byte-identical to /verify input).
+  app.get('/docs/:name', (c) => {
+    const name = c.req.param('name').replace(/\.html$/, '');
+    const entry = loadManifest().find((m) => m.name === name);
+    if (!entry) return c.json({ error: 'unknown document' }, 404);
+    const path = docPath(entry);
+    if (!path) return c.json({ error: 'document file missing' }, 404);
+    const data = new Uint8Array(readFileSync(path));
+    return new Response(data as any, {
+      status: 200,
+      headers: { 'Content-Type': entry.contentType ?? 'application/octet-stream' },
+    });
+  });
+
+  // GET /verify/:name — the "Verify on-ledger" proof. Recompute the doc's sha256, read the
+  // matching template's contentHash from the SESSION party's ACS, compare.
+  app.get('/verify/:name', async (c) => {
+    const s = session(c);
+    if (!s) return c.json({ error: 'unauthenticated' }, 401);
+    const name = c.req.param('name').replace(/\.html$/, '');
+    const entry = loadManifest().find((m) => m.name === name);
+    if (!entry) return c.json({ error: 'unknown document' }, 404);
+    const path = docPath(entry);
+    if (!path) return c.json({ error: 'document file missing' }, 404);
+
+    const docSha256 = createHash('sha256').update(readFileSync(path)).digest('hex');
+
+    // Query the session party's ACS for the anchoring template.
+    let contracts: Array<{ contractId: string; contentHash?: string }> = [];
+    try {
+      const token = await deps.token();
+      const authHdr = { Authorization: `Bearer ${token}` };
+      const endRes = await fetchImpl(`${deps.ledgerBase}/v2/state/ledger-end`, { headers: authHdr });
+      const { offset } = await endRes.json();
+      const acsRes = await fetchImpl(`${deps.ledgerBase}/v2/state/active-contracts`, {
+        method: 'POST',
+        headers: { ...authHdr, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activeAtOffset: offset,
+          filter: {
+            filtersByParty: {
+              [s.party]: {
+                cumulative: [{ identifierFilter: { WildcardFilter: { value: { includeCreatedEventBlob: false } } } }],
+              },
+            },
+          },
+          verbose: false,
+        }),
+      });
+      const raw = await acsRes.json();
+      const items = Array.isArray(raw) ? raw : [raw];
+      contracts = items
+        .map((e: any) => e?.contractEntry?.JsActiveContract?.createdEvent ?? {})
+        .filter((ce: any) => ce.contractId && typeof ce.templateId === 'string' && ce.templateId.endsWith(entry.templateSuffix))
+        .map((ce: any) => ({ contractId: ce.contractId, contentHash: ce.createArgument?.contentHash }));
+    } catch (e: any) {
+      return c.json({ docSha256, onChainHash: null, matches: false, note: `ledger read failed: ${e?.message ?? e}` });
+    }
+
+    if (contracts.length === 0) {
+      return c.json({ docSha256, onChainHash: null, matches: false, note: 'not yet anchored' });
+    }
+    // Prefer the contract whose anchored hash equals the recomputed digest.
+    const hit = contracts.find((k) => k.contentHash === docSha256) ?? contracts[contracts.length - 1]!;
+    const matches = hit.contentHash === docSha256;
+    return c.json({
+      docSha256,
+      onChainHash: hit.contentHash ?? null,
+      matches,
+      contractId: hit.contractId,
+      note: matches
+        ? `Hash matches on-chain anchor · contract ${hit.contractId}`
+        : 'on-ledger anchor hash does not match the stored document',
     });
   });
 
