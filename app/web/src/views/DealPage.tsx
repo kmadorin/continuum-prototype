@@ -41,25 +41,30 @@ const fmtUsdM = (n: number) => `$${(n / 1_000_000).toFixed(1)}M`;
 type TabId = 'overview' | 'valuation' | 'auction' | 'settlement' | 'documents' | 'ledger';
 
 // ── lifecycle derivation ──────────────────────────────────────────────────────
-const STAGE_LABELS = ['Valuation', 'LPAC Consent', 'Auction', 'Elections', 'Issuance', 'Close'] as const;
+const STAGE_LABELS = ['LPAC Consent', 'Valuation', 'Auction', 'Elections', 'Issuance', 'Close'] as const;
 
 /**
- * Map the on-ledger deal state to the six-stage stepper. The ContinuationDeal.stage
- * field is Setup → Consented → Electing → Closed; a SettlementReceipt means Close
- * happened. Because the demo close is one atomic step (issuance + settlement in a
- * single tx), Elections/Issuance/Close all resolve together at close — before that,
- * the active stage is the first not-yet-done one. Ambiguity noted per spec.
+ * Map the on-ledger deal state to the six-stage stepper, in ILPA order: LPAC waives
+ * the conflict / blesses the PROCESS before it runs (it does not approve the price),
+ * so LPAC Consent leads, then the independent Valuation validates, then the Auction
+ * discovers the price. The ContinuationDeal.stage field is Setup → Consented →
+ * Electing → Closed; a SettlementReceipt means Close happened. Each stage's `done`
+ * is set independently from real on-ledger facts (consent, a ValuationReport in this
+ * seat's ACS, a clearing price, a receipt); active = first not-done in display order.
  */
-export function deriveStages(deal: ActiveContract | null, hasReceipt: boolean): Stage[] {
+export function deriveStages(
+  deal: ActiveContract | null,
+  hasReceipt: boolean,
+  hasValuation: boolean,
+): Stage[] {
   const stage = (deal?.args.stage as string | undefined) ?? undefined;
-  const hasDeal = !!deal;
   const hasClearing = !!deal?.args.clearingPrice;
   const consented = stage === 'Consented' || stage === 'Electing' || stage === 'Closed';
   const closed = stage === 'Closed' || hasReceipt;
 
   const done: Record<(typeof STAGE_LABELS)[number], boolean> = {
-    Valuation: hasDeal,
     'LPAC Consent': consented,
+    Valuation: hasValuation,
     Auction: hasClearing,
     Elections: closed,
     Issuance: closed,
@@ -79,7 +84,7 @@ function whatNext(role: Role, activeLabel: string | null): string {
   const m: Record<string, Partial<Record<Role, string>>> = {
     Valuation: {
       gp: 'Open the closing room, then set the clearing price once the independent valuation is in.',
-      valuer: 'Sign and anchor the independent valuation on the Valuation tab — your hash is the reference every seat verifies.',
+      valuer: 'The GP opened the closing room — that is the request for your independent valuation. Sign and anchor it on the Valuation tab; your hash becomes the reference every seat verifies.',
       lpac: 'Review and verify the valuation + fairness documents on the Valuation tab.',
       buyer: 'Review the independent valuation, then ready your sealed bid.',
       lpExiting: 'Await the independent valuation — your sell decision comes after the price is set.',
@@ -195,7 +200,7 @@ export default function DealPage() {
   }, [L]);
 
   const hasReceipt = receipts.length > 0;
-  const stages = deriveStages(deal, hasReceipt);
+  const stages = deriveStages(deal, hasReceipt, valuations.length > 0);
   const activeLabel = stages.find((s) => s.state === 'active')?.label ?? null;
   const stageName = (deal?.args.stage as string | undefined) ?? undefined;
   const electionsPhase = stageName === 'Electing' || stageName === 'Closed' || hasReceipt;
