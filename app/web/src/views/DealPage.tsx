@@ -36,10 +36,6 @@ import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
 import ValuationTab from './ValuationTab';
 import DocumentsTab from './DocumentsTab';
 
-// Independent NAV shown in the KPI row. Placeholder until the Valuation build reads
-// the anchored ValuationReport; the clearing $ figure is derived from it so the row
-// stays internally consistent (96% of $500.0M = $480.0M).
-const NAV_USD = 500_000_000;
 const fmtUsdM = (n: number) => `$${(n / 1_000_000).toFixed(1)}M`;
 
 type TabId = 'overview' | 'valuation' | 'auction' | 'settlement' | 'documents' | 'ledger';
@@ -206,28 +202,35 @@ export default function DealPage() {
 
   // ── KPI tiles ───────────────────────────────────────────────────────────────
   const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
-  const clearingUsd = clearingPct != null ? NAV_USD * clearingPct : null;
+  // NAV (independent): read from the on-chain ValuationReport once the valuer anchors it
+  // (gp/valuer observe it). Pending until then — the valuation is a real gated step, not pre-baked.
+  const valuation = valuations[0] ?? null;
+  const navMid =
+    valuation != null ? (Number(valuation.args.navLow) + Number(valuation.args.navHigh)) / 2 : null;
+  const clearingUsd = clearingPct != null && navMid != null ? navMid * clearingPct : null;
   const receipt = receipts[0] ?? null;
 
   const tiles: Kpi[] = [
-    {
-      label: 'NAV (independent)',
-      value: fmtUsdM(NAV_USD),
-      sub: 'Independent valuation agent',
-      asOf: DEMO.closeDate,
-    },
+    navMid != null
+      ? {
+          label: 'NAV (independent)',
+          value: fmtUsdM(navMid),
+          sub: 'Kroll Valuation Services',
+          asOf: (valuation!.args.asOfDate as string) || DEMO.closeDate,
+        }
+      : { label: 'NAV (independent)', value: '— Pending Valuation', pending: true },
     clearingPct != null
       ? {
           label: 'Clearing price',
           value: `${Math.round(clearingPct * 100)}% of NAV`,
-          sub: fmtUsdM(clearingUsd!),
+          ...(clearingUsd != null ? { sub: fmtUsdM(clearingUsd) } : {}),
           asOf: DEMO.closeDate,
         }
       : { label: 'Clearing price', value: '— Pending Auction', pending: true },
-    clearingPct != null
+    clearingPct != null && clearingUsd != null
       ? {
           label: 'Winning bid',
-          value: fmtUsdM(clearingUsd!),
+          value: fmtUsdM(clearingUsd),
           sub: 'Lead buyer selected',
           asOf: DEMO.closeDate,
         }
