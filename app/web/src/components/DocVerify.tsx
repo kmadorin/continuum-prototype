@@ -89,8 +89,8 @@ export function VerifyBadge({ state, result }: { state: VerifyState; result: Ver
   }
   if (state === 'pending') {
     return (
-      <span className="chip" role="status" data-testid="verify-badge">
-        Pending — not yet anchored on-ledger
+      <span className="chip pending" role="status" data-testid="verify-badge">
+        Awaiting anchoring — not yet on-ledger
       </span>
     );
   }

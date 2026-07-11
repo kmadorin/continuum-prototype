@@ -80,4 +80,16 @@ describe('ValuationTab', () => {
     );
     expect(screen.getByTestId('verify-badge').className).toContain('ok');
   });
+
+  it('AWAITING: with no on-chain report, renders no signer, no hash, and no Verify button', async () => {
+    render(<ValuationTab report={null} />);
+    // The awaiting framing is shown instead of a signature.
+    expect(await screen.findByText(/Awaiting independent valuation/i)).toBeTruthy();
+    // No signer, no sha256 chip, no Verify affordance — never "signed but not anchored".
+    expect(screen.queryByText(/Signed by/i)).toBeNull();
+    expect(screen.queryByText(`${HASH.slice(0, 10)}…${HASH.slice(-6)}`)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Verify on-ledger/i })).toBeNull();
+    // A muted "View draft" link is fine (the prepared bytes may exist off-chain).
+    expect(screen.getByRole('link', { name: /View draft/i })).toBeTruthy();
+  });
 });

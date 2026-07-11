@@ -3,8 +3,15 @@
 // GET /docs/manifest. Each row: file icon · title · signer · date · a copyable
 // hash chip · View (opens the bytes) · Verify (GET /verify/:name → ✓ / pending).
 //
-// A row whose on-chain contract isn't anchored yet (verify → "not yet anchored")
-// greys out and shows "Pending — produced at [group]". SECURITY: read-only.
+// Each row auto-checks its on-ledger anchor (GET /verify/:name) and renders in ONE
+// of two states — never a hybrid:
+//   • SIGNED & ANCHORED (verify → matches) — signer · date, the sha256 chip, a green
+//     ✓, and Re-verify.
+//   • AWAITING (verify → "not yet anchored", or no such contract for this seat) — a
+//     greyed row with "Awaiting — produced at [group]", NO signer, NO hash, NO tick;
+//     only a muted "Draft" link (the prepared bytes may exist off-chain).
+// In this model the valuer's Canton signature IS the on-ledger anchor, so a document
+// is either awaiting OR signed-and-anchored. SECURITY: read-only.
 import { useEffect, useState } from 'react';
 import { fetchManifest, DOC_GROUPS, type DocManifestEntry, type DocGroup } from '../lib/docs';
 import { HashChip, VerifyBadge, useVerify } from '../components/DocVerify';
@@ -24,35 +31,60 @@ function FileGlyph() {
   );
 }
 
-// One document row — owns its own verify state so rows verify independently.
+// One document row — owns its own verify state so rows resolve independently. It
+// auto-checks the anchor on mount, then renders AWAITING or SIGNED (never both).
 function DocRow({ doc }: { doc: DocManifestEntry }) {
   const { state, result, run } = useVerify(doc.name);
-  const pending = state === 'pending';
+  const [everMatched, setEverMatched] = useState(false);
+
+  // Auto-resolve this row's anchor state once on mount.
+  useEffect(() => {
+    void run();
+  }, [run]);
+  useEffect(() => {
+    if (state === 'match') setEverMatched(true);
+  }, [state]);
+
+  // AWAITING: no on-chain contract for this doc yet (not-anchored, or unresolved).
+  // Anything that is NOT a confirmed match reads as awaiting — we never show a
+  // signer/hash next to an un-anchored doc. Once matched, a manual Re-verify stays
+  // in the signed layout while it re-checks (no flicker back to awaiting).
+  const anchored = state === 'match' || (everMatched && state === 'loading');
+  const awaiting = !anchored;
 
   return (
-    <div className={`doc-row${pending ? ' greyed' : ''}`} data-testid="doc-row">
+    <div className={`doc-row${awaiting ? ' greyed' : ''}`} data-testid="doc-row" data-state={anchored ? 'signed' : 'awaiting'}>
       <span className="dr-icon" aria-hidden="true">
         <FileGlyph />
       </span>
       <div className="dr-body">
         <div className="dr-title">{doc.title}</div>
-        <div className="dr-sub mono">
-          {doc.signer} · {doc.date}
-          {pending ? ` · Pending — produced at ${doc.group}` : ''}
-        </div>
+        {anchored ? (
+          <div className="dr-sub mono">
+            Signed by {doc.signer} · {doc.date}
+          </div>
+        ) : (
+          <div className="dr-sub">Awaiting — produced at {doc.group}</div>
+        )}
       </div>
-      <div className="dr-hash">
-        <HashChip hash={doc.sha256} />
-      </div>
+      <div className="dr-hash">{anchored ? <HashChip hash={doc.sha256} /> : null}</div>
       <div className="dr-actions">
-        <a className="btn ghost sm" href={`/docs/${doc.name}`} target="_blank" rel="noopener noreferrer">
-          View
-        </a>
-        <button type="button" className="btn ghost sm" onClick={run} disabled={state === 'loading'}>
-          {state === 'loading' ? 'Verifying…' : 'Verify'}
-        </button>
+        {anchored ? (
+          <>
+            <a className="btn ghost sm" href={`/docs/${doc.name}`} target="_blank" rel="noopener noreferrer">
+              View
+            </a>
+            <button type="button" className="btn ghost sm" onClick={run} disabled={state === 'loading'}>
+              {state === 'loading' ? 'Verifying…' : 'Re-verify'}
+            </button>
+          </>
+        ) : (
+          <a className="btn ghost sm" href={`/docs/${doc.name}`} target="_blank" rel="noopener noreferrer">
+            Draft
+          </a>
+        )}
       </div>
-      {state !== 'idle' && (
+      {(anchored || state === 'mismatch' || state === 'error') && (
         <div className="dr-verify">
           <VerifyBadge state={state} result={result} />
         </div>

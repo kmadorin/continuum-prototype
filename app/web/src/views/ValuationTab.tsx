@@ -101,6 +101,7 @@ export default function ValuationTab({
           <div className="stack" style={{ gap: 6 }}>
             <span className="chip ok val-badge">Independent Valuation Agent</span>
             <h2 style={{ marginTop: 6 }}>{valuerName}</h2>
+            {!onChain && <span className="chip pending val-badge">Awaiting signature &amp; anchor</span>}
           </div>
           <div className="val-id-figs">
             <div className="vif">
@@ -117,7 +118,8 @@ export default function ValuationTab({
         </div>
         {!onChain && (
           <p className="hint" style={{ margin: 0 }}>
-            Your seat does not observe the on-chain ValuationReport — showing the anchored manifest values
+            Awaiting the independent valuation — requested when the deal opened. The range below is
+            indicative until Kroll signs and anchors the report on-ledger
             {manifestErr ? ' (manifest unavailable; spec range)' : ''}.
           </p>
         )}
@@ -126,7 +128,7 @@ export default function ValuationTab({
       {/* 2 · NAV range bar --------------------------------------------------- */}
       <div className="panel">
         <div className="panel-head">
-          <h2>Independent NAV range</h2>
+          <h2>Independent NAV range{onChain ? '' : ' (indicative)'}</h2>
           <span className="ph-meta">
             NAV {fmtM(mid)} · clearing {fmtM(clearing)} ({Math.round(CLEARING_PCT * 100)}%)
           </span>
@@ -134,57 +136,99 @@ export default function ValuationTab({
         <div className="panel-body">
           <NavRangeBar navLow={navLow} navHigh={navHigh} mid={mid} clearing={clearing} clearingPct={CLEARING_PCT} />
           <p className="hint" style={{ margin: '16px 0 0' }}>
-            The negotiated clearing price of {fmtM(clearing)} sits at the floor of the independent range
-            ({fmtM(navLow)}–{fmtM(navHigh)}) — {Math.round(CLEARING_PCT * 100)}% of the {fmtM(mid)} headline NAV.
+            {onChain ? (
+              <>
+                The negotiated clearing price of {fmtM(clearing)} sits at the floor of the independent range
+                ({fmtM(navLow)}–{fmtM(navHigh)}) — {Math.round(CLEARING_PCT * 100)}% of the {fmtM(mid)} headline NAV.
+              </>
+            ) : (
+              <>
+                Indicative range pending anchoring ({fmtM(navLow)}–{fmtM(navHigh)}). The figures become
+                the on-ledger reference once Kroll signs and anchors the report.
+              </>
+            )}
           </p>
         </div>
       </div>
 
-      {/* 3 · signed document card ------------------------------------------- */}
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Signed valuation report</h2>
-          <span className="ph-meta">Deal Formation</span>
-        </div>
-        <div className="panel-body">
-          <div className="doc-card">
-            <span className="doc-icon" aria-hidden="true">
-              <PdfGlyph />
-            </span>
-            <div className="doc-main">
-              <div className="doc-title">Valuation Report — Project Continuum CV I, L.P.</div>
-              <div className="doc-meta mono">
-                Signed by {valuerName} · {asOfDate}
-              </div>
-              <div className="doc-hash-row">
-                <span className="doc-hash-lab">sha256</span>
-                {contentHash ? <HashChip hash={contentHash} /> : <span className="hint">no hash available</span>}
+      {/* 3 · valuation document card — SIGNED & ANCHORED vs AWAITING ---------- */}
+      {onChain ? (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Signed valuation report</h2>
+            <span className="ph-meta">Deal Formation</span>
+          </div>
+          <div className="panel-body">
+            <div className="doc-card">
+              <span className="doc-icon" aria-hidden="true">
+                <PdfGlyph />
+              </span>
+              <div className="doc-main">
+                <div className="doc-title">Valuation Report — Project Continuum CV I, L.P.</div>
+                <div className="doc-meta mono">
+                  Signed by {valuerName} · {asOfDate}
+                </div>
+                <div className="doc-hash-row">
+                  <span className="doc-hash-lab">sha256</span>
+                  {contentHash ? <HashChip hash={contentHash} /> : <span className="hint">no hash available</span>}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="doc-actions">
-            <a className="btn ghost" href={`/docs/${DOC_NAME}`} target="_blank" rel="noopener noreferrer">
-              View report
-            </a>
-            <button type="button" className="btn" onClick={run} disabled={state === 'loading'}>
-              {state === 'loading' ? 'Verifying…' : 'Verify on-ledger'}
-            </button>
-            <VerifyBadge state={state} result={result} />
+            <div className="doc-actions">
+              <a className="btn ghost" href={`/docs/${DOC_NAME}`} target="_blank" rel="noopener noreferrer">
+                View report
+              </a>
+              <button type="button" className="btn" onClick={run} disabled={state === 'loading'}>
+                {state === 'loading' ? 'Verifying…' : 'Verify on-ledger'}
+              </button>
+              <VerifyBadge state={state} result={result} />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Independent valuation</h2>
+            <span className="ph-meta">Deal Formation</span>
+          </div>
+          <div className="panel-body">
+            <div className="doc-card">
+              <span className="doc-icon" aria-hidden="true">
+                <PdfGlyph />
+              </span>
+              <div className="doc-main">
+                <div className="doc-title">Valuation Report — Project Continuum CV I, L.P.</div>
+                <div className="doc-meta">
+                  <span className="chip pending">Awaiting</span>
+                </div>
+                <p className="hint" style={{ margin: '8px 0 0' }}>
+                  Awaiting independent valuation — Kroll will sign and anchor it; requested when the deal
+                  opened. No signer or on-ledger hash exists until then.
+                </p>
+              </div>
+            </div>
+            <div className="doc-actions">
+              <a className="btn ghost" href={`/docs/${DOC_NAME}`} target="_blank" rel="noopener noreferrer">
+                View draft
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* 4 · provenance strip ------------------------------------------------ */}
-      <div className="callout val-provenance">
-        <div className="ct">Provenance</div>
-        <p>
-          {UNITS_ISSUED.toLocaleString()} CV units were issued under an IssuanceBasis referencing this report's
-          hash.{' '}
-          <button type="button" className="link-mono" onClick={() => onNavigate?.('settlement')}>
-            View the settlement →
-          </button>
-        </p>
-      </div>
+      {/* 4 · provenance strip (only once the report is anchored) ------------- */}
+      {onChain && (
+        <div className="callout val-provenance">
+          <div className="ct">Provenance</div>
+          <p>
+            {UNITS_ISSUED.toLocaleString()} CV units were issued under an IssuanceBasis referencing this report's
+            hash.{' '}
+            <button type="button" className="link-mono" onClick={() => onNavigate?.('settlement')}>
+              View the settlement →
+            </button>
+          </p>
+        </div>
+      )}
     </div>
   );
 }
