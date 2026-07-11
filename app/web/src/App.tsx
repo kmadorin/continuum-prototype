@@ -21,6 +21,7 @@ const SEAT_LABEL: Record<Role, string> = {
   lpExiting: 'Exiting LP',
   lpRolling: 'Rolling LP',
   lpac: 'LPAC Oversight',
+  valuer: 'Independent Valuer',
 };
 
 function Gate() {

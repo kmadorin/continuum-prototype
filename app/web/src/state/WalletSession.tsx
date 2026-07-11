@@ -13,10 +13,10 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { loadRegistry } from '../lib/useLedger';
 
-/** The five demo seats (also the backend usernames). */
-export type Role = 'gp' | 'buyer' | 'lpExiting' | 'lpRolling' | 'lpac';
+/** The six demo seats (also the backend usernames). */
+export type Role = 'gp' | 'buyer' | 'lpExiting' | 'lpRolling' | 'lpac' | 'valuer';
 
-export const ROLES: Role[] = ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac'];
+export const ROLES: Role[] = ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac', 'valuer'];
 
 /** Non-secret session identity, exactly what `/me` and `/auth/login` return. */
 export type Identity = { role: Role; party: string; custodianName: string };

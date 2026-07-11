@@ -58,6 +58,13 @@ const META: Record<Role, RoleMeta> = {
     blurb: 'Sees nothing pre-close; gets a scoped fairness view once it settles.',
     cta: 'Enter as oversight',
   },
+  valuer: {
+    avatar: 'KV',
+    name: 'Kroll Valuation Services',
+    seat: 'Independent Valuation Agent',
+    blurb: 'The independent agent. Signs and anchors the NAV range on-ledger — its hash is what every other seat verifies.',
+    cta: 'Enter as valuer',
+  },
 };
 
 // Demo credentials: username = role, password = `<role>-demo` (see custody spine).
