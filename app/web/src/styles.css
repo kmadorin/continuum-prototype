@@ -1088,6 +1088,27 @@ table.data tfoot .num { color: var(--accent); }
 .val-provenance p { font-size: 15px; }
 .val-provenance .link-mono { font-size: 14px; }
 
+/* ---------- sell-vs-roll comparison (Rolling LP) ---------- */
+.svr-cols { display: grid; grid-template-columns: 1fr 1px 1fr; align-items: stretch; gap: 0; }
+.svr-col { padding: 4px 20px; display: flex; flex-direction: column; }
+.svr-col:first-child { padding-left: 0; }
+.svr-col:last-child { padding-right: 0; }
+.svr-div { background: var(--border-hi); width: 1px; }
+.svr-kicker { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); }
+.svr-fig { font-size: 26px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; margin-top: 8px; }
+.svr-unit { font-size: 13px; color: var(--dim); margin-top: 2px; }
+@media (max-width: 640px) {
+  .svr-cols { grid-template-columns: 1fr; }
+  .svr-col { padding: 14px 0; }
+  .svr-div { width: auto; height: 1px; }
+}
+
+/* ---------- LPAC review queue ---------- */
+.review-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.review-doc { padding: 18px; }
+.rd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+@media (max-width: 720px) { .review-cols { grid-template-columns: 1fr; } }
+
 /* ---------- documents accordion ---------- */
 .doc-group-head { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 .doc-group-head:hover { background: var(--surface); }
