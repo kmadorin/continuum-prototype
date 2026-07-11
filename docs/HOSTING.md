@@ -1,5 +1,13 @@
 # Hosting Continuum (the "live product" link)
 
+## ✅ LIVE: https://continuum-custody.fly.dev/  (fly.io, region lhr, 1 machine)
+Deployed + smoke-verified 2026-07-11: `/registry` (5 custodian tenants), login, and `/action` all work —
+gp's custodian signed a real devnet tx (`updateId 12203656…`) through the public URL. This is the hackathon
+"live product" + "deployed on Canton devnet" bar. Config: `app/{Dockerfile,fly.toml,.dockerignore}`.
+Redeploy: `cd app && fly deploy --app continuum-custody`. Keep it **1 machine** (`fly scale count 1`) —
+in-memory audit isn't shared across machines. Secrets already set (`fly secrets list --app continuum-custody`).
+
+
 The whole product is ONE deployable: the custody backend (`app/custody/server.ts`) serves both the JSON API
 and the built React SPA (`app/web/dist`). Deploy it anywhere that runs a Node container (Render / Fly / Railway).
 
