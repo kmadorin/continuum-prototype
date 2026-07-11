@@ -37,6 +37,7 @@ const ROLES: Array<{ role: string; tenant: string; custodianName: string }> = [
   { role: 'lpExiting', tenant: 'lpExiting', custodianName: 'Northgate Trust — Calder Family Office' },
   { role: 'lpRolling', tenant: 'lpRolling', custodianName: 'BNY Digital — Hawthorn Pension' },
   { role: 'lpac', tenant: 'lpac', custodianName: 'State Street Digital — LPAC' },
+  { role: 'valuer', tenant: 'valuer', custodianName: 'Kroll Valuation Services' },
 ];
 
 function m2mSecret(): string {
