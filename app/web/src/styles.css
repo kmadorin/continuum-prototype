@@ -1144,6 +1144,7 @@ table.data tfoot .num { color: var(--accent); }
 }
 .gate-head h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
 .gate-head h2 .mono { color: var(--accent); }
+.gate-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--mute); max-width: 62ch; }
 
 .gate-checks { list-style: none; margin: 18px 0 4px; padding: 0; border: 1px solid var(--border); background: var(--bg-2); }
 .gate-check {

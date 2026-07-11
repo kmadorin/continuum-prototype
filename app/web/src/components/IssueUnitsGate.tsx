@@ -114,6 +114,10 @@ export default function IssueUnitsGate({
         <h2>
           Issue <span className="mono">{unitsToIssue.toLocaleString()}</span> CV units @ {unitPrice}
         </h2>
+        <p className="gate-sub">
+          Price discovered by competitive auction (Copper's winning bid), validated against Kroll's
+          independent valuation and the fairness opinion.
+        </p>
       </div>
 
       <ul className="gate-checks" aria-label="Issuance preconditions">
