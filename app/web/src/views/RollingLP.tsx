@@ -12,7 +12,13 @@ import { ErrNote, pick, useAction, useRefresh } from './parts';
 
 const POSITION_NAV = '1000000.0';
 
-export default function RollingLP() {
+// `embedded` mounts only the cards for a given Deal Page tab (dropping the
+// standalone StageHead + deal-summary chrome the page already renders).
+export type LpSection = 'election' | 'preauth' | 'holding';
+
+export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {}) {
+  const bare = !!embedded;
+  const show = (s: LpSection) => !embedded || embedded.includes(s);
   const L = useLedger();
   const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
@@ -79,26 +85,31 @@ export default function RollingLP() {
 
   return (
     <div className="stack g4">
-      <StageHead
-        tag="INVESTOR — STAYING"
-        role="Rolling LP"
-        title="Roll into the new vehicle"
-        lede="You decide to stay in at the room's clearing price — signed by your custodian, blind to every other LP. Your rolled units settle inside the GP's one atomic Close."
-      />
+      {!bare && (
+        <StageHead
+          tag="INVESTOR — STAYING"
+          role="Rolling LP"
+          title="Roll into the new vehicle"
+          lede="You decide to stay in at the room's clearing price — signed by your custodian, blind to every other LP. Your rolled units settle inside the GP's one atomic Close."
+        />
+      )}
 
-      <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
-        <dl className="kv">
-          <dt>Signed in as</dt>
-          <dd className="mono">{shortParty(L.me)}</dd>
-          <dt>Clearing price</dt>
-          <dd>
-            {deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed — not yet set</span>}
-          </dd>
-          <dt>Your position</dt>
-          <dd>{fmtM(POSITION_NAV)} NAV</dd>
-        </dl>
-      </Card>
+      {!bare && (
+        <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
+          <dl className="kv">
+            <dt>Signed in as</dt>
+            <dd className="mono">{shortParty(L.me)}</dd>
+            <dt>Clearing price</dt>
+            <dd>
+              {deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed — not yet set</span>}
+            </dd>
+            <dt>Your position</dt>
+            <dd>{fmtM(POSITION_NAV)} NAV</dd>
+          </dl>
+        </Card>
+      )}
 
+      {show('election') && (
       <Card title="Elect: roll over">
         {election ? (
           <div className="stack g3">
@@ -113,22 +124,27 @@ export default function RollingLP() {
           </div>
         )}
       </Card>
+      )}
 
-      <Card title="Pre-authorize the close">
-        <div className="actions">
-          <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
-            {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
-          </button>
-          {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
-        </div>
-      </Card>
+      {show('preauth') && (
+        <Card title="Pre-authorize the close">
+          <div className="actions">
+            <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
+              {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
+            </button>
+            {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
+          </div>
+        </Card>
+      )}
 
-      <Card title="Post-close holding">
-        <dl className="kv">
-          <dt>Rolled CV units ({DEMO.unit})</dt>
-          <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
-        </dl>
-      </Card>
+      {show('holding') && (
+        <Card title="Post-close holding">
+          <dl className="kv">
+            <dt>Rolled CV units ({DEMO.unit})</dt>
+            <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
+          </dl>
+        </Card>
+      )}
 
       <ErrNote err={err} note={note} />
     </div>

@@ -10,7 +10,14 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-export default function LPAC() {
+// `embedded` mounts only the cards for a given Deal Page tab (dropping the
+// standalone StageHead + deal-summary chrome the page already renders). RecordConsent
+// itself lives in the four-eyes Approval queue, not here.
+export type LpacSection = 'governance' | 'window';
+
+export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
+  const bare = !!embedded;
+  const show = (s: LpacSection) => !embedded || embedded.includes(s);
   const L = useLedger();
   const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
@@ -114,26 +121,31 @@ export default function LPAC() {
 
   return (
     <div className="stack g4">
-      <StageHead
-        tag="OVERSIGHT"
-        role="LPAC"
-        title="Verify it was fair"
-        lede="The governance seat. You record consent and attest fairness via your custodian, and get a scoped window to verify the settled close — without ever seeing the live per-LP inputs."
-      />
+      {!bare && (
+        <StageHead
+          tag="OVERSIGHT"
+          role="LPAC"
+          title="Verify it was fair"
+          lede="The governance seat. You record consent and attest fairness via your custodian, and get a scoped window to verify the settled close — without ever seeing the live per-LP inputs."
+        />
+      )}
 
-      <Card title={deal ? (deal.args.cv as string) : 'No deal in scope yet'}>
-        <dl className="kv">
-          <dt>Signed in as</dt>
-          <dd className="mono">{shortParty(L.me)}</dd>
-          <dt>Stage</dt>
-          <dd>{stage ?? <span className="chip pending">not opened</span>}</dd>
-          <dt>Clearing price</dt>
-          <dd>{deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed</span>}</dd>
-          <dt>Reference NAV</dt>
-          <dd>{deal ? fmtM(deal.args.refNav) : '—'}</dd>
-        </dl>
-      </Card>
+      {!bare && (
+        <Card title={deal ? (deal.args.cv as string) : 'No deal in scope yet'}>
+          <dl className="kv">
+            <dt>Signed in as</dt>
+            <dd className="mono">{shortParty(L.me)}</dd>
+            <dt>Stage</dt>
+            <dd>{stage ?? <span className="chip pending">not opened</span>}</dd>
+            <dt>Clearing price</dt>
+            <dd>{deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed</span>}</dd>
+            <dt>Reference NAV</dt>
+            <dd>{deal ? fmtM(deal.args.refNav) : '—'}</dd>
+          </dl>
+        </Card>
+      )}
 
+      {show('governance') && (
       <Card title="Governance actions">
         <div className="stack g3">
           <div className="actions">
@@ -154,7 +166,9 @@ export default function LPAC() {
           </div>
         </div>
       </Card>
+      )}
 
+      {show('window') && (
       <Card title="Scoped fairness window">
         {closed ? (
           <div className="stack g3">
@@ -189,6 +203,7 @@ export default function LPAC() {
           </p>
         )}
       </Card>
+      )}
 
       <ErrNote err={err} note={note} />
     </div>

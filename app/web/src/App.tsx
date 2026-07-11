@@ -4,28 +4,23 @@
 // whose actions POST to `/action` (backend signs) and whose reads go through the
 // per-party proxy. The topbar shows the logged-in party's CUSTODIAN (institutional
 // chrome). Role→view routing lives here; every view reads/writes via `useLedger()`.
-import type { ReactNode } from 'react';
 import { SessionProvider, useSession, type Role } from './state/WalletSession';
 import { ToastProvider } from './state/Toast';
 import { InspectorProvider } from './state/Inspector';
-import RoleWorkspace from './views/RoleWorkspace';
+import DealPage from './views/DealPage';
 import SignIn from './views/SignIn';
-import Advisor from './views/Advisor';
-import Buyer from './views/Buyer';
-import ExitingLP from './views/ExitingLP';
-import RollingLP from './views/RollingLP';
-import LPAC from './views/LPAC';
 import Settlement from './views/Settlement';
 import TrustPanel from './views/TrustPanel';
 import './styles.css';
 
-// Each seat's human label + the workspace it unlocks.
-const SEATS: Record<Role, { label: string; view: () => ReactNode }> = {
-  gp: { label: 'Advisor', view: () => <Advisor /> },
-  buyer: { label: 'Secondary Buyer', view: () => <Buyer /> },
-  lpExiting: { label: 'Exiting LP', view: () => <ExitingLP /> },
-  lpRolling: { label: 'Rolling LP', view: () => <RollingLP /> },
-  lpac: { label: 'LPAC Oversight', view: () => <LPAC /> },
+// Each seat's human label (topbar chrome). Every seat now lands on the same shared
+// Deal Page; the role only sets emphasis + which contextual CTA is enabled.
+const SEAT_LABEL: Record<Role, string> = {
+  gp: 'Advisor',
+  buyer: 'Secondary Buyer',
+  lpExiting: 'Exiting LP',
+  lpRolling: 'Rolling LP',
+  lpac: 'LPAC Oversight',
 };
 
 function Gate() {
@@ -43,7 +38,6 @@ function Gate() {
 
   if (!isSignedIn || !role) return <SignIn />;
 
-  const seat = SEATS[role];
   return (
     <div className="stack g4">
       <header className="topbar">
@@ -58,14 +52,14 @@ function Gate() {
             {custodianName}
           </span>
         ) : null}
-        <span className="view-label">{seat.label}</span>
+        <span className="view-label">{SEAT_LABEL[role]}</span>
         <button type="button" className="btn ghost" onClick={signOut}>
           Sign out
         </button>
       </header>
 
       <main className="portal-wrap">
-        <RoleWorkspace>{seat.view()}</RoleWorkspace>
+        <DealPage />
       </main>
 
       {/* Overlays the workspace with a full-screen SETTLED takeover once this

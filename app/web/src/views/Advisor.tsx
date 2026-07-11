@@ -23,7 +23,14 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-export default function Advisor() {
+// `embedded` lets the shared Deal Page mount only the cards for a given tab (and
+// hides the standalone StageHead + deal-summary chrome the page already supplies).
+// Absent → the full standalone workspace (used by the persona smoke tests).
+export type AdvisorSection = 'clearing' | 'elections' | 'settlement' | 'close';
+
+export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = {}) {
+  const bare = !!embedded;
+  const show = (s: AdvisorSection) => !embedded || embedded.includes(s);
   const L = useLedger();
   const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
@@ -280,54 +287,70 @@ export default function Advisor() {
 
   return (
     <div className="stack g4">
-      <StageHead
-        tag="ADVISOR"
-        role="Organizer"
-        title="Run the closing room"
-        lede="One source of truth for the close, signed by your custodian on your behalf. Everyone's in the room — nobody can see anyone else's private inputs until the atomic settlement."
-      />
+      {!bare && (
+        <StageHead
+          tag="ADVISOR"
+          role="Organizer"
+          title="Run the closing room"
+          lede="One source of truth for the close, signed by your custodian on your behalf. Everyone's in the room — nobody can see anyone else's private inputs until the atomic settlement."
+        />
+      )}
 
-      <Card title={deal ? (deal.args.cv as string) : DEMO.cv}>
-        <dl className="kv">
-          <dt>Signed in as</dt>
-          <dd className="mono">{shortParty(L.me)}</dd>
-          <dt>Stage</dt>
-          <dd>{stage ?? <span className="chip pending">no deal yet</span>}</dd>
-          <dt>Clearing price</dt>
-          <dd>{deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed — not yet set</span>}</dd>
-          <dt>Reference NAV</dt>
-          <dd>{deal ? fmtM(deal.args.refNav) : '—'}</dd>
-        </dl>
-      </Card>
+      {!bare && (
+        <Card title={deal ? (deal.args.cv as string) : DEMO.cv}>
+          <dl className="kv">
+            <dt>Signed in as</dt>
+            <dd className="mono">{shortParty(L.me)}</dd>
+            <dt>Stage</dt>
+            <dd>{stage ?? <span className="chip pending">no deal yet</span>}</dd>
+            <dt>Clearing price</dt>
+            <dd>{deal?.args.clearingPrice ? `${fmtPct(deal.args.clearingPrice)} of NAV` : <span className="chip sealed">sealed — not yet set</span>}</dd>
+            <dt>Reference NAV</dt>
+            <dd>{deal ? fmtM(deal.args.refNav) : '—'}</dd>
+          </dl>
+        </Card>
+      )}
 
-      <Card title="Closing room">
-        <div className="stack g3">
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
-              {busy === 'open' ? 'Signing…' : 'Open closing room'}
-            </button>
-          </div>
-          <div className="form-row">
-            <label htmlFor="price">Clearing price — % of NAV</label>
-            <div className="input-group">
-              <input className="input" id="price" type="number" step="0.01" min="0" max="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={!deal} />
-              <span className="suffix">of NAV</span>
+      {show('clearing') && (
+        <Card title="Set the clearing price">
+          <div className="stack g3">
+            <div className="actions">
+              <button className="btn" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
+                {busy === 'open' ? 'Signing…' : 'Open closing room'}
+              </button>
+            </div>
+            <div className="form-row">
+              <label htmlFor="price">Clearing price — % of NAV</label>
+              <div className="input-group">
+                <input className="input" id="price" type="number" step="0.01" min="0" max="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={!deal} />
+                <span className="suffix">of NAV</span>
+              </div>
+            </div>
+            <div className="actions">
+              <button className="btn" type="button" disabled={!!busy || !deal} onClick={setClearing}>
+                {busy === 'price' ? 'Signing…' : 'Set price & disclose to room'}
+              </button>
             </div>
           </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !deal} onClick={setClearing}>
-              {busy === 'price' ? 'Signing…' : 'Set price & disclose to room'}
-            </button>
-            <button className="btn" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
-              {busy === 'elect' ? 'Signing…' : 'Open elections'}
-            </button>
-          </div>
-          <p className="hint" style={{ marginTop: 0 }}>
-            Open elections needs the deal at <span className="mono">Consented</span> — the LPAC records consent in its own tab.
-          </p>
-        </div>
-      </Card>
+        </Card>
+      )}
 
+      {show('elections') && (
+        <Card title="Open elections">
+          <div className="stack g3">
+            <div className="actions">
+              <button className="btn" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
+                {busy === 'elect' ? 'Signing…' : 'Open elections'}
+              </button>
+            </div>
+            <p className="hint" style={{ marginTop: 0 }}>
+              Needs the clearing price set and the deal at <span className="mono">Consented</span> — the LPAC records consent from its Approval queue.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {show('settlement') && (
       <Card title="Settlement — GP-signable backstage">
         <p className="hint" style={{ marginTop: 0 }}>
           Each step is a real command signed by the GP custodian, ported from the proven close-wallets flow. The
@@ -347,15 +370,18 @@ export default function Advisor() {
           <StepRow id="accpart" label="Accept exiting-LP participation" done={false} onClick={acceptParticipation} />
         </div>
       </Card>
+      )}
 
-      <Card title="Close — all at once">
-        <div className="actions">
-          <button className="btn" type="button" disabled={!!busy || !deal || !have.basis} onClick={close}>
-            {busy === 'close' ? 'Signing…' : 'Close the deal'}
-          </button>
-          <span className="cant-see">One atomic transaction. Signed by the GP alone, consuming every pre-signed authority.</span>
-        </div>
-      </Card>
+      {show('close') && (
+        <Card title="Close — all at once">
+          <div className="actions">
+            <button className="btn" type="button" disabled={!!busy || !deal || !have.basis} onClick={close}>
+              {busy === 'close' ? 'Signing…' : 'Close the deal'}
+            </button>
+            <span className="cant-see">One atomic transaction. Signed by the GP alone, consuming every pre-signed authority.</span>
+          </div>
+        </Card>
+      )}
 
       <ErrNote err={err} note={note} />
     </div>

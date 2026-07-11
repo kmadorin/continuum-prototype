@@ -9,7 +9,13 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-export default function Buyer() {
+// `embedded` mounts only the cards for a given Deal Page tab (and drops the
+// standalone StageHead + deal-summary chrome the page already renders).
+export type BuyerSection = 'bid' | 'delegation' | 'holding';
+
+export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) {
+  const bare = !!embedded;
+  const show = (s: BuyerSection) => !embedded || embedded.includes(s);
   const L = useLedger();
   const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
@@ -86,28 +92,33 @@ export default function Buyer() {
 
   return (
     <div className="stack g4">
-      <StageHead
-        tag="SECONDARY BUYER"
-        role="Buy-side"
-        title="Bid sealed, buy the units"
-        lede="Your bid is signed by your custodian and stays blind to every other buyer. You separately pre-authorize the GP to settle your leg — no key ever touches this browser."
-      />
+      {!bare && (
+        <StageHead
+          tag="SECONDARY BUYER"
+          role="Buy-side"
+          title="Bid sealed, buy the units"
+          lede="Your bid is signed by your custodian and stays blind to every other buyer. You separately pre-authorize the GP to settle your leg — no key ever touches this browser."
+        />
+      )}
 
-      <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
-        <dl className="kv">
-          <dt>Signed in as</dt>
-          <dd className="mono">{shortParty(L.me)}</dd>
-          <dt>Clearing price</dt>
-          <dd>
-            {deal?.args.clearingPrice ? (
-              `${fmtPct(deal.args.clearingPrice)} of NAV`
-            ) : (
-              <span className="chip sealed">sealed — set by the room</span>
-            )}
-          </dd>
-        </dl>
-      </Card>
+      {!bare && (
+        <Card title={deal ? (deal.args.cv as string) : 'Deal — not yet visible to you'}>
+          <dl className="kv">
+            <dt>Signed in as</dt>
+            <dd className="mono">{shortParty(L.me)}</dd>
+            <dt>Clearing price</dt>
+            <dd>
+              {deal?.args.clearingPrice ? (
+                `${fmtPct(deal.args.clearingPrice)} of NAV`
+              ) : (
+                <span className="chip sealed">sealed — set by the room</span>
+              )}
+            </dd>
+          </dl>
+        </Card>
+      )}
 
+      {show('bid') && (
       <Card title="Sealed bid">
         {bid ? (
           <div className="stack g3">
@@ -145,7 +156,9 @@ export default function Buyer() {
           </div>
         )}
       </Card>
+      )}
 
+      {show('delegation') && (
       <Card title="Execution delegation">
         <p className="hint" style={{ marginTop: 0 }}>
           Pre-authorize the GP to move your unit leg at Close — a propose/accept, not a key handover.
@@ -161,13 +174,16 @@ export default function Buyer() {
           </div>
         )}
       </Card>
+      )}
 
-      <Card title="Post-close holding">
-        <dl className="kv">
-          <dt>CV units ({DEMO.unit})</dt>
-          <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
-        </dl>
-      </Card>
+      {show('holding') && (
+        <Card title="Post-close holding">
+          <dl className="kv">
+            <dt>CV units ({DEMO.unit})</dt>
+            <dd className="mono">{units ? units.toLocaleString() : <span className="chip pending">none yet — settles at Close</span>}</dd>
+          </dl>
+        </Card>
+      )}
 
       <ErrNote err={err} note={note} />
     </div>
