@@ -1113,3 +1113,60 @@ table.data tfoot .num { color: var(--accent); }
   .doc-row .dr-hash, .doc-row .dr-actions { grid-column: 2 / -1; justify-content: flex-start; }
   .doc-row .dr-verify { grid-column: 1 / -1; }
 }
+
+/* ---------- GP issue-units gate ceremony (HERO) ---------- */
+.gate-card { border-color: var(--accent-dim); background: var(--accent-soft); }
+.gate-head { margin-bottom: 4px; }
+.gate-eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); display: block; margin-bottom: 6px;
+}
+.gate-head h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+.gate-head h2 .mono { color: var(--accent); }
+
+.gate-checks { list-style: none; margin: 18px 0 4px; padding: 0; border: 1px solid var(--border); background: var(--bg-2); }
+.gate-check {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 13px 16px; border-top: 1px solid var(--border);
+}
+.gate-check:first-child { border-top: 0; }
+.gate-check .gc-mark {
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--border-hi); color: var(--mute);
+  transition: color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+}
+.gate-check.ok .gc-mark { color: var(--accent); border-color: var(--accent-dim); animation: gc-pop 0.3s ease; }
+.gate-check.miss .gc-mark { color: var(--fail); border-color: color-mix(in oklch, var(--fail) 45%, transparent); }
+.gate-check .gc-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gate-check .gc-label { font-size: 15px; color: var(--text); }
+.gate-check .gc-fact { font-size: 12px; color: var(--dim); letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; }
+.gate-check .gc-fact.miss { color: var(--fail-text); }
+.gate-check .gc-state { font-size: 15px; color: var(--accent); }
+.gate-check.miss .gc-state { color: var(--fail); }
+@keyframes gc-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+.gate-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.btn.gate-issue { align-self: flex-start; padding: 11px 20px; font-size: 15px; }
+.btn.gate-issue:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gate-success { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.gate-count { font-size: 30px; font-weight: 600; color: var(--accent); letter-spacing: -0.02em; line-height: 1.1; }
+
+/* ---------- holding-provenance receipt ---------- */
+.holding-receipt { border-color: var(--accent-dim); }
+.hr-headline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.hr-units { font-size: 26px; font-weight: 600; color: var(--accent); letter-spacing: -0.02em; }
+.hr-unit-label { font-size: 14px; color: var(--dim); }
+.hr-sep { color: var(--border-hi); }
+.hr-fig { font-size: 14px; color: var(--text); }
+.hr-prov { display: flex; flex-direction: column; gap: 8px; }
+.hr-prov-lab { font-size: 13px; color: var(--dim); }
+.hr-prov-hash { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-check .gc-mark { transition: none !important; animation: none !important; }
+}
+@media (max-width: 560px) {
+  .gate-check { grid-template-columns: 24px 1fr; }
+  .gate-check .gc-state { display: none; }
+}

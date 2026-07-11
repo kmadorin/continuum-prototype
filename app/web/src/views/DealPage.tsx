@@ -317,9 +317,9 @@ export default function DealPage() {
         {tab === 'settlement' && (
           <TabActions
             title="Settlement"
-            note="The GP assembles the issuance basis and fires one atomic Close that moves every leg. Counterparties pre-authorize their legs here; the mint gate-ceremony lands in the Mint build."
+            note="The GP issues units through the gate-ceremony — the ledger will not mint until all four proofs are anchored — then fires one atomic Close that moves every leg. Counterparties pre-authorize their legs and read their provenance-backed holding here."
           >
-            {role === 'gp' && <Advisor embedded={['settlement', 'close']} />}
+            {role === 'gp' && <Advisor embedded={['ceremony', 'settlement', 'close']} />}
             {role === 'buyer' && <Buyer embedded={['delegation', 'holding']} />}
             {role === 'lpExiting' && <ExitingLP embedded={['preauth', 'holding']} />}
             {role === 'lpRolling' && <RollingLP embedded={['preauth', 'holding']} />}

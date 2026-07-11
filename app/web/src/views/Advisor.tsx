@@ -20,28 +20,42 @@
 import { useState } from 'react';
 import type { ActiveContract, JsCommand } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
+import { useInspector } from '../state/Inspector';
+import { truncHash } from '../lib/docs';
+import IssueUnitsGate, { type GateCheck } from '../components/IssueUnitsGate';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
 // `embedded` lets the shared Deal Page mount only the cards for a given tab (and
 // hides the standalone StageHead + deal-summary chrome the page already supplies).
 // Absent → the full standalone workspace (used by the persona smoke tests).
-export type AdvisorSection = 'clearing' | 'elections' | 'settlement' | 'close';
+export type AdvisorSection = 'clearing' | 'elections' | 'ceremony' | 'settlement' | 'close';
 
 export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = {}) {
   const bare = !!embedded;
   const show = (s: AdvisorSection) => !embedded || embedded.includes(s);
   const L = useLedger();
+  const inspector = useInspector();
   const { busy, err, note, run } = useAction();
   const [deal, setDeal] = useState<ActiveContract | null>(null);
   const [have, setHave] = useState<Record<string, boolean>>({});
   const [price, setPrice] = useState<string>(DEMO.clearingPct);
+  // Ceremony state: the on-chain FACTS behind each gate check + issuance outcome.
+  const [receipt, setReceipt] = useState<ActiveContract | null>(null);
+  const [closeUpdateId, setCloseUpdateId] = useState<string | null>(null);
+  const [facts, setFacts] = useState<{
+    valuationHash: string;
+    fairnessHash: string;
+    clearingPct: number | null;
+    consentGranted: boolean;
+    unitsToIssue: number;
+  }>({ valuationHash: '', fairnessHash: '', clearingPct: null, consentGranted: false, unitsToIssue: Number(DEMO.unitAmt) });
 
   // Read the GP's own ACS: the deal + presence of each settlement antecedent so
   // the stepper reflects real on-ledger state, not local flags.
   const refresh = async (alive: () => boolean = () => true) => {
     const forDeal = (c: ActiveContract) => c.args.dealId === DEAL_ID;
-    const [d, factory, cert, psa, basis, allocs, valuation, opinion, consent, interestOffer] =
+    const [d, factory, cert, psa, basis, allocs, valuation, opinion, consent, interestOffer, receiptC] =
       await Promise.all([
         L.myAcs(R.deal),
         L.myAcs(R.factory),
@@ -53,21 +67,37 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         L.myAcs(R.opinion),
         L.myAcs(R.consent),
         L.myAcs(R.interestOffer),
+        L.myAcs(R.receipt),
       ]);
     if (!alive()) return;
     setDeal(pick(d, (c) => c.args.cv === DEMO.cv));
     const legId = (c: ActiveContract) => (c.args.spec as { transferLegId?: string })?.transferLegId;
+    const valC = pick(valuation, forDeal);
+    const opC = pick(opinion, forDeal);
+    const certC = pick(cert, forDeal);
+    const consC = pick(consent, forDeal);
+    const psaC = pick(psa, forDeal);
+    const basisC = pick(basis, forDeal);
     setHave({
       factory: !!pick(factory, (c) => c.args.admin === L.me),
-      cert: !!pick(cert, forDeal),
-      psa: !!pick(psa, forDeal),
-      basis: !!pick(basis, forDeal),
+      cert: !!certC,
+      psa: !!psaC,
+      basis: !!basisC,
       allocUnit: !!pick(allocs, (c) => legId(c) === 'unit-buyer'),
       allocCash: !!pick(allocs, (c) => legId(c) === 'cash-lp'),
-      valuation: !!pick(valuation, forDeal),
-      opinion: !!pick(opinion, forDeal),
-      consent: !!pick(consent, forDeal),
+      valuation: !!valC,
+      opinion: !!opC,
+      // Consent counts only when the LPAC actually GRANTED it (not merely present).
+      consent: !!consC && (consC.args.granted as boolean) !== false,
       interestOffer: !!pick(interestOffer, (c) => c.args.lp === counter.lpExiting),
+    });
+    setReceipt(pick(receiptC, forDeal) ?? pick(receiptC));
+    setFacts({
+      valuationHash: (valC?.args.contentHash as string) || '',
+      fairnessHash: (opC?.args.contentHash as string) || '',
+      clearingPct: certC ? Number(certC.args.clearingPct) : null,
+      consentGranted: !!consC && (consC.args.granted as boolean) !== false,
+      unitsToIssue: Number(basisC?.args.psaPrice ?? psaC?.args.price ?? DEMO.unitAmt),
     });
   };
   useRefresh(refresh, [L.me]);
@@ -272,10 +302,40 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         burns: [{ _1: accLpCid, _2: interestLpCid }],
         fairnessHash: DEMO.fairnessHash,
       };
-      await L.submit([{ ExerciseCommand: { templateId: T.deal, contractId: deal.contractId, choice: 'Close', choiceArgument: closeArg } }], R.receipt);
+      const res = await L.submit([{ ExerciseCommand: { templateId: T.deal, contractId: deal.contractId, choice: 'Close', choiceArgument: closeArg } }], R.receipt);
+      setCloseUpdateId(res.updateId ?? null);
       await refresh();
       return 'Close signed — one atomic transaction moved every leg and produced the settlement receipt.';
     });
+
+  // The four LIVE gate checks — each reads this deal's on-chain state; the fact
+  // strings carry the anchored proof (sha256 / clearing %) when observed.
+  const ceremonyChecks: GateCheck[] = [
+    {
+      key: 'valuation',
+      label: 'Independent valuation anchored',
+      ok: !!have.valuation,
+      fact: `sha256 ${truncHash(facts.valuationHash)} · Kroll`,
+    },
+    {
+      key: 'fairness',
+      label: 'Fairness opinion anchored',
+      ok: !!have.opinion,
+      fact: `sha256 ${truncHash(facts.fairnessHash)}`,
+    },
+    {
+      key: 'consent',
+      label: 'LPAC consent recorded',
+      ok: !!have.consent,
+      fact: 'LPAC recorded consent',
+    },
+    {
+      key: 'auction',
+      label: 'Auction certificate',
+      ok: !!have.cert,
+      fact: `clearing ${facts.clearingPct != null ? Math.round(facts.clearingPct * 100) : Math.round(Number(DEMO.clearingPct) * 100)}% of NAV`,
+    },
+  ];
 
   const StepRow = ({ id, label, done, onClick, disabled }: { id: string; label: string; done: boolean; onClick: () => void; disabled?: boolean }) => (
     <div className="actions">
@@ -348,6 +408,20 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
             </p>
           </div>
         </Card>
+      )}
+
+      {show('ceremony') && (
+        <IssueUnitsGate
+          unitsToIssue={facts.unitsToIssue}
+          checks={ceremonyChecks}
+          hasBasis={!!have.basis}
+          busy={busy === 'close'}
+          issued={!!receipt}
+          issuedUnits={receipt ? Number(receipt.args.totalUnits) : facts.unitsToIssue}
+          updateId={closeUpdateId}
+          onIssue={close}
+          onInspect={inspector.open}
+        />
       )}
 
       {show('settlement') && (
