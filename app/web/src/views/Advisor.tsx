@@ -226,7 +226,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
     step('basis', 'Issuance basis assembled from the antecedent DAG.', async () => {
       const cid = async (suffix: string, pred: (c: ActiveContract) => boolean) => {
         const c = pick(await L.myAcs(suffix), pred);
-        if (!c) throw new Error(`Missing antecedent (${suffix}). Have LPAC attest valuation/fairness/consent and create the certificate + PSA first.`);
+        if (!c) throw new Error(`Missing antecedent (${suffix}). Have the valuer anchor the valuation, LPAC sign fairness + grant consent, and create the certificate + PSA first.`);
         return c.contractId;
       };
       const forDeal = (c: ActiveContract) => c.args.dealId === DEAL_ID;
