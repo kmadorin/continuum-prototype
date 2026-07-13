@@ -69,10 +69,8 @@ export default function Valuer() {
     <Card title="Independent Valuation Agent · Kroll Valuation Services">
       <div className="stack g3">
         <p className="hint" style={{ marginTop: 0 }}>
-          You are the independent agent. The GP opened the closing room for Project Continuum CV I, L.P. —
-          that is the request for your independent valuation. Your sole action is to respond: sign and anchor
-          the NAV range. The on-ledger <span className="mono">contentHash</span> below is what the GP, buyer,
-          LPs and LPAC each verify against the served document — your Canton signature is the anchor.
+          Sign and anchor the NAV range. The on-ledger <span className="mono">contentHash</span> below is what
+          every seat verifies against the served document.
         </p>
 
         <dl className="kv">

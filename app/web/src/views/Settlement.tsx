@@ -69,7 +69,6 @@ function ownOutcome(role: Role | null, holdings: ActiveContract[], me: string): 
  */
 export default function Settlement() {
   const { party, role } = useSession();
-  const [stage, setStage] = useState<string | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [outcome, setOutcome] = useState<string>('');
   const settledRef = useRef(false);
@@ -79,23 +78,18 @@ export default function Settlement() {
     let on = true;
     settledRef.current = false;
     setSettled(null);
-    setStage(null);
 
     const forCv = (c: ActiveContract) => c.args.dealId === DEMO.cv;
 
     const poll = async () => {
       if (settledRef.current) return; // stop once settled
       try {
-        const [deal, receipts, disclosures, holdings] = await Promise.all([
-          reads.activeContracts(party, { templateId: R.deal }),
+        const [receipts, disclosures, holdings] = await Promise.all([
           reads.activeContracts(party, { templateId: R.receipt }),
           reads.activeContracts(party, { templateId: R.disclosure }),
           reads.activeContracts(party, { templateId: R.holding }),
         ]);
         if (!on) return;
-
-        const d = deal.find((c) => c.args.cv === DEMO.cv) ?? deal[deal.length - 1] ?? null;
-        setStage((d?.args.stage as string) ?? null);
 
         // Prefer the room's SettlementReceipt (its cid is the shared proof value).
         // The LPAC is not in `room`, so fall back to its FairnessDisclosure.
@@ -127,20 +121,8 @@ export default function Settlement() {
     };
   }, [party, role]);
 
-  // Pre-deal: nothing to show, keep the workspace clean.
-  if (!settled && !stage) return null;
-
-  if (!settled) {
-    return (
-      <div className="awaiting-strip" role="status">
-        <span className="chip pending">Live · awaiting atomic settlement</span>
-        <span className="hint">
-          Stage <span className="mono">{stage}</span> — this window flips to SETTLED the moment your own
-          ledger projection sees the close.
-        </span>
-      </div>
-    );
-  }
+  // Only the post-close SETTLED overlay is shown; deal state lives in the Stepper.
+  if (!settled) return null;
 
   const clearingPctNum = Number(settled.clearingPct);
   const clearingLabel = Number.isFinite(clearingPctNum) ? `${(clearingPctNum * 100).toFixed(0)}%` : settled.clearingPct;
@@ -148,18 +130,14 @@ export default function Settlement() {
   return (
     <div className="settled-overlay" role="dialog" aria-label="Settlement complete" data-testid="settled">
       <div className="settled-inner">
-        <span className="settled-eyebrow">Atomic close · one transaction · every window</span>
+        <span className="settled-eyebrow">Atomic close</span>
         <h1 className="settled-title">SETTLED</h1>
 
         <div className="settled-idblock">
           <span className="settled-idlabel">
-            {settled.isReceipt ? 'Settlement receipt id — identical in every window' : 'Fairness disclosure id (LPAC scoped view)'}
+            {settled.isReceipt ? 'Settlement receipt id' : 'Fairness disclosure id (LPAC scoped view)'}
           </span>
           <code className="settled-id mono" data-testid="settled-id">{settled.sharedId}</code>
-          <span className="hint">
-            Same id in the buyer, exiting-LP, rolling-LP and GP windows = the same on-ledger contract from the
-            same atomic transaction. Not five animations — one Close.
-          </span>
         </div>
 
         <dl className="kv settled-facts">

@@ -11,7 +11,6 @@ import DealPage from './views/DealPage';
 import FocusedPage from './views/FocusedPage';
 import SignIn from './views/SignIn';
 import Settlement from './views/Settlement';
-import TrustPanel from './views/TrustPanel';
 import './styles.css';
 
 // Each seat's human label (topbar chrome). The GP lands on the full Deal Page; every
@@ -25,8 +24,41 @@ const SEAT_LABEL: Record<Role, string> = {
   valuer: 'Independent Valuer',
 };
 
+// Operator seat-switch bar: pivot between the six seats without signing out.
+const SEATS: Array<{ role: Role; label: string }> = [
+  { role: 'gp', label: 'GP' },
+  { role: 'valuer', label: 'Valuer' },
+  { role: 'lpac', label: 'LPAC' },
+  { role: 'buyer', label: 'Buyer' },
+  { role: 'lpExiting', label: 'Exiting LP' },
+  { role: 'lpRolling', label: 'Rolling LP' },
+];
+
+function SeatBar({ current, onSwitch }: { current: Role; onSwitch: (r: Role) => void }) {
+  return (
+    <nav className="seat-bar" aria-label="Switch seat">
+      <span className="seat-bar-label">Seat</span>
+      {SEATS.map((s) => (
+        <button
+          key={s.role}
+          type="button"
+          className={`seat-bar-btn${s.role === current ? ' on' : ''}`}
+          aria-current={s.role === current ? 'true' : undefined}
+          onClick={() => s.role !== current && onSwitch(s.role)}
+        >
+          {s.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function Gate() {
-  const { isSignedIn, role, custodianName, ready, signOut } = useSession();
+  const { isSignedIn, role, custodianName, ready, signOut, signIn } = useSession();
+
+  const switchSeat = (r: Role) => {
+    void signIn(r, `${r}-demo`).catch(() => {});
+  };
 
   // Wait for the initial /me restore + registry load so a reload doesn't flash the
   // SignIn screen for an already-authenticated session.
@@ -41,12 +73,11 @@ function Gate() {
   if (!isSignedIn || !role) return <SignIn />;
 
   return (
-    <div className="stack g4">
+    <div className="stack g4 has-seat-bar">
       <header className="topbar">
         <span className="wordmark">
           Continuum<span className="dot">.</span>
         </span>
-        <span className="deal-badge">Confidential closing room</span>
         <span className="spacer" />
         {custodianName ? (
           <span className="custodian-badge" title="Signing custodian">
@@ -68,7 +99,8 @@ function Gate() {
       {/* Overlays the workspace with a full-screen SETTLED takeover once this
           party's own projection sees the atomic close. */}
       <Settlement />
-      <TrustPanel />
+
+      <SeatBar current={role} onSwitch={switchSeat} />
     </div>
   );
 }

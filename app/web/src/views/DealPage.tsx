@@ -75,40 +75,40 @@ export function deriveStages(
 
 /** One-liner steering the signed-in role at the current lifecycle stage. */
 function whatNext(role: Role, activeLabel: string | null): string {
-  if (!activeLabel) return 'Deal closed — the settlement receipt is anchored on-ledger. Verify it in the Ledger tab.';
+  if (!activeLabel) return 'Deal closed. Settlement receipt anchored — verify it in the Ledger tab.';
   const m: Record<string, Partial<Record<Role, string>>> = {
     Valuation: {
-      gp: 'Open the closing room, then set the clearing price once the independent valuation is in.',
-      valuer: 'The GP opened the closing room — that is the request for your independent valuation. Sign and anchor it on the Valuation tab; your hash becomes the reference every seat verifies.',
-      lpac: 'Review and verify the valuation + fairness documents on the Valuation tab.',
-      buyer: 'Review the independent valuation, then ready your sealed bid.',
-      lpExiting: 'Await the independent valuation — your sell decision comes after the price is set.',
-      lpRolling: 'Await the independent valuation — weigh roll vs sell once the price is set.',
+      gp: 'Ready: open the closing room.',
+      valuer: 'Sign and anchor the valuation on the Valuation tab.',
+      lpac: 'Review the valuation and fairness documents on the Valuation tab.',
+      buyer: 'Review the valuation, then ready your sealed bid.',
+      lpExiting: 'Awaiting the valuation before your election.',
+      lpRolling: 'Awaiting the valuation before your election.',
     },
     'LPAC Consent': {
-      gp: 'Awaiting LPAC consent — it advances the deal so you can open elections.',
-      lpac: 'Record LPAC consent from your Approval queue to open the room.',
+      gp: 'Awaiting LPAC consent.',
+      lpac: 'Record consent from your Approval queue.',
     },
     Auction: {
-      gp: 'Set the clearing price and disclose it to the room (Valuation tab).',
-      buyer: 'Submit your sealed bid on the Auction & Elections tab — blind to every other buyer.',
-      lpExiting: 'The auction is clearing — your election opens next.',
-      lpRolling: 'The auction is clearing — your roll/sell election opens next.',
+      gp: 'Ready: set the clearing price.',
+      buyer: 'Submit your sealed bid on the Auction & Elections tab.',
+      lpExiting: 'Your election opens next.',
+      lpRolling: 'Your election opens next.',
     },
     Elections: {
-      gp: 'Open elections, then run the settlement backstage on the Settlement tab.',
-      buyer: 'Accept your execution delegation so the GP can settle your unit leg at Close.',
-      lpExiting: 'Elect to sell at the clearing price on the Auction & Elections tab.',
-      lpRolling: 'Compare roll vs sell, then file your election on the Auction & Elections tab.',
+      gp: 'Ready: open elections.',
+      buyer: 'Accept your execution delegation.',
+      lpExiting: 'File your election on the Auction & Elections tab.',
+      lpRolling: 'File your election on the Auction & Elections tab.',
     },
     Issuance: {
-      gp: 'Issue units and run the atomic Close on the Settlement tab.',
+      gp: 'Ready: issue units, then Close.',
     },
     Close: {
-      gp: 'Run the atomic Close on the Settlement tab — one transaction settles every leg.',
+      gp: 'Ready: run the Close.',
     },
   };
-  return m[activeLabel]?.[role] ?? `Awaiting the GP to progress the ${activeLabel} stage.`;
+  return m[activeLabel]?.[role] ?? `Awaiting the ${activeLabel} stage.`;
 }
 
 // ── activity feed ─────────────────────────────────────────────────────────────
@@ -278,8 +278,6 @@ export default function DealPage() {
       <div className="deal-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && (
           <OverviewTab
-            role={role}
-            stages={stages}
             whatNext={whatNext(role ?? 'gp', activeLabel)}
             feed={feed}
             hasApprovals={approvals.length > 0}
@@ -296,7 +294,7 @@ export default function DealPage() {
         {tab === 'auction' && (
           <TabActions
             title="Auction & Elections"
-            note="Sealed-bid auction and per-LP roll/sell elections. Amounts stay peer-blind — you see only that a bid or election was filed, never the figures, until the atomic Close. Open elections once the deal is Consented."
+            note="Bids and elections are sealed until close."
           >
             <Advisor embedded={['elections']} />
           </TabActions>
@@ -305,7 +303,7 @@ export default function DealPage() {
         {tab === 'settlement' && (
           <TabActions
             title="Settlement"
-            note="Issue units through the gate-ceremony — the ledger will not mint until all four proofs are anchored — then fire one atomic Close that moves every leg. Counterparties pre-authorize their legs in their own seats."
+            note="Close requires all four anchored proofs."
           >
             <Advisor embedded={['ceremony', 'settlement']} />
           </TabActions>
@@ -322,29 +320,17 @@ export default function DealPage() {
 // Overview tab: large stepper + what-happens-next + recent activity, plus the
 // four-eyes Approval queue when this party has items awaiting its signature.
 function OverviewTab({
-  role,
-  stages,
   whatNext,
   feed,
   hasApprovals,
 }: {
-  role: Role | null;
-  stages: Stage[];
   whatNext: string;
   feed: FeedItem[];
   hasApprovals: boolean;
 }) {
   return (
     <div className="stack g4">
-      <div className="card">
-        <h2>Lifecycle</h2>
-        <Stepper stages={stages} size="large" style={{ marginTop: 14 }} />
-      </div>
-
-      <div className="callout">
-        <div className="ct">What happens next{role ? ` · ${role}` : ''}</div>
-        <p>{whatNext}</p>
-      </div>
+      <p className="status-line">{whatNext}</p>
 
       {hasApprovals && (
         <div>
@@ -369,7 +355,7 @@ function OverviewTab({
             </ul>
           ) : (
             <p className="hint" style={{ padding: 18, margin: 0 }}>
-              No on-ledger activity in your projection yet. As the deal progresses, each event you can see appears here.
+              No activity yet.
             </p>
           )}
         </div>
