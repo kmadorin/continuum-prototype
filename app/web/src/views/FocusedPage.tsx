@@ -20,7 +20,8 @@ import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
 import Stepper, { type Stage } from '../components/Stepper';
 import KpiRow, { type Kpi } from '../components/KpiRow';
-import Tabs, { type TabDef } from '../components/Tabs';
+import { type TabDef } from '../components/Tabs';
+import Shell from '../components/Shell';
 import Buyer from './Buyer';
 import ExitingLP from './ExitingLP';
 import RollingLP from './RollingLP';
@@ -102,9 +103,54 @@ function focusedTiles(role: Role, f: Facts): Kpi[] {
   return tiles;
 }
 
-function SeatBody({ role }: { role: Role }) {
+/** Sidebar sections per narrow seat. Deliberately NO "Overview" — a focused seat
+ *  has one job; naming its workspace after that job beats a generic label. The
+ *  LPAC keeps Documents + Ledger: its whole role is verifying the record. */
+function seatNav(role: Role): TabDef[] {
+  switch (role) {
+    case 'valuer':
+      return [{ id: 'workspace', label: 'Valuation report' }];
+    case 'buyer':
+      return [{ id: 'workspace', label: 'Bid & holding' }];
+    case 'lpExiting':
+      return [{ id: 'workspace', label: 'Election & proceeds' }];
+    case 'lpRolling':
+      return [{ id: 'workspace', label: 'Election & holding' }];
+    case 'lpac':
+      return [
+        { id: 'workspace', label: 'Governance' },
+        { id: 'documents', label: 'Documents' },
+        { id: 'ledger', label: 'Ledger' },
+      ];
+    default:
+      return [{ id: 'workspace', label: 'Workspace' }];
+  }
+}
+
+/** The one line under the deal title that says what this seat is here to do. */
+const SEAT_PURPOSE: Record<Role, string> = {
+  gp: '',
+  valuer: 'Independent valuation agent — sign and anchor the NAV range',
+  buyer: 'Secondary buyer — sealed bid, blind to every other buyer',
+  lpExiting: 'Exiting LP — sell at the clearing price, privately',
+  lpRolling: 'Rolling LP — roll into the new vehicle, privately',
+  lpac: 'LPAC oversight — consent, fairness, and the scoped post-close view',
+};
+
+function SeatBody({ role, section }: { role: Role; section: string }) {
   const { items: approvals } = usePendingApprovals();
-  const [subTab, setSubTab] = useState<'documents' | 'ledger'>('documents');
+
+  if (role === 'lpac') {
+    if (section === 'documents') return <DocumentsTab />;
+    if (section === 'ledger') return <AuditTrail />;
+    return (
+      <div className="stack g4">
+        <LPAC embedded={['governance']} />
+        {approvals.length > 0 && <ApprovalQueue />}
+        <LPAC embedded={['window']} />
+      </div>
+    );
+  }
 
   switch (role) {
     case 'valuer':
@@ -115,23 +161,6 @@ function SeatBody({ role }: { role: Role }) {
       return <ExitingLP embedded={['election', 'preauth', 'holding']} />;
     case 'lpRolling':
       return <RollingLP embedded={['election', 'preauth', 'holding']} />;
-    case 'lpac': {
-      const tabs: TabDef[] = [
-        { id: 'documents', label: 'Documents' },
-        { id: 'ledger', label: 'Ledger' },
-      ];
-      return (
-        <div className="stack g4">
-          <LPAC embedded={['governance']} />
-          {approvals.length > 0 && <ApprovalQueue />}
-          <LPAC embedded={['window']} />
-          <Tabs tabs={tabs} current={subTab} onChange={(id) => setSubTab(id as 'documents' | 'ledger')} />
-          <div className="deal-panel" role="tabpanel" id={`panel-${subTab}`} aria-labelledby={`tab-${subTab}`}>
-            {subTab === 'documents' ? <DocumentsTab /> : <AuditTrail />}
-          </div>
-        </div>
-      );
-    }
     default:
       return null;
   }
@@ -141,6 +170,7 @@ export default function FocusedPage() {
   const L = useLedger();
   const { role } = useSession();
   const inspector = useInspector();
+  const [section, setSection] = useState('workspace');
 
   const [facts, setFacts] = useState<Facts>({ deal: null, hasReceipt: false, ownElection: false, ownUnits: 0, ownUsdc: 0 });
 
@@ -184,22 +214,27 @@ export default function FocusedPage() {
   const stages = role === 'valuer' ? [] : miniStages(role, facts);
   const tiles = focusedTiles(role, facts);
   const oversight = role === 'lpac';
+  const stageName = facts.deal?.args.stage as string | undefined;
 
   return (
-    <div className="deal-page focused-page stack g4">
-      <header className="deal-header focused-header">
-        <div className="dh-titles">
-          <span className="dh-eyebrow">GP-Led Continuation Vehicle</span>
-          <h1>Project Continuum CV I, L.P.</h1>
-        </div>
-        {stages.length > 0 && <Stepper stages={stages} size="compact" />}
-      </header>
+    <Shell
+      nav={seatNav(role)}
+      current={section}
+      onNav={setSection}
+      navLabel="Your seat"
+      eyebrow="GP-led continuation vehicle"
+      title="Project Continuum CV I, L.P."
+      subtitle={SEAT_PURPOSE[role]}
+      headSide={stages.length > 0 ? <Stepper stages={stages} size="compact" /> : undefined}
+      status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
+    >
+      {section === 'workspace' && tiles.length > 0 && (
+        <KpiRow tiles={tiles} variant="strip" onInspect={oversight ? inspector.open : undefined} />
+      )}
 
-      {tiles.length > 0 && <KpiRow tiles={tiles} variant="strip" onInspect={oversight ? inspector.open : undefined} />}
-
-      <div className="deal-panel">
-        <SeatBody role={role} />
+      <div className="deal-panel" role="tabpanel" id={`panel-${section}`} aria-labelledby={`tab-${section}`}>
+        <SeatBody role={role} section={section} />
       </div>
-    </div>
+    </Shell>
   );
 }

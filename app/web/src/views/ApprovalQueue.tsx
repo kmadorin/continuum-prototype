@@ -267,7 +267,7 @@ export default function ApprovalQueue() {
           </p>
 
           <div className="actions">
-            <button className="btn" type="button" disabled={busy === item.id} onClick={() => approve(item)}>
+            <button className="btn primary" type="button" disabled={busy === item.id} onClick={() => approve(item)}>
               {busy === item.id ? 'Signing…' : item.approveLabel}
             </button>
             <button className="btn ghost" type="button" disabled={busy === item.id} onClick={() => reject(item.id)}>

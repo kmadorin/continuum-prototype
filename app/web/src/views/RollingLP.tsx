@@ -208,7 +208,7 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
               </div>
             ) : (
               <div className="actions">
-                <button className="btn" type="button" disabled={!!busy} onClick={electRoll}>
+                <button className="btn primary" type="button" disabled={!!busy} onClick={electRoll}>
                   {busy === 'elect' ? 'Signing…' : 'Elect to roll'}
                 </button>
                 <span className="cant-see">Signed by your custodian — blind to every other LP.</span>

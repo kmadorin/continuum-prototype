@@ -122,72 +122,72 @@ export default function SignIn() {
   }
 
   return (
-    <div className="portal-wrap">
-      <div className="portal-lede">
-        <span className="eyebrow accent">Sign in</span>
+    <div className="signin-shell">
+      {/* Brand panel — who this is and what happens here. Institutional, no landing fluff. */}
+      <div className="signin-brand">
+        <span className="wordmark">
+          Continuum<span className="dot">.</span>
+        </span>
         <h1>Run a GP-led continuation deal, end to end.</h1>
         <p>
-          Continuum runs continuation closes as a single confidential workspace — a sealed-bid buyer auction
-          sets the price, investors elect privately, and every leg settles at once or not at all. Each seat is
-          held at its own qualified custodian, which signs on the party's behalf under policy. Open several
-          seats in separate tabs to watch the same close from every side.
+          A single confidential workspace: a sealed-bid buyer auction sets the price, investors elect
+          privately, and every leg settles at once or not at all. Each seat is held at its own qualified
+          custodian, which signs on the party's behalf under policy — no signing key ever touches this
+          browser.
         </p>
+        <div className="sb-foot">
+          <span>Canton devnet · custody-signed · atomic settlement</span>
+          <span>Open several seats in separate tabs to watch the same close from every side.</span>
+        </div>
       </div>
 
-      {picked === null ? (
-        <>
-          <p className="section-label">Choose an account</p>
-          <div className="accounts">
-            {ROLES.map((role) => {
-              const m = META[role];
-              const custodian = custodians[role];
-              return (
-                <button
-                  key={role}
-                  className={`account${m.wide ? ' wide' : ''}`}
-                  type="button"
-                  data-role={role}
-                  onClick={() => choose(role)}
-                >
-                  <div className="acc-top">
+      <div className="signin-accounts">
+        {picked === null ? (
+          <>
+            <p className="section-label">Choose your seat</p>
+            <div className="accounts">
+              {ROLES.map((role) => {
+                const m = META[role];
+                const custodian = custodians[role];
+                return (
+                  <button key={role} className="account" type="button" data-role={role} onClick={() => choose(role)}>
                     <span className="acc-avatar" aria-hidden="true">
                       {m.avatar}
                     </span>
-                    <div>
-                      <div className="acc-name">{m.name}</div>
-                      <div className="acc-role">{m.seat}</div>
-                    </div>
-                  </div>
-                  <div className="acc-org">{m.blurb}</div>
-                  {custodian ? <div className="acc-custodian">Custodian · {custodian}</div> : null}
-                  <span className="acc-enter">{m.cta}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="portal-foot">
-            <span className="note">
-              Tip — open several seats in separate tabs to watch the same close from every side.
-            </span>
-            <button type="button" className="btn ghost" onClick={resetDemo} disabled={resetting}>
-              {resetting ? 'Resetting…' : 'Reset demo'}
-            </button>
-          </div>
-        </>
-      ) : (
-        <LoginPanel
-          meta={META[picked]}
-          custodian={custodians[picked]}
-          username={username}
-          password={password}
-          busy={busy}
-          error={error}
-          onUsername={setUsername}
-          onPassword={setPassword}
-          onSubmit={submit}
-          onBack={() => setPicked(null)}
-        />
-      )}
+                    <span>
+                      <span className="acc-name">{m.name}</span>
+                      <span className="acc-role" style={{ display: 'block' }}>
+                        {m.seat}
+                        {custodian ? ` · ${custodian}` : ''}
+                      </span>
+                    </span>
+                    <span className="acc-enter">{m.cta}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="portal-foot">
+              <span className="note">Demo credentials are prefilled — pick a seat and sign in.</span>
+              <button type="button" className="btn ghost" onClick={resetDemo} disabled={resetting}>
+                {resetting ? 'Resetting…' : 'Reset demo'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <LoginPanel
+            meta={META[picked]}
+            custodian={custodians[picked]}
+            username={username}
+            password={password}
+            busy={busy}
+            error={error}
+            onUsername={setUsername}
+            onPassword={setPassword}
+            onSubmit={submit}
+            onBack={() => setPicked(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -208,61 +208,59 @@ function LoginPanel(props: {
   return (
     <form
       className="stack g4"
-      style={{ maxWidth: 480 }}
+      style={{ maxWidth: 440, marginTop: 14 }}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
       }}
     >
       <p className="section-label">Sign in to your custodian</p>
-      <div className="acc-top">
-        <span className="acc-avatar" aria-hidden="true">
-          {meta.avatar}
-        </span>
-        <div>
-          <div className="acc-name">{meta.name}</div>
-          <div className="acc-role">{meta.seat}</div>
-          {custodian ? <div className="acc-custodian">Custodian · {custodian}</div> : null}
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span className="acc-avatar" aria-hidden="true">
+            {meta.avatar}
+          </span>
+          <div>
+            <div className="acc-name">{meta.name}</div>
+            <div className="acc-role">{meta.seat}</div>
+            {custodian ? <div className="acc-custodian">Custodian · {custodian}</div> : null}
+          </div>
         </div>
-      </div>
 
-      <div className="stack g2">
-        <label className="acc-role" htmlFor="username">
-          Username
-        </label>
-        <input
-          id="username"
-          className="input"
-          value={username}
-          autoComplete="username"
-          spellCheck={false}
-          onChange={(e) => onUsername(e.target.value)}
-        />
-        <label className="acc-role" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          className="input"
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => onPassword(e.target.value)}
-          aria-invalid={error ? true : undefined}
-        />
-        <span className="note">
-          Your custodian signs on your behalf — no signing key ever touches this browser.
-        </span>
+        <div className="form-row">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            className="input"
+            value={username}
+            autoComplete="username"
+            spellCheck={false}
+            onChange={(e) => onUsername(e.target.value)}
+          />
+        </div>
+        <div className="form-row">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            onChange={(e) => onPassword(e.target.value)}
+            aria-invalid={error ? true : undefined}
+          />
+        </div>
+        <span className="hint">Your custodian signs on your behalf — no signing key ever touches this browser.</span>
         {error ? <div className="field-err">{error}</div> : null}
-      </div>
 
-      <div className="portal-foot">
-        <button type="submit" className="btn" disabled={busy || !username.trim() || !password}>
-          {busy ? 'Signing in…' : meta.cta}
-        </button>
-        <button type="button" className="btn ghost" onClick={onBack} disabled={busy}>
-          Back
-        </button>
+        <div className="actions">
+          <button type="submit" className="btn primary" disabled={busy || !username.trim() || !password}>
+            {busy ? 'Signing in…' : meta.cta}
+          </button>
+          <button type="button" className="btn ghost" onClick={onBack} disabled={busy}>
+            Back
+          </button>
+        </div>
       </div>
     </form>
   );

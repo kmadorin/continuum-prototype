@@ -1,32 +1,20 @@
-// App shell (custody build). The browser holds NO signing key: each role logs in
+// App gate (custody build). The browser holds NO signing key: each role logs in
 // with backend credentials, and the CUSTODY BACKEND signs that party's txs under
-// policy. Not signed in → the SignIn gate. Signed in → that role's workspace,
-// whose actions POST to `/action` (backend signs) and whose reads go through the
-// per-party proxy. The topbar shows the logged-in party's CUSTODIAN (institutional
-// chrome). Role→view routing lives here; every view reads/writes via `useLedger()`.
-import { SessionProvider, useSession, type Role } from './state/WalletSession';
+// policy. Not signed in → the SignIn screen. Signed in → that role's workspace,
+// which renders the shared application Shell (sidebar, page header, content):
+// the GP gets the full lifecycle Deal Page, every narrow seat a focused page.
+// All chrome that used to live here (topbar, trust footer) now lives in the Shell.
+import { SessionProvider, useSession } from './state/WalletSession';
 import { ToastProvider } from './state/Toast';
 import { InspectorProvider } from './state/Inspector';
 import DealPage from './views/DealPage';
 import FocusedPage from './views/FocusedPage';
 import SignIn from './views/SignIn';
 import Settlement from './views/Settlement';
-import TrustPanel from './views/TrustPanel';
 import './styles.css';
 
-// Each seat's human label (topbar chrome). The GP lands on the full Deal Page; every
-// narrow seat lands on its role-scoped FocusedPage.
-const SEAT_LABEL: Record<Role, string> = {
-  gp: 'Advisor',
-  buyer: 'Secondary Buyer',
-  lpExiting: 'Exiting LP',
-  lpRolling: 'Rolling LP',
-  lpac: 'LPAC Oversight',
-  valuer: 'Independent Valuer',
-};
-
 function Gate() {
-  const { isSignedIn, role, custodianName, ready, signOut } = useSession();
+  const { isSignedIn, role, ready } = useSession();
 
   // Wait for the initial /me restore + registry load so a reload doesn't flash the
   // SignIn screen for an already-authenticated session.
@@ -41,35 +29,15 @@ function Gate() {
   if (!isSignedIn || !role) return <SignIn />;
 
   return (
-    <div className="stack g4">
-      <header className="topbar">
-        <span className="wordmark">
-          Continuum<span className="dot">.</span>
-        </span>
-        <span className="deal-badge">Confidential closing room</span>
-        <span className="spacer" />
-        {custodianName ? (
-          <span className="custodian-badge" title="Signing custodian">
-            <span className="custodian-dot" aria-hidden="true" />
-            {custodianName}
-          </span>
-        ) : null}
-        <span className="view-label">{SEAT_LABEL[role]}</span>
-        <button type="button" className="btn ghost" onClick={signOut}>
-          Sign out
-        </button>
-      </header>
+    <>
+      {/* GP orchestrates → full Deal Page; every narrow seat → role-scoped FocusedPage.
+          Both render the Shell themselves (their nav differs). */}
+      {role === 'gp' ? <DealPage /> : <FocusedPage />}
 
-      <main className="portal-wrap">
-        {/* GP orchestrates → full Deal Page; every narrow seat → role-scoped FocusedPage. */}
-        {role === 'gp' ? <DealPage /> : <FocusedPage />}
-      </main>
-
-      {/* Overlays the workspace with a full-screen SETTLED takeover once this
-          party's own projection sees the atomic close. */}
+      {/* Overlays the workspace with the SETTLED dialog once this party's own
+          projection sees the atomic close. Dismissable — the proof lives behind it. */}
       <Settlement />
-      <TrustPanel />
-    </div>
+    </>
   );
 }
 

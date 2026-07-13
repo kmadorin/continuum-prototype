@@ -164,7 +164,7 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
               </div>
             </div>
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy} onClick={submitBid}>
+              <button className="btn primary" type="button" disabled={!!busy} onClick={submitBid}>
                 {busy === 'bid' ? 'Signing…' : 'Submit sealed bid'}
               </button>
               <span className="cant-see">Signed by your custodian — blind to other buyers.</span>

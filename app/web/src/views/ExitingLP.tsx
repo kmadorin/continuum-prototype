@@ -197,7 +197,7 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               </div>
             ) : (
               <div className="actions">
-                <button className="btn" type="button" disabled={!!busy} onClick={electSell}>
+                <button className="btn primary" type="button" disabled={!!busy} onClick={electSell}>
                   {busy === 'elect' ? 'Signing…' : 'Elect to sell'}
                 </button>
                 <span className="cant-see">Signed by your custodian — blind to every other LP.</span>

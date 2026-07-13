@@ -380,11 +380,37 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
     },
   ];
 
+  // One backstage step = one status row: what it is, its on-ledger state, and the
+  // signing action. Done → confirmed (green, no button); blocked → the button says
+  // nothing until its prerequisites exist; available → sign. Post-close, every step
+  // that no longer reads as done was CONSUMED by the Close (allocations executed,
+  // basis validated, authority spent) — offering to re-sign it would describe a deal
+  // that has already settled.
+  const dealClosed = !!receipt || stage === 'Closed';
   const StepRow = ({ id, label, done, onClick, disabled }: { id: string; label: string; done: boolean; onClick: () => void; disabled?: boolean }) => (
-    <div className="actions">
-      <button className="btn" type="button" disabled={!!busy || done || disabled} onClick={onClick}>
-        {done ? `${label} ✓` : busy === id ? 'Signing…' : label}
-      </button>
+    <div className={`task${done || dealClosed ? ' muted' : ''}`}>
+      <span className={`tk-dot${done || dealClosed ? ' done' : disabled ? ' blocked' : ''}`} aria-hidden="true" />
+      <div className="tk-main">
+        <span className="tk-title">{label}</span>
+        <span className="tk-where">
+          {done
+            ? 'Signed — on-ledger'
+            : dealClosed
+              ? 'Spent inside the atomic Close'
+              : disabled
+                ? 'Blocked — prerequisites missing'
+                : 'Ready to sign'}
+        </span>
+      </div>
+      {done ? (
+        <span className="chip ok">Signed</span>
+      ) : dealClosed ? (
+        <span className="chip ok">Consumed by the close</span>
+      ) : (
+        <button className="btn sm" type="button" disabled={!!busy || disabled} onClick={onClick}>
+          {busy === id ? 'Signing…' : 'Sign'}
+        </button>
+      )}
     </div>
   );
 
@@ -418,7 +444,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         <Card title="Set the clearing price">
           <div className="stack g3">
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
+              <button className="btn primary" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
                 {busy === 'open' ? 'Signing…' : 'Open closing room'}
               </button>
             </div>
@@ -430,7 +456,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
               </div>
             </div>
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !deal} onClick={setClearing}>
+              <button className="btn primary" type="button" disabled={!!busy || !deal} onClick={setClearing}>
                 {busy === 'price' ? 'Signing…' : 'Set price & disclose to room'}
               </button>
             </div>
@@ -442,7 +468,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         <Card title="Open elections">
           <div className="stack g3">
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
+              <button className="btn primary" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
                 {busy === 'elect' ? 'Signing…' : 'Open elections'}
               </button>
             </div>
@@ -474,7 +500,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
           counterparty accepts (buyer/LP delegations, LP interest + participation) are signed in those tabs; run
           Close once they're in — the coordinated live close is Task 9.
         </p>
-        <div className="stack g3" style={{ marginTop: 14 }}>
+        <div className="taskq" style={{ marginTop: 14 }}>
           <StepRow id="factory" label="Create registry allocation factory" done={!!have.factory} onClick={createFactory} />
           <StepRow id="cert" label="Sign auction certificate" done={!!have.cert} onClick={createCert} />
           <StepRow id="psa" label="Sign purchase agreement" done={!!have.psa} onClick={createPsa} />

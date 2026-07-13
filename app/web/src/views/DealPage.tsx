@@ -18,13 +18,14 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, R, DEMO, shortParty } from '../lib/useLedger';
+import { useLedger, R, DEMO, custodians, shortParty } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
 import Stepper, { type Stage } from '../components/Stepper';
 import KpiRow, { type Kpi } from '../components/KpiRow';
-import Tabs, { type TabDef } from '../components/Tabs';
+import { type TabDef } from '../components/Tabs';
+import Shell from '../components/Shell';
 import Advisor from './Advisor';
 import AuditTrail from './AuditTrail';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
@@ -261,7 +262,7 @@ export default function DealPage() {
       : { label: 'CV units issued', value: '— Pending Issuance', pending: true },
   ];
 
-  // ── tabs ──────────────────────────────────────────────────────────────────
+  // ── sections (sidebar nav) ────────────────────────────────────────────────
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', badge: approvals.length || undefined },
     { id: 'valuation', label: 'Valuation' },
@@ -274,25 +275,21 @@ export default function DealPage() {
   const feed = buildFeed({ deal, elections, bids, consents, valuations, opinions, receipts });
 
   return (
-    <div className="deal-page stack g4">
-      {/* Header ---------------------------------------------------------------- */}
-      <header className="deal-header">
-        <div className="dh-titles">
-          <span className="dh-eyebrow">GP-Led Continuation Vehicle</span>
-          <h1>Project Continuum CV I, L.P.</h1>
-          {/* The sponsor is the advisory firm running the deal. Fireblocks is the CUSTODIAN
-              that holds this seat's key and signs on its behalf — that belongs in the topbar
-              badge, where it already is, not on the sponsor line. */}
-          <p className="dh-sponsor">Sponsor: Whitfield Advisory · Meridian Growth Fund III</p>
-        </div>
-        <Stepper stages={stages} size="compact" />
-      </header>
-
+    <Shell
+      nav={tabs}
+      current={tab}
+      onNav={(id) => setTab(id as TabId)}
+      navLabel="Deal"
+      eyebrow="GP-led continuation vehicle"
+      title="Project Continuum CV I, L.P."
+      // The sponsor is the advisory firm running the deal. Fireblocks is the CUSTODIAN that
+      // holds this seat's key — that lives in the sidebar identity, not on the sponsor line.
+      subtitle="Sponsor: Whitfield Advisory · Meridian Growth Fund III"
+      headSide={<Stepper stages={stages} size="compact" />}
+      status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
+    >
       {/* Sticky KPI row -------------------------------------------------------- */}
       <KpiRow tiles={tiles} onInspect={inspector.open} />
-
-      {/* Tab nav --------------------------------------------------------------- */}
-      <Tabs tabs={tabs} current={tab} onChange={(id) => setTab(id as TabId)} />
 
       <div className="deal-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && (
@@ -333,7 +330,7 @@ export default function DealPage() {
 
         {tab === 'ledger' && <AuditTrail />}
       </div>
-    </div>
+    </Shell>
   );
 }
 
@@ -354,40 +351,88 @@ function OverviewTab({
   // The header already carries the stepper; repeating it verbatim in a "Lifecycle" card said
   // the same thing twice and pushed the only thing the Overview adds — what to do next, and
   // what just happened — below the fold.
+  // Two columns on wide screens: your move (and anything awaiting your signature)
+  // on the left, the projection's event feed on the right.
   return (
-    <div className="stack g4">
-      <div className="callout">
-        <div className="ct">What happens next{role ? ` · ${role}` : ''}</div>
-        <p>{whatNext}</p>
+    <div className="cols-main-side">
+      <div className="col">
+        <div className="callout">
+          <div className="ct">What happens next{role ? ` · ${role}` : ''}</div>
+          <p>{whatNext}</p>
+        </div>
+
+        {hasApprovals && <ApprovalQueue />}
+
+        <ParticipantsPanel />
       </div>
 
-      {hasApprovals && (
-        <div>
-          <ApprovalQueue />
+      <div className="col">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Recent activity</h2>
+            <span className="ph-meta">{feed.length ? `${feed.length} event${feed.length === 1 ? '' : 's'}` : 'nothing yet'}</span>
+          </div>
+          <div className="panel-body flush">
+            {feed.length ? (
+              <ul className="activity">
+                {feed.map((f, i) => (
+                  <li key={`${f.text}-${i}`} className={f.tone}>
+                    <span className="a-dot" aria-hidden="true" />
+                    <span className="a-text">{f.text}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="hint" style={{ padding: 18, margin: 0 }}>
+                No on-ledger activity in your projection yet. As the deal progresses, each event you can see appears here.
+              </p>
+            )}
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
 
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Recent activity</h2>
-          <span className="ph-meta">{feed.length ? `${feed.length} event${feed.length === 1 ? '' : 's'}` : 'nothing yet'}</span>
-        </div>
-        <div className="panel-body flush">
-          {feed.length ? (
-            <ul className="activity">
-              {feed.map((f, i) => (
-                <li key={`${f.text}-${i}`} className={f.tone}>
-                  <span className="a-dot" aria-hidden="true" />
-                  <span className="a-text">{f.text}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="hint" style={{ padding: 18, margin: 0 }}>
-              No on-ledger activity in your projection yet. As the deal progresses, each event you can see appears here.
-            </p>
-          )}
-        </div>
+// Participants & visibility — who is in the room, which custodian signs for them,
+// and what the LEDGER lets each of them see. The visibility column is the privacy
+// model stated as fact (Daml signatories/observers), not aspiration: it is exactly
+// what this demo proves when you open two seats side by side.
+const PARTICIPANTS: Array<{ role: keyof typeof custodians; seat: string; sees: string }> = [
+  { role: 'gp', seat: 'Advisor / Organizer', sees: 'Deal state, proofs — never sealed bids or elections' },
+  { role: 'valuer', seat: 'Independent valuer', sees: 'Its own valuation and anchor hash only' },
+  { role: 'lpac', seat: 'LPAC oversight', sees: 'Bid markers, fairness scope — never amounts pre-close' },
+  { role: 'buyer', seat: 'Secondary buyer', sees: 'Its own bid and leg — no other bids or elections' },
+  { role: 'lpExiting', seat: 'Exiting LP', sees: 'Its own election and cash leg — no peer elections' },
+  { role: 'lpRolling', seat: 'Rolling LP', sees: 'Its own election and rolled units — no peer elections' },
+];
+
+function ParticipantsPanel() {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>Participants &amp; visibility</h2>
+        <span className="ph-meta">enforced by the ledger, not the app</span>
+      </div>
+      <div className="panel-body flush">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Seat</th>
+              <th>Signing custodian</th>
+              <th>Sees</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PARTICIPANTS.map((p) => (
+              <tr key={p.role}>
+                <td className="nm">{p.seat}</td>
+                <td>{custodians[p.role] ?? '—'}</td>
+                <td className="mute">{p.sees}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

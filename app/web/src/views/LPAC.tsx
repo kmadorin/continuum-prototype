@@ -47,7 +47,7 @@ function ReviewDoc({
     <div className="card review-doc" data-testid="review-doc">
       <div className="stack g2">
         <div className="rd-head">
-          <span className="chip ok val-badge">{anchored ? 'Anchored' : 'Not yet anchored'}</span>
+          <span className={`chip ${anchored ? 'ok' : 'pending'} val-badge`}>{anchored ? 'Anchored' : 'Not yet anchored'}</span>
           <span className="ph-meta mono">{docName}</span>
         </div>
         <div className="doc-title">{title}</div>
@@ -222,7 +222,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
               {!consentRecorded && (
                 <div className="stack g3" style={{ marginTop: 16 }}>
                   <div className="actions">
-                    <button className="btn" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
+                    <button className="btn primary" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
                       {opinion ? 'Fairness opinion signed ✓' : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
                     </button>
                     <button className="btn ghost" type="button" disabled={!!busy || !!consent} onClick={grantConsent}>
@@ -250,7 +250,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
                   <dt>Clearing %</dt>
                   <dd>{fmtPct(d.args.clearingPct)}</dd>
                   <dt>Total units</dt>
-                  <dd className="mono">{String(d.args.totalUnits)}</dd>
+                  <dd className="mono">{Number(d.args.totalUnits).toLocaleString()}</dd>
                   <dt>Fairness hash</dt>
                   <dd className="mono">{String(d.args.fairnessHash)}</dd>
                 </dl>
@@ -261,7 +261,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
             {receipts.map((r) => (
               <dl className="kv" key={r.contractId}>
                 <dt>Settlement receipt — units</dt>
-                <dd className="mono">{String(r.args.totalUnits)}</dd>
+                <dd className="mono">{Number(r.args.totalUnits).toLocaleString()}</dd>
                 <dt>Clearing %</dt>
                 <dd>{fmtPct(r.args.clearingPct)}</dd>
               </dl>
