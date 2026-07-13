@@ -132,12 +132,15 @@ function buildFeed(s: {
     const pct = Math.round(Number(s.deal.args.clearingPrice) * 100);
     f.push({ text: `Clearing price set — ${pct}% of NAV`, tone: 'ok' });
   }
-  s.bids.forEach(() => f.push({ text: 'Sealed bid submitted — blind to peers and to the GP', tone: 'info' }));
-  for (const e of s.elections) {
-    const lp = shortParty(String(e.args.lp));
-    const sell = Number(e.args.sellNav) > 0;
-    f.push({ text: `${lp} elected to ${sell ? 'SELL' : 'ROLL'}`, tone: 'info' });
-  }
+  // Both feeds are built from the CONTENTLESS markers — the only thing the GP can see. The
+  // amounts behind them are in contracts the GP is not a stakeholder of, which is the point:
+  // the organizer of the auction cannot read the auction.
+  s.bids.forEach((b) =>
+    f.push({ text: `${shortParty(String(b.args.buyer))} filed a sealed bid — amount blind to you`, tone: 'info' }),
+  );
+  s.elections.forEach((e) =>
+    f.push({ text: `${shortParty(String(e.args.lp))} filed an election — roll/sell sealed`, tone: 'info' }),
+  );
   for (const r of s.receipts) {
     f.push({ text: `Settlement receipt issued — ${String(r.args.totalUnits)} CV units`, tone: 'ok' });
   }
@@ -165,11 +168,15 @@ export default function DealPage() {
     let on = true;
     const tick = async () => {
       try {
+        // Elections + bids come from the MARKERS (ElectionFiled / BidFiled), never from the
+        // private LPElection / SealedBid: those have a single signatory and no observers, so
+        // this seat could poll them forever and always read zero — which is exactly what the
+        // deal page used to do ("0 of 2 responded" with both elections filed).
         const [d, rec, el, sb, cons, val, op] = await Promise.all([
           L.myAcs(R.deal),
           L.myAcs(R.receipt),
-          L.myAcs(R.election),
-          L.myAcs(R.sealedBid),
+          L.myAcs(R.electionFiled),
+          L.myAcs(R.bidFiled),
           L.myAcs(R.consent),
           L.myAcs(R.valuation),
           L.myAcs(R.opinion),

@@ -90,3 +90,75 @@ describe('DealPage shell', () => {
     expect(screen.getByText('— Pending Issuance')).toBeTruthy();
   });
 });
+
+// The GP is not a stakeholder of a SealedBid or an LPElection — it CANNOT read them, and a
+// page that polls for them counts zero forever. Oversight has to run on the contentless
+// markers (BidFiled / ElectionFiled), which carry no amounts. These tests pin that: the deal
+// page must count markers, and it must never have a private contract to leak in the first place.
+describe('DealPage oversight — counts what it cannot read', () => {
+  const marker = (id: string, templateId: string, args: Record<string, unknown>): ActiveContract => ({
+    contractId: id,
+    templateId,
+    args,
+  });
+
+  beforeEach(() => {
+    installBackend({
+      me: { role: 'gp', party: ME_PARTY, custodianName: 'Fireblocks — GP treasury' },
+      registry: { parties: { gp: ME_PARTY }, custodians: { gp: 'Fireblocks — GP treasury' } },
+    });
+    // The GP's real projection: the deal, one bid marker, two election markers — and NOT one
+    // SealedBid or LPElection, because the ledger would never hand it either.
+    vi.spyOn(reads, 'activeContracts').mockImplementation(async (_party, opts = {}) => {
+      const t = opts.templateId ?? '';
+      if (t.endsWith('Deal:ContinuationDeal'))
+        return [marker('d1', 't', { cv: 'Meridian CV I', stage: 'Electing', clearingPrice: '0.96', refNav: '500000000.0' })];
+      if (t.endsWith('Auction:BidFiled'))
+        return [marker('b1', 't', { gp: ME_PARTY, lpac: 'lpac', buyer: 'continuum-buyer-x::ns', dealId: 'M1' })];
+      if (t.endsWith('Election:ElectionFiled'))
+        return [
+          marker('e1', 't', { lp: 'continuum-lpExiting-x::ns', gp: ME_PARTY, dealId: 'M1' }),
+          marker('e2', 't', { lp: 'continuum-lpRolling-x::ns', gp: ME_PARTY, dealId: 'M1' }),
+        ];
+      return [];
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('counts filed elections from the markers', async () => {
+    render(
+      <SessionProvider>
+        <DealPage />
+      </SessionProvider>,
+    );
+    expect(await screen.findByText('2 of 2 responded')).toBeTruthy();
+  });
+
+  it('reports the filed bid and elections without their contents', async () => {
+    render(
+      <SessionProvider>
+        <DealPage />
+      </SessionProvider>,
+    );
+    expect(await screen.findByText(/filed a sealed bid — amount blind to you/)).toBeTruthy();
+    expect(screen.getAllByText(/filed an election — roll\/sell sealed/)).toHaveLength(2);
+    // The old feed printed "elected to SELL" / "elected to ROLL" off the private contract.
+    expect(screen.queryByText(/elected to (SELL|ROLL)/)).toBeNull();
+  });
+
+  it('never asks the ledger for a contract this seat cannot see', async () => {
+    render(
+      <SessionProvider>
+        <DealPage />
+      </SessionProvider>,
+    );
+    await screen.findByText('2 of 2 responded');
+    const asked = vi.mocked(reads.activeContracts).mock.calls.map(([, opts]) => opts?.templateId ?? '');
+    expect(asked).not.toContain('Auction:SealedBid');
+    expect(asked).not.toContain('Election:LPElection');
+  });
+});

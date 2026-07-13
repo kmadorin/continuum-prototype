@@ -34,6 +34,13 @@ export const T = {
   cert: '#continuum-contracts:Continuum.Auction:AuctionCertificate',
   sealedBid: '#continuum-contracts:Continuum.Auction:SealedBid',
   election: '#continuum-contracts:Continuum.Election:LPElection',
+  // The contentless markers. A SealedBid / LPElection has ONE signatory and no observers —
+  // nobody else can ever see it, the GP included. These carry no amounts and are observed by
+  // the GP (and, for bids, the LPAC), so oversight can count WHO responded without learning
+  // WHAT they said. They are what makes "private inputs, aggregate oversight" true rather
+  // than a slogan: without them the GP's deal page is blind to its own auction.
+  bidFiled: '#continuum-contracts:Continuum.Auction:BidFiled',
+  electionFiled: '#continuum-contracts:Continuum.Election:ElectionFiled',
   consent: '#continuum-contracts:Continuum.Consent:LPACConsent',
   psa: '#continuum-contracts:Continuum.Issuance:PurchaseAgreement',
   basis: '#continuum-contracts:Continuum.Issuance:IssuanceBasis',
@@ -61,6 +68,8 @@ export const R = {
   cert: 'Auction:AuctionCertificate',
   sealedBid: 'Auction:SealedBid',
   election: 'Election:LPElection',
+  bidFiled: 'Auction:BidFiled',
+  electionFiled: 'Election:ElectionFiled',
   consent: 'Consent:LPACConsent',
   psa: 'Issuance:PurchaseAgreement',
   basis: 'Issuance:IssuanceBasis',

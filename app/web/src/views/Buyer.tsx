@@ -47,6 +47,11 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
   };
   useRefresh(refresh, [L.me]);
 
+  // The bid and its marker go in ONE transaction: you cannot file a bid without announcing
+  // THAT you bid. The SealedBid carries the amount and has no observers — not even the GP.
+  // The BidFiled carries nothing at all and is observed by the GP and the LPAC, so the room
+  // can count bidders (and the LPAC can recuse a bidding member) without anyone learning the
+  // price. Splitting these into two submits would let a bid exist that oversight cannot see.
   const submitBid = () =>
     run('bid', async () => {
       await L.submit(
@@ -63,11 +68,22 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
               },
             },
           },
+          {
+            CreateCommand: {
+              templateId: T.bidFiled,
+              createArguments: {
+                gp: counter.gp,
+                lpac: counter.lpac,
+                buyer: L.me,
+                dealId: DEAL_ID,
+              },
+            },
+          },
         ],
         R.sealedBid,
       );
       await refresh();
-      return 'Sealed bid signed and submitted — blind to every other buyer and to the GP until select.';
+      return 'Sealed bid signed and submitted — the room sees THAT you bid, never what you bid.';
     });
 
   const acceptDelegation = () =>

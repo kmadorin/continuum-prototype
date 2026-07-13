@@ -66,7 +66,11 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
   // sets them.
   const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
   const refNav = deal?.args.refNav != null ? Number(deal.args.refNav) : null;
+  /** Settled from this seat's OWN projection: the deal is Closed, or the units have landed. */
+  const closed = deal?.args.stage === 'Closed' || units > 0;
 
+  // Election + contentless marker in ONE transaction — see ExitingLP: the GP learns THAT you
+  // filed (ElectionFiled), never the roll/sell split (LPElection, which has no observers).
   const electRoll = () =>
     run('elect', async () => {
       await L.submit(
@@ -82,6 +86,12 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
                 sellNav: '0.0',
                 disclosureHash: DEMO.contentHash,
               },
+            },
+          },
+          {
+            CreateCommand: {
+              templateId: T.electionFiled,
+              createArguments: { lp: L.me, gp: counter.gp, dealId: DEAL_ID },
             },
           },
         ],

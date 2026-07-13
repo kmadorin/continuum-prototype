@@ -66,7 +66,13 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
   // constant. Sealed until the GP sets the clearing price.
   const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
   const refNav = deal?.args.refNav != null ? Number(deal.args.refNav) : null;
+  /** Settled from this seat's OWN projection: the deal is Closed, or the cash has landed. */
+  const closed = deal?.args.stage === 'Closed' || usdc > 0;
 
+  // The election and its marker go in ONE transaction. The LPElection carries the roll/sell
+  // split and has no observers — not the GP, not another LP. The ElectionFiled carries no
+  // amounts and is observed by the GP, so the deal page can say "2 of 2 responded" without
+  // anyone learning who sold and who rolled.
   const electSell = () =>
     run('elect', async () => {
       await L.submit(
@@ -82,6 +88,12 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
                 sellNav: POSITION_NAV,
                 disclosureHash: DEMO.contentHash,
               },
+            },
+          },
+          {
+            CreateCommand: {
+              templateId: T.electionFiled,
+              createArguments: { lp: L.me, gp: counter.gp, dealId: DEAL_ID },
             },
           },
         ],
