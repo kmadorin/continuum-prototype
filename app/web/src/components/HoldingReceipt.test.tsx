@@ -30,8 +30,10 @@ describe('HoldingReceipt', () => {
   it('renders the held amount, cost, and NAV percentage', () => {
     render(<HoldingReceipt amount={4_800_000} clearingPct={0.96} metaHash={META_HASH} />);
     expect(screen.getByTestId('hr-amount').textContent).toBe('4,800,000');
-    // cost = 4,800,000 × 0.96 = 4,608,000 → $4.6M
-    expect(screen.getByText(/cost \$4\.6M/)).toBeTruthy();
+    // CV units are issued at $1.00, so 4,800,000 units cost $4.8M. The 96% clearing discount
+    // is already in the unit COUNT (units = clearing × NAV) — applying it to the price too
+    // would double-count it.
+    expect(screen.getByText(/cost \$4\.8M/)).toBeTruthy();
     expect(screen.getByText(/96\.0% of independent NAV/)).toBeTruthy();
   });
 

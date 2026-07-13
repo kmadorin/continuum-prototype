@@ -96,7 +96,9 @@ function whatNext(role: Role, activeLabel: string | null): string {
       lpRolling: 'The auction is clearing — your roll/sell election opens next.',
     },
     Elections: {
-      gp: 'Open elections, then run the settlement backstage on the Settlement tab.',
+      // Elections is the ACTIVE stage — they are already open. Telling the GP to open them is
+      // the stalest possible instruction at exactly the wrong moment.
+      gp: 'Elections are open — LPs file privately; you see only that they filed. Run the settlement backstage on the Settlement tab.',
       buyer: 'Accept your execution delegation so the GP can settle your unit leg at Close.',
       lpExiting: 'Elect to sell at the clearing price on the Auction & Elections tab.',
       lpRolling: 'Compare roll vs sell, then file your election on the Auction & Elections tab.',
@@ -233,7 +235,14 @@ export default function DealPage() {
           ...(clearingUsd != null ? { sub: fmtUsdM(clearingUsd) } : {}),
           asOf: DEMO.closeDate,
         }
-      : { label: 'Clearing price', value: '— Pending Auction', pending: true },
+      : {
+          label: 'Clearing price',
+          value: '— Pending Auction',
+          pending: true,
+          // Pre-clearing, the count of filed bids is everything the organizer of the auction
+          // is entitled to know — and, until now, more than it could see.
+          ...(bids.length ? { sub: `${bids.length} sealed ${bids.length === 1 ? 'bid' : 'bids'} filed — amounts blind` } : {}),
+        },
     electionsPhase
       ? {
           label: 'Elections',
@@ -271,7 +280,10 @@ export default function DealPage() {
         <div className="dh-titles">
           <span className="dh-eyebrow">GP-Led Continuation Vehicle</span>
           <h1>Project Continuum CV I, L.P.</h1>
-          <p className="dh-sponsor">Sponsor: Fireblocks — GP Treasury</p>
+          {/* The sponsor is the advisory firm running the deal. Fireblocks is the CUSTODIAN
+              that holds this seat's key and signs on its behalf — that belongs in the topbar
+              badge, where it already is, not on the sponsor line. */}
+          <p className="dh-sponsor">Sponsor: Whitfield Advisory · Meridian Growth Fund III</p>
         </div>
         <Stepper stages={stages} size="compact" />
       </header>
@@ -286,7 +298,6 @@ export default function DealPage() {
         {tab === 'overview' && (
           <OverviewTab
             role={role}
-            stages={stages}
             whatNext={whatNext(role ?? 'gp', activeLabel)}
             feed={feed}
             hasApprovals={approvals.length > 0}
@@ -326,28 +337,25 @@ export default function DealPage() {
   );
 }
 
-// Overview tab: large stepper + what-happens-next + recent activity, plus the
-// four-eyes Approval queue when this party has items awaiting its signature.
+// Overview tab: what-happens-next + recent activity, plus the four-eyes Approval
+// queue when this party has items awaiting its signature. (The stepper lives in the
+// page header — it used to be repeated here verbatim.)
 function OverviewTab({
   role,
-  stages,
   whatNext,
   feed,
   hasApprovals,
 }: {
   role: Role | null;
-  stages: Stage[];
   whatNext: string;
   feed: FeedItem[];
   hasApprovals: boolean;
 }) {
+  // The header already carries the stepper; repeating it verbatim in a "Lifecycle" card said
+  // the same thing twice and pushed the only thing the Overview adds — what to do next, and
+  // what just happened — below the fold.
   return (
     <div className="stack g4">
-      <div className="card">
-        <h2>Lifecycle</h2>
-        <Stepper stages={stages} size="large" style={{ marginTop: 14 }} />
-      </div>
-
       <div className="callout">
         <div className="ct">What happens next{role ? ` · ${role}` : ''}</div>
         <p>{whatNext}</p>

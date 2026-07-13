@@ -62,8 +62,12 @@ const META: Record<Role, RoleMeta> = {
     avatar: 'KV',
     name: 'Kroll Valuation Services',
     seat: 'Independent Valuation Agent',
-    blurb: 'The independent agent. Signs and anchors the NAV range on-ledger — its hash is what every other seat verifies.',
+    // The GP is conflicted on both sides of this deal; the independent valuer is the check on
+    // it. Giving the two of them the full-width cards reads as the shape of the story — and it
+    // fills the sixth grid slot, which otherwise sat visibly empty next to Kroll.
+    blurb: 'The independent agent. Signs and anchors the NAV range on-ledger — its hash is what the GP verifies against the served document.',
     cta: 'Enter as valuer',
+    wide: true,
   },
 };
 

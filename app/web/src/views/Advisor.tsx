@@ -140,11 +140,24 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       return 'Closing room opened — deal created and signed by the GP custodian.';
     });
 
+  /**
+   * The CURRENT deal cid, re-read at the moment of use.
+   *
+   * Every ContinuationDeal choice is consuming — `create this with …` — so the contract id
+   * changes on each one, including the LPAC's `RecordConsent`, which is exercised in ANOTHER
+   * session. A GP acting on the id it cached at page load would then submit against an
+   * archived contract and fail for reasons that look like nothing to do with what it clicked.
+   */
+  const currentDealCid = async (): Promise<string> => {
+    const d = pick(await L.myAcs(R.deal), (c) => c.args.cv === DEMO.cv);
+    if (!d) throw new Error('Open the closing room first.');
+    return d.contractId;
+  };
+
   const exerciseDeal = (label: string, choice: string, arg: Record<string, unknown>, ok: string) =>
     run(label, async () => {
-      if (!deal) throw new Error('Open the closing room first.');
       await L.submit(
-        [{ ExerciseCommand: { templateId: T.deal, contractId: deal.contractId, choice, choiceArgument: arg } }],
+        [{ ExerciseCommand: { templateId: T.deal, contractId: await currentDealCid(), choice, choiceArgument: arg } }],
         R.deal,
       );
       await refresh();

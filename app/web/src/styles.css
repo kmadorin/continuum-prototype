@@ -250,7 +250,11 @@ main { max-width: 1120px; margin: 0 auto; padding: var(--sp-6) 40px 152px; }
 .redact { display: inline-block; height: 14px; background: var(--border-hi); vertical-align: middle; }
 .sealed-row .lbl { font-family: var(--mono); font-size: 13px; color: var(--mute); letter-spacing: 0.04em; }
 .sealed-row .seal-note { font-family: var(--mono); font-size: 12px; color: var(--mute); margin-left: auto; letter-spacing: 0.04em; }
-.cant-see { font-family: var(--mono); font-size: 12px; color: var(--fail-text); letter-spacing: 0.04em; }
+/* "No other buyer — and not the GP — can see this." That is the product WORKING, not an
+   error. It was painted in the failure colour, which reads as something having gone wrong at
+   the exact moment the privacy guarantee holds. Semantic colour, used semantically. */
+.cant-see { font-family: var(--mono); font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+.cant-see::before { content: '⊘ '; color: var(--accent-dim); }
 
 /* ---------- settlement legs ---------- */
 .legs { border: 1px solid var(--border); }
@@ -783,12 +787,29 @@ table.data tfoot .num { color: var(--accent); }
 }
 @keyframes settled-in { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
 
+/* Dismissed takeover: the deal stays visibly settled, one click from the full view. */
+.settled-strip {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.settled-strip .btn { margin-left: auto; }
+
 .settled-inner {
+  position: relative;
   width: min(720px, 100%);
   display: flex; flex-direction: column; gap: var(--sp-4);
   padding: var(--sp-6) var(--sp-5);
   border: 1px solid var(--accent-dim); background: var(--surface);
 }
+.settled-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid var(--border-hi); background: transparent;
+  color: var(--dim); font-family: var(--mono); font-size: 13px; cursor: pointer;
+}
+.settled-close:hover { color: var(--text); border-color: var(--accent-dim); }
+.settled-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settled-dismiss-hint { margin: 0; }
 .settled-eyebrow {
   font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--accent);

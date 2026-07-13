@@ -45,7 +45,7 @@ export default function SellVsRoll({
           <div className="svr-div" aria-hidden="true" />
           <div className="svr-col" data-testid="svr-roll">
             <div className="svr-kicker">Roll</div>
-            <div className="svr-fig mono">~{units.toLocaleString()}</div>
+            <div className="svr-fig mono">{units.toLocaleString()}</div>
             <div className="svr-unit">CV units @ $1.00</div>
             <p className="hint" style={{ margin: '10px 0 0' }}>
               Roll your {fmtUsdM(stakeNav)} position into the new vehicle on the same {pct}%-of-independent-NAV

@@ -31,7 +31,6 @@ import DocumentsTab from './DocumentsTab';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
 
 const fmtUsdM = (n: number) => `$${(n / 1_000_000).toFixed(1)}M`;
-const LP_POSITION_NAV = Number(DEMO.interestNav); // an LP's own stake — its own record
 
 // The projection-safe facts every focused seat derives its chrome from.
 type Facts = {

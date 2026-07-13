@@ -55,6 +55,9 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
     setElection(pick(el, (c) => c.args.lp === L.me));
     setProp(pick(p, (c) => c.args.party === L.me));
     setDeleg(pick(dg, (c) => c.args.party === L.me));
+    setOffer(pick(of, (c) => c.args.lp === L.me));
+    setInterest(pick(it, (c) => c.args.lp === L.me));
+    setParticipation(pick(dp, (c) => c.args.lp === L.me));
     const mine = h.filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit);
     setUnits(mine.reduce((s, c) => s + Number(c.args.amount), 0));
     setHolding(pick(mine));
