@@ -7,13 +7,15 @@
 // at the GP's atomic Close.
 import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
+import { useLedger, T, R, counter, DEAL_ID, DEMO, positionNav, atClearing, shortParty } from '../lib/useLedger';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-// $100.0M — matches the $500M institutional scale. The LP's OWN stake record (an LP
-// does not observe the independent ValuationReport), so it is never labelled "independent".
-const POSITION_NAV = DEMO.interestNav;
+// $300.0M — this seat's own stake record. With the rolling LP's $200M it sums to the
+// deal's $500M reference NAV, so the cash leg the close pays is exactly what this screen
+// promises. An LP does not observe the independent ValuationReport, so its own position is
+// never labelled "independent".
+const POSITION_NAV = String(positionNav('lpExiting'));
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -159,7 +161,8 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               <dd className="mono">
                 {clearingPct != null ? (
                   <>
-                    {fmtM(Number(POSITION_NAV) * clearingPct)} <span className="hint">= stake × {Math.round(clearingPct * 100)}%</span>
+                    {fmtM(atClearing(Number(POSITION_NAV), clearingPct))}{' '}
+                    <span className="hint">= stake × {Math.round(clearingPct * 100)}%</span>
                   </>
                 ) : (
                   <span className="chip sealed">sealed — clearing not set</span>
@@ -192,29 +195,43 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
         </div>
       )}
 
-      {show('preauth') && (
-      <Card title="Pre-authorize the close">
-        <div className="stack g3">
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
-              {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
-            </button>
-            {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
-          </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
-              {interest ? 'Interest accepted ✓' : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
-            </button>
-            {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
-          </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
-              {participation ? 'Participation proposed ✓' : busy === 'part' ? 'Signing…' : 'Propose participation'}
-            </button>
-          </div>
-        </div>
-      </Card>
-      )}
+      {show('preauth') &&
+        // Post-close these contracts are gone — spent by the Close itself. Offering the
+        // buttons again (or claiming to be "waiting on the GP") describes a deal that has
+        // already settled in this seat's own projection.
+        (closed ? (
+          <Card title="Pre-authorize the close">
+            <div className="stack g3">
+              <span className="chip ok">Pre-authorization consumed by the close ✓</span>
+              <span className="hint">
+                Your delegation and your old-fund interest were spent inside the atomic Close — the old
+                position was burned in the same transaction that paid your cash.
+              </span>
+            </div>
+          </Card>
+        ) : (
+          <Card title="Pre-authorize the close">
+            <div className="stack g3">
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
+                  {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
+                </button>
+                {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
+              </div>
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
+                  {interest ? 'Interest accepted ✓' : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
+                </button>
+                {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
+              </div>
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
+                  {participation ? 'Participation proposed ✓' : busy === 'part' ? 'Signing…' : 'Propose participation'}
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
 
       {show('holding') && (
         <Card title="Post-close cash">

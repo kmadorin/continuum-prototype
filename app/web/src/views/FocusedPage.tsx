@@ -14,7 +14,7 @@
 // Spec: docs/superpowers/specs/2026-07-11-continuum-role-scoped-ia.ts
 import { useEffect, useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, R, DEMO } from '../lib/useLedger';
+import { useLedger, R, DEMO, positionNav, atClearing } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
@@ -75,13 +75,28 @@ function miniStages(role: Role, f: Facts): Stage[] {
 function focusedTiles(role: Role, f: Facts): Kpi[] {
   const tiles: Kpi[] = [];
   if (role === 'lpExiting' || role === 'lpRolling') {
-    tiles.push({ label: 'My position', value: fmtUsdM(LP_POSITION_NAV), sub: 'Your stake — own record', asOf: DEMO.closeDate });
+    tiles.push({
+      label: 'My position',
+      value: fmtUsdM(positionNav(role)),
+      sub: 'Your stake — own record',
+      asOf: DEMO.closeDate,
+    });
   }
   if (role !== 'valuer') {
+    // The clearing price is a DEAL fact, so its sub-line is the deal-level figure — the
+    // same number on every seat. What it means for you personally is the "My position"
+    // tile and the sell-vs-roll panel; conflating the two put an LP's proceeds on the
+    // buyer's and the LPAC's screen.
     const pct = f.deal?.args.clearingPrice != null ? Number(f.deal.args.clearingPrice) : null;
+    const refNav = f.deal?.args.refNav != null ? Number(f.deal.args.refNav) : null;
     tiles.push(
       pct != null
-        ? { label: 'Clearing price', value: `${Math.round(pct * 100)}% of NAV`, sub: fmtUsdM(LP_POSITION_NAV * pct), asOf: DEMO.closeDate }
+        ? {
+            label: 'Clearing price',
+            value: `${Math.round(pct * 100)}% of NAV`,
+            sub: refNav != null ? `${fmtUsdM(atClearing(refNav, pct))} purchase price` : undefined,
+            asOf: DEMO.closeDate,
+          }
         : { label: 'Clearing price', value: '— Pending Auction', pending: true },
     );
   }

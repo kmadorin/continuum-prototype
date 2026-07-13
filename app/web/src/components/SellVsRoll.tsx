@@ -1,12 +1,15 @@
 // Sell-vs-Roll comparison — the Rolling LP's product-thinking moment. Two columns
-// off the SAME independent-NAV basis:
+// off the SAME independent-NAV basis, priced at the SAME clearing price:
 //
 //   SELL now  → stake × clearing%  in cash today (crystallized, exits the vehicle)
-//   ROLL      → stake worth of CV units @ $1.00 in the new vehicle (stays invested,
-//               same 96%-of-independent-NAV basis, future upside retained)
+//   ROLL      → stake × clearing%  in CV units @ $1.00 (stays invested, future upside)
 //
-// Pure presentational: the numbers derive from the LP's stake NAV + the deal
-// clearing price, so it ties out to the on-ledger economics without any write.
+// Both sides are repriced at the clearing price — that is the whole point of the
+// number: a roll is not a par-value swap. It mirrors Clearing.daml, which mints
+// `rollerUnits = roundDollar (clearing × rollNav)`; showing the undiscounted stake
+// here would promise the roller units the close will not issue.
+import { atClearing } from '../lib/useLedger';
+
 const fmtUsdM = (n: number): string => `$${(n / 1_000_000).toFixed(1)}M`;
 
 export default function SellVsRoll({
@@ -18,8 +21,8 @@ export default function SellVsRoll({
   stakeNav: number;
   clearingPct?: number;
 }) {
-  const cash = stakeNav * clearingPct;
-  const units = stakeNav; // CV units @ $1.00, one unit per $1 of rolled NAV
+  const cash = atClearing(stakeNav, clearingPct);
+  const units = atClearing(stakeNav, clearingPct); // CV units @ $1.00, repriced at the clearing price
   const pct = Math.round(clearingPct * 100);
 
   return (

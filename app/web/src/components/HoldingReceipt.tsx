@@ -68,7 +68,11 @@ export default function HoldingReceipt({
   }, []);
 
   const hash = metaHash || fallbackHash;
-  const cost = amount * clearingPct;
+  // CV units are issued at $1.00 apiece — the clearing discount is already expressed in HOW
+  // MANY units you got (units = clearing × NAV), so it must not be applied to the price a
+  // second time. What the holding cost is simply its unit count in dollars; the NAV basis
+  // it was struck at is the separate figure beside it.
+  const cost = amount;
   const pct = (clearingPct * 100).toFixed(1);
 
   return (

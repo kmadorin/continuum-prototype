@@ -1,6 +1,10 @@
 // Sell-vs-Roll tests: the Rolling LP's comparison renders BOTH columns off the same
-// independent-NAV basis — sell = stake × clearing% in cash; roll = stake worth of
-// CV units @ $1.00.
+// independent-NAV basis, and BOTH are repriced at the clearing price — sell = stake ×
+// clearing% in cash; roll = stake × clearing% in CV units @ $1.00.
+//
+// The roll figure is the one that matters: Clearing.daml mints
+// `rollerUnits = roundDollar (clearing × rollNav)`, so quoting the undiscounted stake here
+// would promise units the atomic Close does not issue.
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import SellVsRoll from './SellVsRoll';
