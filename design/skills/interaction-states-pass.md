@@ -73,17 +73,28 @@ Every state change should be smoothly transitioned, not snapped:
 
 ```css
 button {
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease-out;
 }
 ```
 
+Name the properties. Never `transition: all` — it animates whatever you add later, including layout.
+
+Prefer `transform` and `opacity`: they run on the GPU, skipping layout and paint. `box-shadow`, `filter`, `width`, and `height` repaint every frame — animating them is what makes a list feel janky under load.
+
 Check transition durations:
 - **0.15–0.3s** for state changes (hover, focus, active) — feels responsive
-- **0.3–0.5s** for entry/exit (modals, drawers, toasts) — feels composed
-- **Avoid** transitions slower than 0.5s for micro-interactions; they feel laggy
+- **0.2–0.3s** for entry/exit (modals, drawers, toasts) — composed, still snappy
+- **Avoid** exceeding 0.3s for UI. A 180ms dropdown *feels* faster than a 400ms one. Longer is for explanatory motion the user sees once, not for chrome they touch all day.
 - **Avoid** transitions of 0s or no transition; state changes feel broken
 
-Wrap motion-heavy transitions in `@media (prefers-reduced-motion: reduce)` to shorten or remove for users who prefer reduced motion.
+Easing:
+- **Entering or exiting → `ease-out`.** It starts fast, so the interface feels like it already heard you.
+- **Never `ease-in` on UI.** It delays the first frame — exactly the moment the user is watching — so it feels sluggish at any duration.
+- Built-in curves are weak. A custom `cubic-bezier(0.23, 1, 0.32, 1)` reads as deliberate where plain `ease-out` reads as default.
+
+Frequency governs everything: the more often a user sees an animation, the shorter and subtler it must be. Something triggered by a keyboard shortcut should not animate at all.
+
+Under `@media (prefers-reduced-motion: reduce)`, **remove movement, keep colour and opacity.** Reduced motion means gentler, not none — a chip turning green still carries state; its travel does not.
 
 ## Phase 4: Verify feedback for actions
 

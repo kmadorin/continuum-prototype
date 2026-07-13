@@ -25,6 +25,14 @@
 
   --sp-1: 6px;  --sp-2: 12px; --sp-3: 18px; --sp-4: 24px;
   --sp-5: 32px; --sp-6: 48px; --sp-7: 72px;
+
+  /* Motion. Institutional restraint: things arrive fast and stop. No bounce, no
+     overshoot. --ease-out carries entrances/exits (starts fast = feels instant);
+     plain `ease` stays on hover/colour, where symmetry is correct. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 120ms;   /* press feedback   */
+  --dur-ui:    180ms;   /* menus, chips, carets, toasts */
+  --dur-layer: 240ms;   /* drawers, overlays */
 }
 
 * { box-sizing: border-box; }
@@ -276,11 +284,6 @@ main { max-width: 1120px; margin: 0 auto; padding: var(--sp-6) 40px 152px; }
 .leg.failing .st { color: var(--fail); border-color: var(--fail); }
 .leg.reverted .st { color: var(--mute); }
 
-@media (prefers-reduced-motion: reduce) {
-  .leg .sweep { transition: none !important; }
-  select.persona, .btn, .input, .choice, .card { transition: none !important; }
-}
-
 /* ---------- approval checklist ---------- */
 .approvals { border: 1px solid var(--border); }
 .appr {
@@ -343,17 +346,6 @@ table.calc .c-out { color: var(--accent); font-size: 14px; white-space: nowrap; 
 .attest .ck { width: 18px; height: 18px; position: relative; margin-top: 2px; }
 .attest .ck::after { content: ""; position: absolute; left: 6px; top: 0; width: 6px; height: 12px; border: solid var(--accent); border-width: 0 2.5px 2.5px 0; transform: rotate(42deg); }
 .attest li small { display: block; font-family: var(--mono); font-size: 12px; color: var(--mute); margin-top: 3px; }
-
-/* toast */
-.toast {
-  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px);
-  background: var(--surface); border: 1px solid var(--accent-dim);
-  padding: 14px 22px; font-family: var(--mono); font-size: 13px; color: var(--text);
-  letter-spacing: 0.03em; z-index: 80; opacity: 0; pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.fail { border-color: color-mix(in oklch, var(--fail) 55%, transparent); color: var(--fail); }
 
 /* sim footer */
 .sim-note {
@@ -796,7 +788,6 @@ table.data tfoot .num { color: var(--accent); }
   display: flex; flex-direction: column; gap: var(--sp-4);
   padding: var(--sp-6) var(--sp-5);
   border: 1px solid var(--accent-dim); background: var(--surface);
-  box-shadow: 0 0 0 1px var(--accent-soft), 0 40px 120px rgba(0,0,0,0.55);
 }
 .settled-eyebrow {
   font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
@@ -840,12 +831,13 @@ table.data tfoot .num { color: var(--accent); }
 .custodian-badge {
   display: inline-flex; align-items: center; gap: 8px;
   font-family: var(--mono); font-size: 12px; color: var(--dim);
-  padding: 5px 10px; border: 1px solid var(--border-hi); border-radius: 999px;
+  padding: 5px 10px; border: 1px solid var(--border-hi);
   background: var(--accent-soft);
 }
+/* square, like every other status dot in the system (.chip, .task, .activity) */
 .custodian-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+  width: 7px; height: 7px; flex: none;
+  background: var(--accent);
 }
 .acc-custodian {
   font-family: var(--mono); font-size: 12px; color: var(--accent-dim);
@@ -859,11 +851,10 @@ table.data tfoot .num { color: var(--accent); }
 }
 .toast {
   display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; border-radius: 10px; cursor: pointer;
+  padding: 12px 14px; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--border-hi);
   color: var(--text); font-size: 13px; line-height: 1.4;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
-  animation: toast-in 160ms ease-out;
+  animation: toast-in var(--dur-ui) var(--ease-out) both;
 }
 .toast-msg { font-family: var(--mono); word-break: break-word; }
 .toast-pending { border-color: var(--border-hi); }
@@ -917,7 +908,7 @@ table.data tfoot .num { color: var(--accent); }
 }
 .drawer {
   width: min(560px, 96vw); height: 100%; background: var(--bg-2);
-  border-left: 1px solid var(--border-hi); box-shadow: -12px 0 40px rgba(0,0,0,0.5);
+  border-left: 1px solid var(--border-hi);
   display: flex; flex-direction: column; overflow: hidden;
 }
 .drawer-head {
@@ -960,8 +951,9 @@ table.data tfoot .num { color: var(--accent); }
   padding: 11px 14px; border-right: 1px solid var(--border);
 }
 .lifecycle .lc-step:last-child { border-right: 0; }
+/* square, matching the workspace rail's step numbers (.rail .rl .rn) */
 .lc-num {
-  width: 20px; height: 20px; flex: none; border-radius: 50%;
+  width: 20px; height: 20px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--border-hi); font-family: var(--mono); font-size: 11px; color: var(--mute);
 }
@@ -1058,7 +1050,7 @@ table.data tfoot .num { color: var(--accent); }
 .nrb-range { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border-hi); }
 .nrb-node { position: absolute; top: 50%; width: 3px; height: 16px; transform: translate(-50%, -50%); }
 .nrb-node-nav { background: var(--dim); }
-.nrb-node-clear { background: var(--accent); box-shadow: 0 0 6px var(--accent-dim); }
+.nrb-node-clear { background: var(--accent); }
 
 .nrb-axis { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; }
 .nrb-end { font-size: 12px; color: var(--dim); }
@@ -1156,11 +1148,11 @@ table.data tfoot .num { color: var(--accent); }
 }
 .gate-check:first-child { border-top: 0; }
 .gate-check .gc-mark {
-  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  width: 20px; height: 20px; display: grid; place-items: center; flex: none;
   border: 1px solid var(--border-hi); color: var(--mute);
-  transition: color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+  transition: color var(--dur-ui) var(--ease-out), border-color var(--dur-ui) var(--ease-out);
 }
-.gate-check.ok .gc-mark { color: var(--accent); border-color: var(--accent-dim); animation: gc-pop 0.3s ease; }
+.gate-check.ok .gc-mark { color: var(--accent); border-color: var(--accent-dim); animation: gc-pop var(--dur-ui) var(--ease-out); }
 .gate-check.miss .gc-mark { color: var(--fail); border-color: color-mix(in oklch, var(--fail) 45%, transparent); }
 .gate-check .gc-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .gate-check .gc-label { font-size: 15px; color: var(--text); }
@@ -1168,7 +1160,10 @@ table.data tfoot .num { color: var(--accent); }
 .gate-check .gc-fact.miss { color: var(--fail-text); }
 .gate-check .gc-state { font-size: 15px; color: var(--accent); }
 .gate-check.miss .gc-state { color: var(--fail); }
-@keyframes gc-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+/* A gate condition turning green is a rare, load-bearing state change, so it earns
+   a mark — but it settles, it does not bounce. Overshoot reads as celebration; this
+   is a compliance check. */
+@keyframes gc-pop { from { transform: scale(0.94); } to { transform: scale(1); } }
 
 .gate-foot { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .btn.gate-issue { align-self: flex-start; padding: 11px 20px; font-size: 15px; }
@@ -1188,9 +1183,29 @@ table.data tfoot .num { color: var(--accent); }
 .hr-prov-lab { font-size: 13px; color: var(--dim); }
 .hr-prov-hash { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+/* ===========================================================================
+   REDUCED MOTION
+   Fewer and gentler, not zero. Colour and opacity still carry state — a chip
+   turning green, a toast arriving — so they stay. What goes is movement:
+   translation, scale, and the settlement sweep.
+   =========================================================================== */
+@keyframes reduced-fade { from { opacity: 0; } to { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .gate-check .gc-mark { transition: none !important; animation: none !important; }
+  /* movement → gone */
+  .leg .sweep,
+  .dg-caret,
+  .skip-link            { transition: none; }
+  .gate-check .gc-mark  { animation: none; }
+  .btn:active           { transform: none; }
+  .btn                  { transition: background var(--dur-ui) ease, border-color var(--dur-ui) ease; }
+
+  /* entrances keep their meaning, lose their travel */
+  .toast,
+  .drawer-backdrop,
+  .settled-overlay      { animation-name: reduced-fade; }
 }
+
 @media (max-width: 560px) {
   .gate-check { grid-template-columns: 24px 1fr; }
   .gate-check .gc-state { display: none; }

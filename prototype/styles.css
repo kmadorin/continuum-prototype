@@ -25,6 +25,14 @@
 
   --sp-1: 6px;  --sp-2: 12px; --sp-3: 18px; --sp-4: 24px;
   --sp-5: 32px; --sp-6: 48px; --sp-7: 72px;
+
+  /* Motion. Institutional restraint: things arrive fast and stop. No bounce, no
+     overshoot. --ease-out carries entrances/exits (starts fast = feels instant);
+     plain `ease` stays on hover and colour, where symmetry is correct. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 120ms;   /* press feedback   */
+  --dur-ui:    180ms;   /* menus, chips, carets, toasts */
+  --dur-layer: 240ms;   /* drawers, overlays */
 }
 
 * { box-sizing: border-box; }
@@ -276,9 +284,16 @@ main { max-width: 1120px; margin: 0 auto; padding: var(--sp-6) 40px 152px; }
 .leg.failing .st { color: var(--fail); border-color: var(--fail); }
 .leg.reverted .st { color: var(--mute); }
 
+/* Reduced motion: fewer and gentler, not zero. Colour and opacity still carry
+   state — a chip turning green, a toast arriving — so they stay. What goes is
+   movement: translation, scale, and the settlement sweep. */
 @media (prefers-reduced-motion: reduce) {
-  .leg .sweep { transition: none !important; }
-  select.persona, .btn, .input, .choice, .card { transition: none !important; }
+  .leg .sweep      { transition: none; }
+  .btn:active      { transform: none; }
+  .btn             { transition: background var(--dur-ui) ease, border-color var(--dur-ui) ease; }
+  /* toast keeps its fade, loses its travel */
+  .toast           { transform: translateX(-50%); transition: opacity var(--dur-layer) ease; }
+  .toast.show      { transform: translateX(-50%); }
 }
 
 /* ---------- approval checklist ---------- */
@@ -350,7 +365,7 @@ table.calc .c-out { color: var(--accent); font-size: 14px; white-space: nowrap; 
   background: var(--surface); border: 1px solid var(--accent-dim);
   padding: 14px 22px; font-family: var(--mono); font-size: 13px; color: var(--text);
   letter-spacing: 0.03em; z-index: 80; opacity: 0; pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity var(--dur-layer) var(--ease-out), transform var(--dur-layer) var(--ease-out);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.fail { border-color: color-mix(in oklch, var(--fail) 55%, transparent); color: var(--fail); }

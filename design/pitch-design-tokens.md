@@ -50,7 +50,24 @@ Scale (app/dashboard context — between the docs pages and the deck):
 - Containers: 1040–1120px max-width for reading; full-width grids for dashboards.
 - Grids: `repeat(3,1fr)` cards/stats; label+content `230px 1fr`; use `border:1px solid var(--border);border-bottom:0` to avoid double borders.
 - Spacing: 40px page edges, 28–36px inside cells, 72px section breaks, 14–24px small gaps.
-- Transitions: 0.2s ease for most states, 0.35s for progress bars.
+
+## Motion
+Institutional restraint: things arrive fast and stop. **No bounce, no overshoot, no glow.** Motion exists to show state changed, never to celebrate.
+
+```css
+:root{
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);  /* entrances/exits — starts fast, reads as instant */
+  --dur-press: 120ms;   /* press feedback */
+  --dur-ui:    180ms;   /* menus, chips, carets, toasts */
+  --dur-layer: 240ms;   /* drawers, overlays */
+}
+```
+- **`--ease-out` for entering/exiting.** Plain `ease` stays on hover and colour, where symmetry is right. **Never `ease-in`** on UI — it delays the first frame, the one the user is watching.
+- **Keep UI under 300ms.** The two deliberate exceptions are *explanatory*, seen once per deal, and stay: the atomic-close settlement sweep (`0.35s`) and the settled overlay (`0.35s`).
+- **Animate `transform` and `opacity` only** — they skip layout and paint. Animating `box-shadow`, `width`, or `height` does not.
+- **Press feedback is `translateY(1px)`, not `scale()`.** Scaling sub-pixel-blurs our 1px hairlines.
+- **Never animate from `scale(0)`** — start at `0.94`+ with opacity. Nothing in the real world appears out of nothing.
+- **`prefers-reduced-motion`: remove movement, keep colour and opacity.** A chip turning green still carries state; its travel does not.
 
 ## Implementation notes
 1. Keep `oklch()` accents (perceptually consistent).
