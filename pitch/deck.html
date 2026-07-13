@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuum — a secure closing room for GP-led continuation deals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0b0d;
+    --bg-2:      #0d0f12;
+    --surface:   #101317;
+    --border:    #1c1f26;
+    --border-hi: #2a2e37;
+    --text:      #e7e9ec;
+    --dim:       #9aa0ab;
+    --mute:      #7c828c;
+    --accent:    oklch(76% 0.135 162);
+    --accent-dim:oklch(60% 0.10 162);
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body {
+    font-family: var(--sans);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ---------- deck scaling / letterbox ---------- */
+  #stage {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 1920px; height: 1080px;
+    transform-origin: center center;
+    background: var(--bg);
+  }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 96px 120px 104px;
+    display: none;
+    flex-direction: column;
+    background: var(--bg);
+    opacity: 0;
+  }
+  .slide.live { display: flex; opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    .slide.live { animation: fade .4s ease both; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  }
+
+  /* ---------- shared type ---------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 16px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--mute); font-weight: 500; margin: 0;
+  }
+  .eyebrow .n { color: var(--accent-dim); }
+  h1.lead { font-size: 56px; line-height: 1.08; letter-spacing: -0.02em; font-weight: 600; margin: 0; max-width: 26ch; text-wrap: balance; }
+  p.body { font-size: 24px; line-height: 1.5; color: var(--dim); margin: 0; max-width: 64ch; text-wrap: pretty; }
+  .num { font-variant-numeric: tabular-nums lining-nums; }
+
+  .head { display: flex; align-items: baseline; gap: 24px; margin-bottom: 64px; }
+  .head .eyebrow { white-space: nowrap; }
+  .head .rule { flex: 1; height: 1px; background: var(--border); }
+  .head .tag { font-family: var(--mono); font-size: 15px; color: var(--mute); letter-spacing: 0.03em; }
+
+  /* ---------- slide 1 title ---------- */
+  .title-grid { flex: 1; display: grid; grid-template-rows: 1fr auto 1fr; }
+  .title-mid { align-self: center; }
+  .wordmark { font-size: 150px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.9; margin: 0; }
+  .wordmark .dot { color: var(--accent); }
+  .title-sub { font-size: 30px; color: var(--dim); margin: 34px 0 0; max-width: 46ch; line-height: 1.4; font-weight: 400; }
+  .title-foot { align-self: end; display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--mono); font-size: 16px; color: var(--mute); letter-spacing: 0.04em; }
+
+  /* ---------- layout primitives ---------- */
+  .cols { display: grid; gap: 64px; flex: 1; }
+  .c-1-1 { grid-template-columns: 1fr 1fr; }
+  .c-5-7 { grid-template-columns: 5fr 7fr; }
+  .c-7-5 { grid-template-columns: 7fr 5fr; }
+  .stack { display: flex; flex-direction: column; }
+  .center { justify-content: center; }
+
+  /* plain list of facts (slide 2) */
+  .facts { display: flex; flex-direction: column; }
+  .facts .f { display: grid; grid-template-columns: 40px 1fr; gap: 22px; padding: 26px 0; border-top: 1px solid var(--border); align-items: baseline; }
+  .facts .f:last-child { border-bottom: 1px solid var(--border); }
+  .facts .f .fn { font-family: var(--mono); font-size: 15px; color: var(--accent-dim); }
+  .facts .f .ft { font-size: 26px; color: var(--text); line-height: 1.35; }
+
+  /* conflict + checks (slide 3) */
+  .conflict { border: 1px solid var(--border); padding: 30px 34px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; margin-bottom: 8px; }
+  .conflict .side { display: flex; flex-direction: column; gap: 6px; }
+  .conflict .side.r { text-align: right; }
+  .conflict .side .l { font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+  .conflict .side .v { font-size: 22px; font-weight: 500; color: var(--text); }
+  .conflict .mid { text-align: center; display: flex; flex-direction: column; gap: 8px; }
+  .conflict .mid .who { font-size: 20px; font-weight: 600; }
+  .conflict .mid .lk { font-family: var(--mono); font-size: 18px; color: var(--mute); letter-spacing: 0.1em; }
+  .checks { display: flex; flex-direction: column; }
+  .checks .c { display: grid; grid-template-columns: 1fr; padding: 18px 0; border-top: 1px solid var(--border); }
+  .checks .c:last-child { border-bottom: 1px solid var(--border); }
+  .checks .c .ct { font-size: 22px; color: var(--text); }
+
+  /* numbered flow (slide 4) */
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--border); }
+  .fstep { padding: 30px 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
+  .fstep:last-child { border-right: 0; }
+  .fstep.settle { background: var(--accent-soft); }
+  .fstep .sn { font-family: var(--mono); font-size: 32px; font-weight: 500; color: var(--border-hi); line-height: 1; }
+  .fstep.settle .sn { color: var(--accent-dim); }
+  .fstep p { font-size: 18px; line-height: 1.4; color: var(--text); margin: 0; text-wrap: pretty; }
+  .proofline { font-family: var(--mono); font-size: 17px; color: var(--dim); letter-spacing: 0.02em; margin-top: 4px; }
+  .proofline b { color: var(--text); font-weight: 500; }
+
+  /* seats list (slide 5) */
+  .seats { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); }
+  .seat { padding: 26px 28px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .seat:nth-child(3n) { border-right: 0; }
+  .seat:nth-child(n+4) { border-bottom: 0; }
+  .seat .r { font-size: 22px; font-weight: 500; color: var(--text); }
+  .seat .b { font-family: var(--mono); font-size: 14px; color: var(--mute); letter-spacing: 0.04em; margin-top: 4px; }
+  .demo-meta { display: flex; gap: 44px; align-items: baseline; margin-top: 4px; }
+  .demo-meta .url { font-family: var(--mono); font-size: 22px; color: var(--accent); }
+  .demo-meta .note { font-size: 20px; color: var(--dim); }
+
+  /* projection diagram (slide 6) */
+  .proj { flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 52px; }
+  .proj-col { display: flex; flex-direction: column; gap: 18px; }
+  .pnode { border: 1px solid var(--border); padding: 20px 24px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .pnode .pr { font-size: 20px; font-weight: 500; color: var(--text); }
+  .pnode .pl { font-size: 15px; color: var(--dim); line-height: 1.35; }
+  .pnode .pl .k { color: var(--mute); font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 6px; }
+  .proj-col.left .pnode::after { content:""; position:absolute; top:50%; left:100%; width:52px; height:1px; background: var(--border-hi); }
+  .proj-col.right .pnode::after { content:""; position:absolute; top:50%; right:100%; width:52px; height:1px; background: var(--border-hi); }
+  .pcenter { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .pcenter .core { width: 240px; height: 150px; border: 1px solid var(--accent-dim); background: var(--accent-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .pcenter .core .cl { font-family: var(--mono); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-dim); }
+  .pcenter .core .cb { font-size: 26px; font-weight: 600; }
+  .pcenter .core .cs { font-family: var(--mono); font-size: 13px; color: var(--dim); }
+  .projcap { font-family: var(--mono); font-size: 17px; color: var(--dim); letter-spacing: 0.02em; margin-top: 40px; text-align: center; }
+
+  /* labeled rows (slide 7) */
+  .props { display: flex; flex-direction: column; border: 1px solid var(--border); }
+  .prop { display: grid; grid-template-columns: 340px 1fr; gap: 40px; padding: 30px 34px; border-bottom: 1px solid var(--border); align-items: baseline; }
+  .prop:last-child { border-bottom: 0; }
+  .prop .pn { font-size: 24px; font-weight: 500; color: var(--text); }
+  .prop .pd { font-size: 21px; color: var(--dim); line-height: 1.4; }
+
+  /* problem rows (slide 4) */
+  .plist { display: flex; flex-direction: column; border: 1px solid var(--border); }
+  .prow { display: grid; grid-template-columns: 280px 1fr; gap: 36px; padding: 30px 34px; border-bottom: 1px solid var(--border); align-items: baseline; }
+  .prow:last-child { border-bottom: 0; }
+  .prow .pl { font-size: 23px; font-weight: 500; color: var(--text); }
+  .prow .pd { font-size: 21px; color: var(--dim); line-height: 1.4; }
+  .subcap { font-family: var(--mono); font-size: 16px; color: var(--mute); letter-spacing: 0.02em; }
+
+  /* mirror table (slide 5) */
+  .mirror2 { border: 1px solid var(--border); }
+  .mhead { display: grid; grid-template-columns: 1fr 1fr; }
+  .mhead div { font-family: var(--mono); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); padding: 18px 30px; border-bottom: 1px solid var(--border); }
+  .mhead div:first-child { border-right: 1px solid var(--border); }
+  .mrow2 { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .mrow2:last-child { border-bottom: 0; }
+  .mrow2 .l { padding: 24px 30px; border-right: 1px solid var(--border); font-size: 20px; color: var(--dim); line-height: 1.38; }
+  .mrow2 .r { padding: 24px 30px; font-size: 20px; color: var(--text); line-height: 1.38; }
+  .mrow2 .r b { color: var(--accent); font-weight: 600; }
+
+  /* demo interstitial */
+  .demo-hero { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .demo-hero .w { font-size: 150px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.9; margin: 0; }
+  .demo-hero .w .dot { color: var(--accent); }
+
+  /* thanks links */
+  .tlinks { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); }
+  .tlink { padding: 32px 30px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .tlink:last-child { border-right: 0; }
+  .tlink .tl { font-family: var(--mono); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+  .tlink .tv { font-family: var(--mono); font-size: 19px; color: var(--accent); word-break: break-all; }
+
+  /* ---------- chrome ---------- */
+  #progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent-dim); width: 0; transition: width .3s ease; z-index: 60; }
+  #hud {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 18px;
+    font-family: var(--mono); font-size: 13px; color: var(--mute);
+    letter-spacing: 0.06em; pointer-events: auto; z-index: 60;
+    background: color-mix(in oklch, var(--bg) 80%, transparent);
+    border: 1px solid var(--border); padding: 8px 16px; backdrop-filter: blur(6px);
+  }
+  #hud .counter .cur { color: var(--text); }
+  #hud .dots { display: flex; gap: 7px; }
+  #hud .dot { width: 7px; height: 7px; background: var(--border-hi); cursor: pointer; transition: background .2s; border: 0; padding: 0; }
+  #hud .dot.on { background: var(--accent-dim); }
+  #hud .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #hud .nav { background: none; border: 0; color: var(--mute); cursor: pointer; font-family: var(--mono); font-size: 13px; padding: 2px 6px; }
+  #hud .nav:hover { color: var(--text); }
+  #hud .nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #hint { position: fixed; bottom: 24px; right: 26px; font-family: var(--mono); font-size: 12px; color: var(--mute); letter-spacing: 0.06em; z-index: 60; opacity: .7; }
+
+  @media (prefers-reduced-motion: reduce) { #progress { transition: none; } }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div id="stage" role="region" aria-label="Continuum pitch deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide" aria-label="Title">
+    <div class="title-grid">
+      <div></div>
+      <div class="title-mid">
+        <h1 class="wordmark">Continuum<span class="dot">.</span></h1>
+        <p class="title-sub">Continuum is a secure closing room for GP-led continuation deals — LPs and buyers commit privately, the system computes the close, and cash plus fund interests settle atomically on Canton.</p>
+      </div>
+      <div class="title-foot">
+        <span>Encode Club</span>
+        <span>Build on Canton</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · THE TRANSACTION -->
+  <section class="slide" aria-label="The transaction">
+    <div class="head">
+      <p class="eyebrow"><span class="n">02</span> &nbsp;The transaction</p>
+      <div class="rule"></div>
+      <span class="tag">GP-led continuation deal</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:36px;">
+      <h1 class="lead">What a continuation deal is.</h1>
+      <div class="facts">
+        <div class="f"><span class="fn">01</span><span class="ft">A fund is ending; one company is still worth holding.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">The GP moves it into a new continuation vehicle.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">Each LP elects: take cash now, or roll into the new fund.</span></div>
+        <div class="f"><span class="fn">04</span><span class="ft">A secondary buyer provides fresh capital.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · THE CONFLICT -->
+  <section class="slide" aria-label="The structural conflict">
+    <div class="head">
+      <p class="eyebrow"><span class="n">03</span> &nbsp;The structure</p>
+      <div class="rule"></div>
+      <span class="tag">independent checks</span>
+    </div>
+    <div class="cols c-5-7" style="align-items:center;">
+      <div class="stack" style="gap:28px;">
+        <h1 class="lead">The GP is on both sides.</h1>
+        <div class="conflict">
+          <div class="side"><span class="l">sells</span><span class="v">Old fund</span></div>
+          <div class="mid"><span class="who">GP</span><span class="lk">←&nbsp;&nbsp;→</span></div>
+          <div class="side r"><span class="l">manages</span><span class="v">New vehicle</span></div>
+        </div>
+        <p class="body">The process relies on independent checks so the price and terms don't depend on the conflicted party.</p>
+        <p class="subcap">All four checks run through a process the GP coordinates.</p>
+      </div>
+      <div class="stack center">
+        <div class="checks">
+          <div class="c"><span class="ct">An independent valuer prices the asset.</span></div>
+          <div class="c"><span class="ct">A sealed auction discovers the price.</span></div>
+          <div class="c"><span class="ct">The LPAC reviews fairness and consents.</span></div>
+          <div class="c"><span class="ct">Each LP elects privately.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE PROBLEM -->
+  <section class="slide" aria-label="The problem">
+    <div class="head">
+      <p class="eyebrow"><span class="n">04</span> &nbsp;The problem</p>
+      <div class="rule"></div>
+      <span class="tag">off-ledger today</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:36px;">
+      <h1 class="lead">Today, integrity depends on the conflicted party.</h1>
+      <div class="plist">
+        <div class="prow"><span class="pl">Leakage</span><span class="pd">Sealed bids and LP elections sit in a data room the GP controls.</span></div>
+        <div class="prow"><span class="pl">Partial close</span><span class="pd">The close is separate wires and signatures; one failed leg leaves the deal half-closed.</span></div>
+        <div class="prow"><span class="pl">Unverifiable record</span><span class="pd">The audit trail is reconstructed afterward from emails and PDFs.</span></div>
+      </div>
+      <p class="subcap">Every check assumes the GP's coordination is neutral.</p>
+    </div>
+  </section>
+
+  <!-- 5 · WHAT THE LEDGER CHANGES -->
+  <section class="slide" aria-label="What the ledger changes">
+    <div class="head">
+      <p class="eyebrow"><span class="n">05</span> &nbsp;The solution</p>
+      <div class="rule"></div>
+      <span class="tag">the same checks, enforced by the ledger</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:34px;">
+      <h1 class="lead">The same checks, enforced by the ledger.</h1>
+      <div class="mirror2">
+        <div class="mhead"><div>Off-ledger today</div><div>On Canton</div></div>
+        <div class="mrow2"><span class="l">GP-controlled data room</span><span class="r"><b>Per-party privacy</b> — each participant is projected only its own slice, by the ledger, not the app.</span></div>
+        <div class="mrow2"><span class="l">Separate wires and signatures</span><span class="r"><b>One atomic transaction</b> — units, cash, rolled units, burn: all legs or none.</span></div>
+        <div class="mrow2"><span class="l">GP coordinates every step</span><span class="r"><b>Each party signs with its own key</b> — no shared database under the conflicted party.</span></div>
+        <div class="mrow2"><span class="l">Record reconstructed afterward</span><span class="r"><b>Four on-ledger proofs</b> — valuation, fairness, consent, auction certificate; anyone entitled can verify.</span></div>
+      </div>
+      <p class="subcap">Native to Canton: sub-transaction privacy · atomic settlement · selective disclosure · no central operator.</p>
+    </div>
+  </section>
+
+  <!-- 6 · WHAT CONTINUUM DOES -->
+  <section class="slide" aria-label="What Continuum does">
+    <div class="head">
+      <p class="eyebrow"><span class="n">06</span> &nbsp;The system</p>
+      <div class="rule"></div>
+      <span class="tag">one closing room, on-ledger</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:40px;">
+      <h1 class="lead">One deal, end to end.</h1>
+      <div class="flow">
+        <div class="fstep"><span class="sn">1</span><p>Open the room — six parties, each with its own key.</p></div>
+        <div class="fstep"><span class="sn">2</span><p>Valuation anchored on-chain.</p></div>
+        <div class="fstep"><span class="sn">3</span><p>Sealed-bid auction, clearing price, certificate.</p></div>
+        <div class="fstep"><span class="sn">4</span><p>LPAC fairness review and consent.</p></div>
+        <div class="fstep"><span class="sn">5</span><p>LP elections — cash or roll.</p></div>
+        <div class="fstep settle"><span class="sn">6</span><p>Atomic close — units, cash, rolled interests settle together, or not at all.</p></div>
+      </div>
+      <p class="proofline">The close requires four on-ledger proofs: <b>valuation · fairness · consent · auction certificate</b>.</p>
+    </div>
+  </section>
+
+  <!-- 7 · DEMO -->
+  <section class="slide" aria-label="Demo">
+    <div class="demo-hero">
+      <h1 class="w">Demo<span class="dot">.</span></h1>
+    </div>
+  </section>
+
+  <!-- 8 · HOW IT WORKS -->
+  <section class="slide" aria-label="How it works">
+    <div class="head">
+      <p class="eyebrow"><span class="n">08</span> &nbsp;How it works</p>
+      <div class="rule"></div>
+      <span class="tag">one transaction, six views</span>
+    </div>
+    <div class="proj">
+      <div class="proj-col left">
+        <div class="pnode"><span class="pr">GP</span><span class="pl"><span class="k">sees</span>deal state, proofs</span><span class="pl"><span class="k">not</span>sealed bids, elections before close</span></div>
+        <div class="pnode"><span class="pr">Valuer</span><span class="pl"><span class="k">sees</span>its valuation, anchor hash</span><span class="pl"><span class="k">not</span>bids, elections</span></div>
+        <div class="pnode"><span class="pr">LPAC</span><span class="pl"><span class="k">sees</span>scoped fairness view</span><span class="pl"><span class="k">not</span>the whole book</span></div>
+      </div>
+      <div class="pcenter">
+        <div class="core"><span class="cl">one transaction</span><span class="cb">Atomic Close</span><span class="cs">all legs, or none</span></div>
+      </div>
+      <div class="proj-col right">
+        <div class="pnode"><span class="pr">Buyer</span><span class="pl"><span class="k">sees</span>its own bid, clearing price</span><span class="pl"><span class="k">not</span>other bids, elections</span></div>
+        <div class="pnode"><span class="pr">Exiting LP</span><span class="pl"><span class="k">sees</span>its election, its cash leg</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+        <div class="pnode"><span class="pr">Rolling LP</span><span class="pl"><span class="k">sees</span>its election, its units</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+      </div>
+    </div>
+    <p class="projcap">Visibility is enforced by the ledger, not by the application.</p>
+  </section>
+
+  <!-- 9 · NEXT STEPS -->
+  <section class="slide" aria-label="Next steps">
+    <div class="head">
+      <p class="eyebrow"><span class="n">09</span> &nbsp;Next steps</p>
+      <div class="rule"></div>
+      <span class="tag">same closing room, different deal type</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:36px;">
+      <h1 class="lead">A general engine for multi-party corporate actions.</h1>
+      <div class="props">
+        <div class="prop"><span class="pn">Fund liquidation</span><span class="pd">A wind-down settles the same way — assets out, cash to LPs, all or none.</span></div>
+        <div class="prop"><span class="pn">NAV fund-finance closes</span><span class="pd">Multiple lenders commit tranches privately; the drawdown settles atomically.</span></div>
+        <div class="prop"><span class="pn">Tender offers, block crossings</span><span class="pd">Sealed offers and private elections, settled in one transaction.</span></div>
+      </div>
+      <p class="subcap">Continuation deals are the wedge; the pattern is the same each time.</p>
+    </div>
+  </section>
+
+  <!-- 10 · THANKS -->
+  <section class="slide" aria-label="Thanks">
+    <div class="title-grid">
+      <div></div>
+      <div class="title-mid">
+        <h1 class="wordmark" style="font-size:120px;">Continuum<span class="dot">.</span></h1>
+        <p class="title-sub">A secure closing room for GP-led continuation deals — LPs and buyers commit privately, the system computes the close, and cash plus fund interests settle atomically on Canton.</p>
+      </div>
+      <div class="tlinks" style="align-self:end;">
+        <div class="tlink"><span class="tl">Live app</span><span class="tv">continuum-custody.fly.dev</span></div>
+        <div class="tlink"><span class="tl">Code</span><span class="tv">github.com/kmadorin/continuum-prototype</span></div>
+        <div class="tlink"><span class="tl">Network</span><span class="tv">Canton 5N devnet</span></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="hud" role="navigation" aria-label="Slide navigation">
+  <button class="nav" id="prev" aria-label="Previous slide">←</button>
+  <span class="counter"><span class="cur" id="cur">01</span> / <span id="tot">08</span></span>
+  <div class="dots" id="dots" aria-hidden="true"></div>
+  <button class="nav" id="next" aria-label="Next slide">→</button>
+</div>
+<div id="hint">↑ ↓ · scroll · F</div>
+
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var slides = Array.prototype.slice.call(stage.querySelectorAll('.slide'));
+  var N = slides.length;
+  var KEY = 'continuum-deck-slide';
+  var i = parseInt(localStorage.getItem(KEY), 10);
+  if (isNaN(i) || i < 0 || i >= N) i = 0;
+
+  var dots = document.getElementById('dots');
+  slides.forEach(function (s, k) {
+    var b = document.createElement('button');
+    b.className = 'dot'; b.type = 'button';
+    b.setAttribute('aria-label', 'Go to slide ' + (k + 1));
+    b.addEventListener('click', function () { go(k); });
+    dots.appendChild(b);
+  });
+  var dotEls = Array.prototype.slice.call(dots.children);
+  document.getElementById('tot').textContent = String(N).padStart(2, '0');
+
+  function render() {
+    slides.forEach(function (s, k) { s.classList.toggle('live', k === i); });
+    dotEls.forEach(function (d, k) { d.classList.toggle('on', k === i); });
+    document.getElementById('cur').textContent = String(i + 1).padStart(2, '0');
+    document.getElementById('progress').style.width = ((i + 1) / N * 100) + '%';
+    localStorage.setItem(KEY, i);
+  }
+  function go(n) { i = Math.max(0, Math.min(N - 1, n)); render(); }
+  function next() { go(i + 1); }
+  function prev() { go(i - 1); }
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+
+  document.addEventListener('keydown', function (e) {
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End': e.preventDefault(); go(N - 1); break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+        break;
+    }
+  });
+
+  var lock = false, acc = 0;
+  window.addEventListener('wheel', function (e) {
+    acc += e.deltaY;
+    if (lock) return;
+    if (Math.abs(acc) < 40) return;
+    lock = true;
+    if (acc > 0) next(); else prev();
+    acc = 0;
+    setTimeout(function () { lock = false; }, 550);
+  }, { passive: true });
+
+  var ty = 0, tx = 0;
+  window.addEventListener('touchstart', function (e) { ty = e.touches[0].clientY; tx = e.touches[0].clientX; }, { passive: true });
+  window.addEventListener('touchend', function (e) {
+    var dy = e.changedTouches[0].clientY - ty, dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dy) > 60 || Math.abs(dx) > 60) {
+      if (Math.abs(dy) > Math.abs(dx)) { dy < 0 ? next() : prev(); }
+      else { dx < 0 ? next() : prev(); }
+    }
+  }, { passive: true });
+
+  function scale() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', scale);
+  scale();
+  render();
+})();
+</script>
+</body>
+</html>
