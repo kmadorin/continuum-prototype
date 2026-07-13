@@ -6,8 +6,11 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "module": "nodenext",
+    /* Bundler mode. The config + the sandbox spine import the backend's TS sources
+       (custody/, ledger-client/), which are written for bundler resolution — so is Vite's
+       own config loader. nodenext here would demand .js extensions the sources don't use. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -19,5 +22,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  /* The sandbox test runs under vitest globals, not this project. */
+  "include": ["vite.config.ts", "sandbox/**/*.ts"],
+  "exclude": ["sandbox/**/*.test.ts"]
 }

@@ -486,7 +486,7 @@ export function createApp(deps: AppDeps) {
       const token = await deps.token();
       const authHdr = { Authorization: `Bearer ${token}` };
       const endRes = await fetchImpl(`${deps.ledgerBase}/v2/state/ledger-end`, { headers: authHdr });
-      const { offset } = await endRes.json();
+      const { offset } = (await endRes.json()) as { offset: number };
       const acsRes = await fetchImpl(`${deps.ledgerBase}/v2/state/active-contracts`, {
         method: 'POST',
         headers: { ...authHdr, 'Content-Type': 'application/json' },
