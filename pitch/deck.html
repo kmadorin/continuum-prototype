@@ -143,6 +143,16 @@
   .pcenter .core .cl { font-family: var(--mono); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-dim); }
   .pcenter .core .cb { font-size: 26px; font-weight: 600; }
   .pcenter .core .cs { font-family: var(--mono); font-size: 13px; color: var(--dim); }
+  .demo-note { font-family: var(--mono); font-size: 16px; color: var(--dim); letter-spacing: 0.02em; margin: 0; max-width: 88ch; line-height: 1.6; }
+  .demo-note b { color: var(--accent); font-weight: 600; }
+  .demo-note .m { color: var(--text); }
+  .legsrow { display: flex; gap: 0; border: 1px solid var(--border); margin-top: 36px; }
+  .legsrow .lr { flex: 1; padding: 16px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
+  .legsrow .lr:last-child { border-right: 0; }
+  .legsrow .lv { font-family: var(--mono); font-size: 21px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .legsrow .ll { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+  .legsrow .lr.sum { background: var(--accent-soft); }
+  .legsrow .lr.sum .lv { color: var(--accent); }
   .projcap { font-family: var(--mono); font-size: 17px; color: var(--dim); letter-spacing: 0.02em; margin-top: 40px; text-align: center; }
 
   /* labeled rows (slide 7) */
@@ -334,8 +344,19 @@
 
   <!-- 7 · DEMO -->
   <section class="slide" aria-label="Demo">
-    <div class="demo-hero">
-      <h1 class="w">Demo<span class="dot">.</span></h1>
+    <div class="head">
+      <p class="eyebrow"><span class="n">07</span> &nbsp;Demo</p>
+      <div class="rule"></div>
+      <span class="tag">live on Canton devnet</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:36px;">
+      <h1 class="lead">Six seats, one atomic close<span class="dot">.</span></h1>
+      <div class="facts">
+        <div class="f"><span class="fn">01</span><span class="ft">The buyer bids sealed; each LP elects privately. The GP's room reads <b>“2 of 2 responded”</b> while its own ledger projection holds <b>zero</b> bids and <b>zero</b> elections — it counts what it cannot read.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">Four proofs anchor on-ledger — Kroll's valuation, the fairness opinion, LPAC consent, the auction certificate. The issuance gate will not mint until all four exist.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">One <b>Close</b> moves every leg and burns both old-fund interests. The settlement-receipt id is <b>identical in every seat's window</b> — the same on-ledger contract from the same transaction, not six animations.</span></div>
+      </div>
+      <p class="demo-note">Watch it yourself: <b>continuum-custody.fly.dev</b> — sign in as any seat (<span class="m">gp</span>, <span class="m">buyer</span>, <span class="m">lpExiting</span>, <span class="m">lpRolling</span>, <span class="m">lpac</span>, <span class="m">valuer</span> · password <span class="m">&lt;seat&gt;-demo</span>), in as many tabs as you have sides to check.</p>
     </div>
   </section>
 
@@ -360,6 +381,13 @@
         <div class="pnode"><span class="pr">Exiting LP</span><span class="pl"><span class="k">sees</span>its election, its cash leg</span><span class="pl"><span class="k">not</span>other LPs</span></div>
         <div class="pnode"><span class="pr">Rolling LP</span><span class="pl"><span class="k">sees</span>its election, its units</span><span class="pl"><span class="k">not</span>other LPs</span></div>
       </div>
+    </div>
+    <div class="legsrow" aria-label="The legs of the close">
+      <div class="lr"><span class="lv">288,000,000</span><span class="ll">CV units → buyer</span></div>
+      <div class="lr"><span class="lv">192,000,000</span><span class="ll">CV units → rolling LP</span></div>
+      <div class="lr"><span class="lv">$288.0M</span><span class="ll">USDC → exiting LP</span></div>
+      <div class="lr"><span class="lv">2×</span><span class="ll">old-fund interests burned</span></div>
+      <div class="lr sum"><span class="lv">= $480M</span><span class="ll">units issued ≡ PSA price · asserted on-ledger</span></div>
     </div>
     <p class="projcap">Visibility is enforced by the ledger, not by the application.</p>
   </section>
