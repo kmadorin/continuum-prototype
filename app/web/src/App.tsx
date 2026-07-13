@@ -8,13 +8,14 @@ import { SessionProvider, useSession, type Role } from './state/WalletSession';
 import { ToastProvider } from './state/Toast';
 import { InspectorProvider } from './state/Inspector';
 import DealPage from './views/DealPage';
+import FocusedPage from './views/FocusedPage';
 import SignIn from './views/SignIn';
 import Settlement from './views/Settlement';
 import TrustPanel from './views/TrustPanel';
 import './styles.css';
 
-// Each seat's human label (topbar chrome). Every seat now lands on the same shared
-// Deal Page; the role only sets emphasis + which contextual CTA is enabled.
+// Each seat's human label (topbar chrome). The GP lands on the full Deal Page; every
+// narrow seat lands on its role-scoped FocusedPage.
 const SEAT_LABEL: Record<Role, string> = {
   gp: 'Advisor',
   buyer: 'Secondary Buyer',
@@ -60,7 +61,8 @@ function Gate() {
       </header>
 
       <main className="portal-wrap">
-        <DealPage />
+        {/* GP orchestrates → full Deal Page; every narrow seat → role-scoped FocusedPage. */}
+        {role === 'gp' ? <DealPage /> : <FocusedPage />}
       </main>
 
       {/* Overlays the workspace with a full-screen SETTLED takeover once this

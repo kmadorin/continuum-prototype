@@ -327,3 +327,67 @@ describe('reads proxy', () => {
     expect(forwarded.filter.filtersByParty[PARTY_B]).toBeUndefined();
   });
 });
+
+describe('demo epoch reset', () => {
+  it('/registry exposes the epoch-1 deal keys by default', async () => {
+    const { app } = makeDeps();
+    const res = await app.request('/registry');
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.deal).toEqual({ epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' });
+  });
+
+  it('POST /demo/reset bumps the epoch and rotates every join/identity key', async () => {
+    const { app } = makeDeps();
+    const reset = await app.request('/demo/reset', { method: 'POST' });
+    expect(reset.status).toBe(200);
+    const bumped = (await reset.json()).deal;
+    expect(bumped).toEqual({ epoch: 2, dealId: 'M2', cv: 'Meridian CV I #2', unit: 'MERIDIAN-CV-I-2', usdc: 'USDC-2' });
+    // The new epoch is now what /registry serves — reads scope to the fresh, empty deal.
+    const reg = await (await app.request('/registry')).json();
+    expect(reg.deal.epoch).toBe(2);
+    expect(reg.deal.dealId).toBe('M2');
+  });
+});
+
+describe('valuation auto-seed', () => {
+  const VALUER_MNEM = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
+  const VALUER_PARTY = `continuum-valuer-test::${keyFromMnemonic(VALUER_MNEM).derPubB64.slice(0, 8)}`;
+  const SEED_RECORDS: TenantRecord[] = [
+    { tenant: 'gp', custodianName: 'Fireblocks — GP Treasury', role: 'gp', party: PARTY_A, mnemonic: MNEM_A, fingerprint: FP_A, username: 'gp', password: 'gp-demo' },
+    { tenant: 'valuer', custodianName: 'Kroll Valuation Services', role: 'valuer', party: VALUER_PARTY, mnemonic: VALUER_MNEM, fingerprint: 'fp-valuer', username: 'valuer', password: 'valuer-demo' },
+  ];
+
+  function seedDeps(existing: Array<{ contractId: string; args: Record<string, unknown> }> = []) {
+    const submitSigned = vi.fn(async () => ({ updateId: 'seed-tx' }));
+    const activeContracts = vi.fn(async () => existing);
+    const app = createApp({
+      tenants: tenantsFromRecords(SEED_RECORDS),
+      signer: { submitSigned },
+      reads: { activeContracts },
+      sessionSecret: SECRET,
+      ledgerBase: 'https://ledger.example',
+      token: async () => 'M2M-TOKEN',
+      docsRoot: DOCS_ROOT,
+    });
+    return { app, submitSigned, activeContracts };
+  }
+
+  it('reset anchors the new epoch valuation, signed by the valuer party, before responding', async () => {
+    const { app, submitSigned } = seedDeps();
+    const res = await app.request('/demo/reset', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(submitSigned).toHaveBeenCalledTimes(1);
+    const [party, , , commands] = submitSigned.mock.calls[0]! as any[];
+    expect(party).toBe(VALUER_PARTY); // the REAL valuer party signs
+    const args = commands[0].CreateCommand.createArguments;
+    expect(commands[0].CreateCommand.templateId).toContain('Continuum.Valuation:ValuationReport');
+    expect(args).toMatchObject({ agent: VALUER_PARTY, gp: PARTY_A, dealId: 'M2', contentHash: VALUATION_SHA256 });
+  });
+
+  it('is idempotent — skips the create when a report for the epoch dealId already exists', async () => {
+    const { app, submitSigned } = seedDeps([{ contractId: 'v1', args: { dealId: 'M2' } }]);
+    await app.request('/demo/reset', { method: 'POST' });
+    expect(submitSigned).not.toHaveBeenCalled();
+  });
+});

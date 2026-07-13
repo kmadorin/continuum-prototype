@@ -19,6 +19,7 @@ import type { JsCommand } from '../ledger-client/src/types';
 import type { Ed25519Key } from '../ledger-client/src/ed25519';
 import { SESSION_COOKIE, signSession, verifySession, type SessionData } from './session';
 import type { TenantStore } from './tenants';
+import { VALUATION_SHA256 } from './docs/hashes';
 
 /** Minimal slice of WalletClient the spine needs (so tests can mock it). */
 export interface Signer {
@@ -28,6 +29,14 @@ export interface Signer {
     fingerprint: string,
     commands: JsCommand[],
   ): Promise<{ updateId?: string }>;
+}
+
+/** Minimal read port for server-initiated idempotency checks (so tests can omit it). */
+export interface Reader {
+  activeContracts(
+    party: string,
+    opts?: { templateId?: string },
+  ): Promise<Array<{ contractId: string; args: Record<string, unknown> }>>;
 }
 
 export type AuditEntry = {
@@ -63,6 +72,10 @@ export type AppDeps = {
    * Holds the sample docs + manifest.json served by /docs/* and re-hashed by /verify.
    */
   docsRoot?: string;
+  /** Read port for server-initiated idempotency checks (the auto-seed). Omitted in tests. */
+  reads?: Reader;
+  /** Seed the current epoch's independent valuation on boot (server.ts sets true). */
+  seedOnBoot?: boolean;
 };
 
 /** One row of the documents manifest (public metadata + the real sha256 of the served bytes). */
@@ -284,9 +297,25 @@ export function createApp(deps: AppDeps) {
     });
   });
 
-  // ── GET /registry ── PUBLIC party ids + custodian names (no keys, no session) ──
+  // ── Demo epoch ── the reset knob ──────────────────────────────────────────────
+  // The ledger is append-only, so "start over" can't delete history. Instead every
+  // demo run is scoped by an EPOCH that rotates the four on-ledger JOIN/IDENTITY keys
+  // the UI filters on: the deal id, the human cv, and the two instrument ids (holdings
+  // are filtered by instId, so those must rotate too or old units/cash would still
+  // show). A fresh epoch → the new keys have zero contracts → every seat's view is
+  // pristine and the GP re-opens the room. Old contracts linger invisibly on devnet.
+  // Epoch 1 == the original hardcoded constants (no change for existing state).
+  // In-memory (single machine); a restart falls back to epoch 1.
+  let demoEpoch = 1;
+  const dealKeys = (e: number) =>
+    e <= 1
+      ? { epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' }
+      : { epoch: e, dealId: `M${e}`, cv: `Meridian CV I #${e}`, unit: `MERIDIAN-CV-I-${e}`, usdc: `USDC-${e}` };
+
+  // ── GET /registry ── PUBLIC party ids + custodian names + demo keys (no session) ─
   // The frontend needs every party id (the deal room references buyer/lpExiting/…),
-  // and party ids are public. Key material is never included.
+  // and party ids are public. Key material is never included. The demo `deal` keys let
+  // the client scope its reads to the current epoch.
   app.get('/registry', (c) => {
     const parties: Record<string, string> = {};
     const custodians: Record<string, string> = {};
@@ -294,7 +323,81 @@ export function createApp(deps: AppDeps) {
       parties[t.role] = t.party;
       custodians[t.role] = t.custodianName;
     }
-    return c.json({ parties, custodians });
+    return c.json({ parties, custodians, deal: dealKeys(demoEpoch) });
+  });
+
+  // ── Auto-seed the independent valuation ────────────────────────────────────────
+  // Per ILPA, the independent valuation is an INPUT to price + the LPAC fairness
+  // review, NOT a precondition to opening the room — so the real-world state a GP's
+  // closing room is in is "the independent valuation already anchored". We reproduce
+  // that on-ledger: the REAL valuer party (Kroll) signs a ValuationReport for the
+  // current epoch's dealId (backend holds the valuer key — identical artifact to a
+  // manual click: agent=valuer ≠ gp, real Ed25519 signature, real contentHash). The
+  // GP tile + Close ceremony check then auto-resolve off the ACS (no view change). The
+  // Valuer seat stays as a read-only "anchored ✓" proof; its manual sign button remains
+  // a genuine create-if-absent fallback. We do NOT seed fairness/consent — those are
+  // the LPAC governance seat's live decisions, and pre-seeding them would misrepresent
+  // sequencing.
+  const VALUATION_TEMPLATE = '#continuum-contracts:Continuum.Valuation:ValuationReport';
+  const SEED_NAV = { navLow: '480000000.0', navHigh: '520000000.0', asOfDate: '2026-06-30' };
+  const seedingByEpoch = new Map<number, Promise<void>>(); // in-flight dedup (double-click Reset)
+
+  async function seedValuation(epoch: number): Promise<void> {
+    const inFlight = seedingByEpoch.get(epoch);
+    if (inFlight) return inFlight;
+    const run = (async () => {
+      const valuer = deps.tenants.all.find((t) => t.role === 'valuer');
+      const gp = deps.tenants.all.find((t) => t.role === 'gp');
+      if (!valuer || !gp) return; // no valuer/gp tenant (e.g. minimal test set) → skip
+      const keys = dealKeys(epoch);
+      // Idempotency: if the valuer's ACS already holds a report for THIS epoch's dealId,
+      // do nothing (covers restarts + reset replays).
+      if (deps.reads) {
+        try {
+          const existing = await deps.reads.activeContracts(valuer.party, { templateId: VALUATION_TEMPLATE });
+          if (existing.some((c) => c.args?.dealId === keys.dealId)) return;
+        } catch {
+          /* read failed — fall through and attempt the create (worst case a harmless dup) */
+        }
+      }
+      await deps.signer.submitSigned(valuer.party, valuer.key, valuer.fingerprint, [
+        {
+          CreateCommand: {
+            templateId: VALUATION_TEMPLATE,
+            createArguments: {
+              agent: valuer.party,
+              gp: gp.party,
+              dealId: keys.dealId,
+              navLow: SEED_NAV.navLow,
+              navHigh: SEED_NAV.navHigh,
+              asOfDate: SEED_NAV.asOfDate,
+              contentHash: VALUATION_SHA256,
+            },
+          },
+        },
+      ]);
+    })().finally(() => seedingByEpoch.delete(epoch));
+    seedingByEpoch.set(epoch, run);
+    return run;
+  }
+
+  // ── POST /demo/reset ── bump the epoch → the whole demo starts over ────────────
+  // Landing-page "Reset demo" calls this (confirm-gated in the UI). No session needed:
+  // it authorizes nothing beyond seeding the independent valuation and reveals no
+  // secrets — it advances the epoch counter so subsequent reads target fresh deal keys,
+  // then anchors the new epoch's independent valuation BEFORE responding so the client
+  // never reloads into a "Pending Valuation" flash. The client then reloads.
+  app.post('/demo/reset', async (c) => {
+    demoEpoch += 1;
+    const epoch = demoEpoch;
+    try {
+      await seedValuation(epoch);
+    } catch (err) {
+      // Degrade gracefully: the reset still succeeds; the UI falls back to the Pending
+      // state and the Valuer seat's manual sign is the recovery path.
+      console.error('[demo/reset] valuation seed failed', err);
+    }
+    return c.json({ deal: dealKeys(epoch) });
   });
 
   // ── GET /ledger/update/:updateId ── the Ledger Inspector proof ────────────────
@@ -447,6 +550,12 @@ export function createApp(deps: AppDeps) {
       if (existsSync(index)) return serveFile(c, index);
       return c.text('frontend build not found — run the Vite build (web/dist)', 404);
     });
+  }
+
+  // Boot seed: anchor the current epoch's independent valuation on startup (covers a
+  // server restart mid-epoch). Best-effort + idempotent — never blocks boot.
+  if (deps.seedOnBoot) {
+    void seedValuation(demoEpoch).catch((err) => console.error('[boot] valuation seed failed', err));
   }
 
   return app;

@@ -11,8 +11,9 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-const POSITION_NAV = DEMO.interestNav; // $100.0M — matches the $500M institutional scale
-const CLEARING = Number(DEMO.clearingPct);
+// $100.0M — matches the $500M institutional scale. The LP's OWN stake record (an LP
+// does not observe the independent ValuationReport), so it is never labelled "independent".
+const POSITION_NAV = DEMO.interestNav;
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -58,6 +59,11 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
     );
   };
   useRefresh(refresh, [L.me]);
+
+  // Projection-safe economics off the room-visible ContinuationDeal — never a DEMO
+  // constant. Sealed until the GP sets the clearing price.
+  const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
+  const refNav = deal?.args.refNav != null ? Number(deal.args.refNav) : null;
 
   const electSell = () =>
     run('elect', async () => {
@@ -145,11 +151,19 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
         <div className="stack g4">
           <Card title="My position">
             <dl className="kv">
-              <dt>Stake (independent NAV)</dt>
+              <dt>Stake (your record)</dt>
               <dd className="mono">{fmtM(POSITION_NAV)}</dd>
+              <dt>Reference NAV (deal record)</dt>
+              <dd className="mono">{refNav != null ? fmtM(refNav) : <span className="chip sealed">not on deal yet</span>}</dd>
               <dt>Implied proceeds</dt>
               <dd className="mono">
-                {fmtM(Number(POSITION_NAV) * CLEARING)} <span className="hint">= stake × {Math.round(CLEARING * 100)}%</span>
+                {clearingPct != null ? (
+                  <>
+                    {fmtM(Number(POSITION_NAV) * clearingPct)} <span className="hint">= stake × {Math.round(clearingPct * 100)}%</span>
+                  </>
+                ) : (
+                  <span className="chip sealed">sealed — clearing not set</span>
+                )}
               </dd>
               <dt>Valuation</dt>
               <dd>

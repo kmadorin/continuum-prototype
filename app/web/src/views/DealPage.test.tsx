@@ -84,8 +84,9 @@ describe('DealPage shell', () => {
     await waitFor(() =>
       expect(screen.getAllByText('LPAC Consent')[0].closest('li')?.getAttribute('aria-current')).toBe('step'),
     );
-    // Pending KPI placeholders show before any stage completes (clearing + winning bid).
-    expect(screen.getAllByText('— Pending Auction')).toHaveLength(2);
+    // Pending KPI placeholders show before any stage completes. The 'Winning bid' tile
+    // was deleted globally (vanity derivation), so only Clearing price is Pending Auction.
+    expect(screen.getByText('— Pending Auction')).toBeTruthy();
     expect(screen.getByText('— Pending Issuance')).toBeTruthy();
   });
 });

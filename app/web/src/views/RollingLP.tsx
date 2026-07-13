@@ -12,9 +12,10 @@ import SellVsRoll from '../components/SellVsRoll';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-// $100.0M position — matches the exiting LP and the $500M institutional scale.
+// $100.0M position — matches the exiting LP and the $500M institutional scale. This
+// is the LP's OWN stake record, not an independent-valuation read (an LP does not
+// observe the ValuationReport), so it is never labelled "independent".
 const POSITION_NAV = DEMO.interestNav;
-const CLEARING = Number(DEMO.clearingPct);
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -50,6 +51,12 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
     setHolding(pick(mine));
   };
   useRefresh(refresh, [L.me]);
+
+  // Projection-safe economics: read the clearing price + reference NAV straight off
+  // the room-visible ContinuationDeal — never a DEMO constant. Sealed until the GP
+  // sets them.
+  const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
+  const refNav = deal?.args.refNav != null ? Number(deal.args.refNav) : null;
 
   const electRoll = () =>
     run('elect', async () => {
@@ -116,16 +123,31 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
         <div className="stack g4">
           <Card title="My position">
             <dl className="kv">
-              <dt>Stake (independent NAV)</dt>
+              <dt>Stake (your record)</dt>
               <dd className="mono">{fmtM(POSITION_NAV)}</dd>
+              <dt>Reference NAV (deal record)</dt>
+              <dd className="mono">{refNav != null ? fmtM(refNav) : <span className="chip sealed">not on deal yet</span>}</dd>
               <dt>If you roll</dt>
               <dd className="mono">~{Number(POSITION_NAV).toLocaleString()} CV units @ $1.00</dd>
               <dt>If you sell</dt>
-              <dd className="mono">{fmtM(Number(POSITION_NAV) * CLEARING)} cash</dd>
+              <dd className="mono">
+                {clearingPct != null ? (
+                  `${fmtM(Number(POSITION_NAV) * clearingPct)} cash`
+                ) : (
+                  <span className="chip sealed">sealed — clearing not set</span>
+                )}
+              </dd>
             </dl>
           </Card>
 
-          <SellVsRoll stakeNav={Number(POSITION_NAV)} clearingPct={CLEARING} />
+          {clearingPct != null ? (
+            <SellVsRoll stakeNav={Number(POSITION_NAV)} clearingPct={clearingPct} />
+          ) : (
+            <div className="callout">
+              <div className="ct">Sell vs roll — waiting on the clearing price</div>
+              <p>The room sets the clearing price before you weigh roll vs sell. Your comparison unlocks the moment it's disclosed on the deal record — figures stay sealed until then.</p>
+            </div>
+          )}
 
           <Card title="Elect: roll over">
             {election ? (

@@ -81,6 +81,9 @@ function main() {
     audit,
     staticRoot: resolve(APP_DIR, 'web/dist'),
     secureCookie: process.env.NODE_ENV === 'production',
+    // Server-initiated auto-seed of the independent valuation (idempotency read + boot).
+    reads,
+    seedOnBoot: true,
   });
 
   console.log(`custody spine: ${tenants.all.length} tenants loaded (${tenants.all.map((t) => t.role).join(', ')})`);

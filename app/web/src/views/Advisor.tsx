@@ -446,17 +446,6 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       </Card>
       )}
 
-      {show('close') && (
-        <Card title="Close — all at once">
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !deal || !have.basis} onClick={close}>
-              {busy === 'close' ? 'Signing…' : 'Close the deal'}
-            </button>
-            <span className="cant-see">One atomic transaction. Signed by the GP alone, consuming every pre-signed authority.</span>
-          </div>
-        </Card>
-      )}
-
       <ErrNote err={err} note={note} />
     </div>
   );

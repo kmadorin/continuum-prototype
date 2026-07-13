@@ -230,8 +230,8 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
                     </button>
                   </div>
                   <p className="hint" style={{ margin: 0 }}>
-                    Then record LPAC consent from your <b>Approval queue</b> on the Overview tab — the four-eyes
-                    release advances the deal so the GP can open elections.
+                    Then record LPAC consent from your <b>Approval queue</b> below — the four-eyes release
+                    advances the deal so the GP can open elections.
                   </p>
                 </div>
               )}

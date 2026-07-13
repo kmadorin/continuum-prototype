@@ -26,11 +26,6 @@ import Stepper, { type Stage } from '../components/Stepper';
 import KpiRow, { type Kpi } from '../components/KpiRow';
 import Tabs, { type TabDef } from '../components/Tabs';
 import Advisor from './Advisor';
-import Buyer from './Buyer';
-import ExitingLP from './ExitingLP';
-import RollingLP from './RollingLP';
-import LPAC from './LPAC';
-import Valuer from './Valuer';
 import AuditTrail from './AuditTrail';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
 import ValuationTab from './ValuationTab';
@@ -232,14 +227,6 @@ export default function DealPage() {
           asOf: DEMO.closeDate,
         }
       : { label: 'Clearing price', value: '— Pending Auction', pending: true },
-    clearingPct != null && clearingUsd != null
-      ? {
-          label: 'Winning bid',
-          value: fmtUsdM(clearingUsd),
-          sub: 'Lead buyer selected',
-          asOf: DEMO.closeDate,
-        }
-      : { label: 'Winning bid', value: '— Pending Auction', pending: true },
     electionsPhase
       ? {
           label: 'Elections',
@@ -301,46 +288,26 @@ export default function DealPage() {
 
         {tab === 'valuation' && (
           <div className="stack g4">
-            {role === 'valuer' && <Valuer />}
             <ValuationTab report={pick(valuations)} onNavigate={setTab} />
-            {role === 'gp' && <Advisor embedded={['clearing']} />}
-            {role === 'lpac' && <LPAC embedded={['governance']} />}
+            <Advisor embedded={['clearing']} />
           </div>
         )}
 
         {tab === 'auction' && (
           <TabActions
             title="Auction & Elections"
-            note="Sealed-bid auction and per-LP roll/sell elections. Amounts stay peer-blind until the atomic Close. Your contextual action for this stage is below."
+            note="Sealed-bid auction and per-LP roll/sell elections. Amounts stay peer-blind — you see only that a bid or election was filed, never the figures, until the atomic Close. Open elections once the deal is Consented."
           >
-            {role === 'gp' && <Advisor embedded={['elections']} />}
-            {role === 'buyer' && <Buyer embedded={['bid']} />}
-            {role === 'lpExiting' && <ExitingLP embedded={['election']} />}
-            {role === 'lpRolling' && <RollingLP embedded={['election']} />}
-            {role === 'lpac' && (
-              <p className="hint" style={{ margin: 0 }}>
-                Oversight seat — you verify the cleared result after Close, never the live sealed inputs.
-              </p>
-            )}
-            {role === 'valuer' && (
-              <p className="hint" style={{ margin: 0 }}>
-                Independent valuation agent — your role ends once the valuation is anchored. The auction and
-                elections are not in your scope.
-              </p>
-            )}
+            <Advisor embedded={['elections']} />
           </TabActions>
         )}
 
         {tab === 'settlement' && (
           <TabActions
             title="Settlement"
-            note="The GP issues units through the gate-ceremony — the ledger will not mint until all four proofs are anchored — then fires one atomic Close that moves every leg. Counterparties pre-authorize their legs and read their provenance-backed holding here."
+            note="Issue units through the gate-ceremony — the ledger will not mint until all four proofs are anchored — then fire one atomic Close that moves every leg. Counterparties pre-authorize their legs in their own seats."
           >
-            {role === 'gp' && <Advisor embedded={['ceremony', 'settlement', 'close']} />}
-            {role === 'buyer' && <Buyer embedded={['delegation', 'holding']} />}
-            {role === 'lpExiting' && <ExitingLP embedded={['preauth', 'holding']} />}
-            {role === 'lpRolling' && <RollingLP embedded={['preauth', 'holding']} />}
-            {role === 'lpac' && <LPAC embedded={['window']} />}
+            <Advisor embedded={['ceremony', 'settlement']} />
           </TabActions>
         )}
 

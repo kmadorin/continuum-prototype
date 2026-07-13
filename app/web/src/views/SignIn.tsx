@@ -77,6 +77,24 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  // Reset the demo → a brand-new empty deal epoch. The ledger is append-only, so this
+  // doesn't delete history; it advances the backend epoch so every seat's reads target
+  // fresh, empty deal keys (pristine "no deal yet"). The GP then re-opens the room.
+  async function resetDemo() {
+    const ok = window.confirm(
+      'Reset the demo?\n\nStarts a brand-new empty deal — every seat returns to its initial state and the GP re-opens the room. On-ledger history is preserved; the current deal is left behind.',
+    );
+    if (!ok) return;
+    setResetting(true);
+    try {
+      await fetch('/demo/reset', { method: 'POST', credentials: 'include' });
+      window.location.reload();
+    } catch {
+      setResetting(false);
+    }
+  }
 
   function choose(role: Role) {
     setPicked(role);
@@ -147,6 +165,9 @@ export default function SignIn() {
             <span className="note">
               Tip — open several seats in separate tabs to watch the same close from every side.
             </span>
+            <button type="button" className="btn ghost" onClick={resetDemo} disabled={resetting}>
+              {resetting ? 'Resetting…' : 'Reset demo'}
+            </button>
           </div>
         </>
       ) : (

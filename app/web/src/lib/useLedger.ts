@@ -100,13 +100,24 @@ export async function loadRegistry(): Promise<void> {
   const body = await r.json();
   Object.assign(counter, body?.parties ?? {});
   Object.assign(custodians, body?.custodians ?? {});
+  // Demo epoch: the backend rotates the four on-ledger join/identity keys on reset.
+  // Adopt them so every read scopes to the current epoch (pristine after a reset).
+  if (body?.deal) {
+    DEAL_ID = body.deal.dealId ?? DEAL_ID;
+    DEMO.cv = body.deal.cv ?? DEMO.cv;
+    DEMO.unit = body.deal.unit ?? DEMO.unit;
+    DEMO.usdc = body.deal.usdc ?? DEMO.usdc;
+  }
   registryLoaded = true;
 }
 
 // Demo economics — identical to close-wallets.ts so a cross-tab live run ties out.
 // dealId ('M1') is the join key across SealedBid/LPElection/certs/basis; it is
 // deliberately distinct from the deal's human-readable `cv`.
-export const DEAL_ID = 'M1';
+// dealId + cv + unit + usdc are epoch-scoped: loadRegistry() overwrites them from
+// /registry so a demo "Reset" (which bumps the backend epoch) points every read at a
+// fresh, empty deal. `let` so the live ESM binding updates across importers.
+export let DEAL_ID = 'M1';
 export const DEMO = {
   cv: 'Meridian CV I',
   fund: 'Meridian Growth Fund III',
@@ -130,7 +141,7 @@ export const DEMO = {
   electionDeadline: '2026-12-31T00:00:00Z',
   usdc: 'USDC',
   unit: 'MERIDIAN-CV-I',
-} as const;
+};
 
 export const shortParty = (p?: string | null): string => (p ? p.split('::')[0] : '—');
 const shortId = (id?: string): string => (id ? (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id) : '—');

@@ -6,7 +6,7 @@
 // Pure presentation: the Deal Page derives the tile values from on-chain state and
 // passes them in. `onInspect` is wired to `useInspector().open`; a tile with no
 // `updateId` renders the shield as a disabled, non-interactive marker (no-op).
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export type Kpi = {
   label: string;
@@ -29,9 +29,25 @@ const Shield = () => (
   </svg>
 );
 
-export default function KpiRow({ tiles, onInspect }: { tiles: Kpi[]; onInspect?: (updateId: string) => void }) {
+export default function KpiRow({
+  tiles,
+  onInspect,
+  variant = 'grid',
+}: {
+  tiles: Kpi[];
+  onInspect?: (updateId: string) => void;
+  /** `grid` = the GP's sticky full-width row (columns sized to tile count);
+   *  `strip` = a focused seat's compact left-aligned strip of 1–2 tiles. */
+  variant?: 'grid' | 'strip';
+}) {
   return (
-    <div className="kpi-row" role="group" aria-label="Deal key figures" data-testid="kpi-row">
+    <div
+      className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}
+      role="group"
+      aria-label="Deal key figures"
+      data-testid="kpi-row"
+      style={variant === 'grid' ? ({ '--kpi-cols': tiles.length } as CSSProperties) : undefined}
+    >
       {tiles.map((t) => {
         const canInspect = !!t.updateId && !!onInspect;
         return (
