@@ -12,7 +12,8 @@
 // as an in-page tab row elsewhere. The sidebar footer carries the SIGNING identity
 // (the custodian holds this seat's key — the browser holds none), the trust-model
 // dialog, and sign-out. Everything else on screen belongs to the page.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useSession } from '../state/WalletSession';
 import TrustPanel from '../views/TrustPanel';
@@ -38,7 +39,7 @@ function TrustDialog({ onClose }: { onClose: () => void }) {
     >
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Trust model">
         <button type="button" className="settled-close" aria-label="Close" onClick={onClose}>
-          ✕
+          <X size={15} strokeWidth={2.2} aria-hidden="true" />
         </button>
         <h2>How authorization works</h2>
         <TrustPanel />
@@ -81,6 +82,21 @@ export default function Shell({
   const { role, custodianName, signOut } = useSession();
   const [trustOpen, setTrustOpen] = useState(false);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const headRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLDivElement | null>(null);
+
+  // The sticky KPI strip pins itself right under the header, whatever the header's
+  // real height is at this width — measured, not guessed.
+  useLayoutEffect(() => {
+    const head = headRef.current;
+    const main = mainRef.current;
+    if (!head || !main || typeof ResizeObserver === 'undefined') return;
+    const apply = () => main.style.setProperty('--head-h', `${head.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(head);
+    return () => ro.disconnect();
+  }, []);
 
   const move = (from: number, delta: number) => {
     const n = nav.length;
@@ -171,8 +187,8 @@ export default function Shell({
         </div>
       </aside>
 
-      <div className="appmain">
-        <header className="page-head">
+      <div className="appmain" ref={mainRef}>
+        <header className="page-head" ref={headRef}>
           <div className="ph-titles">
             {eyebrow ? <span className="ph-eyebrow">{eyebrow}</span> : null}
             <h1>{title}</h1>

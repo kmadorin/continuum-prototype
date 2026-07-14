@@ -6,6 +6,7 @@
 // Pure presentation: the Deal Page derives the tile values from on-chain state and
 // passes them in. `onInspect` is wired to `useInspector().open`; a tile with no
 // `updateId` renders the shield as a disabled, non-interactive marker (no-op).
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 export type Kpi = {
@@ -40,9 +41,27 @@ export default function KpiRow({
    *  `strip` = a focused seat's compact left-aligned strip of 1–2 tiles. */
   variant?: 'grid' | 'strip';
 }) {
+  // Rounded cards at rest; once the row pins under the header it morphs into the
+  // compact chrome strip. A zero-height sentinel above the row tells us which state
+  // we are in (jsdom has no IntersectionObserver — then it simply never sticks).
+  const sentinel = useRef<HTMLDivElement | null>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || variant !== 'grid' || typeof IntersectionObserver === 'undefined') return;
+    const headH = parseFloat(getComputedStyle(el).getPropertyValue('--head-h')) || 84;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), {
+      rootMargin: `-${Math.ceil(headH) + 1}px 0px 0px 0px`,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [variant]);
+
   return (
+    <>
+    {variant === 'grid' ? <div ref={sentinel} aria-hidden="true" /> : null}
     <div
-      className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}
+      className={`kpi-row${variant === 'strip' ? ' strip' : ''}${stuck ? ' stuck' : ''}`}
       role="group"
       aria-label="Deal key figures"
       data-testid="kpi-row"
@@ -72,5 +91,6 @@ export default function KpiRow({
         );
       })}
     </div>
+    </>
   );
 }

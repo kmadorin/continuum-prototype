@@ -10,6 +10,7 @@
 //
 // SECURITY: read-only. No key material, no transport token — the backend holds those.
 import { useCallback, useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 
 const short = (s?: string, head = 10, tail = 6): string =>
   !s ? '—' : s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s;
@@ -184,7 +185,7 @@ export default function LedgerInspector({ updateId, onClose }: { updateId: strin
             <h2 className="drawer-title mono">update {short(updateId)}</h2>
           </div>
           <button type="button" className="icon-btn" onClick={close} aria-label="Close inspector">
-            ✕
+            <X size={15} strokeWidth={2.2} aria-hidden="true" />
           </button>
         </header>
 

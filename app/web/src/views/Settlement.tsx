@@ -18,6 +18,7 @@
 //
 // SECURITY: read-only. No key material is touched, logged, persisted, or sent.
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { reads, R, DEMO } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
@@ -193,7 +194,7 @@ export default function Settlement() {
           aria-label="Dismiss settlement"
           onClick={() => setDismissed(true)}
         >
-          ✕
+          <X size={15} strokeWidth={2.2} aria-hidden="true" />
         </button>
         <span className="settled-eyebrow">Atomic close · one transaction · every window</span>
         <h1 className="settled-title">SETTLED</h1>
