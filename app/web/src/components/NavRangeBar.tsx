@@ -22,8 +22,10 @@ export type NavRangeBarProps = {
 
 /** Label horizontal anchor from a 0–100 position, keeping tags inside the track. */
 function tagShift(pos: number): string {
-  if (pos <= 12) return '0';
-  if (pos >= 88) return '-100%';
+  // Wide tags ("Clearing · 96% $480.0M") need a generous edge zone: inside it the tag
+  // grows inward from the mark instead of centring over it.
+  if (pos <= 18) return '0';
+  if (pos >= 82) return '-100%';
   return '-50%';
 }
 

@@ -125,6 +125,23 @@ export default function SignIn() {
     <div className="signin-shell">
       {/* Brand panel — who this is and what happens here. Institutional, no landing fluff. */}
       <div className="signin-brand">
+        {/* Barely-there flow field: interweaving streams drifting forever. Decorative only —
+            aria-hidden, pointer-events none, paused under prefers-reduced-motion. */}
+        <svg className="brand-flow" viewBox="0 0 640 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g className="ff-slow">
+            <path d="M-60,140 C120,90 260,230 420,170 S640,90 720,150" />
+            <path d="M-60,320 C140,270 300,410 460,340 S660,260 720,330" />
+            <path d="M-60,520 C120,470 280,600 440,540 S650,460 720,530" />
+            <path d="M-60,720 C150,660 300,800 460,730 S660,650 720,720" />
+            <path d="M-60,900 C140,850 300,980 460,910 S660,840 720,900" />
+          </g>
+          <g className="ff-fast">
+            <path d="M-60,220 C160,180 280,300 450,250 S650,190 720,240" />
+            <path d="M-60,430 C150,380 300,500 460,440 S660,370 720,430" />
+            <path d="M-60,620 C140,570 290,700 450,630 S655,560 720,620" />
+            <path d="M-60,810 C150,760 300,880 460,820 S660,750 720,810" />
+          </g>
+        </svg>
         <span className="wordmark">
           Continuum<span className="dot">.</span>
         </span>
@@ -142,59 +159,65 @@ export default function SignIn() {
       </div>
 
       <div className="signin-accounts">
-        {picked === null ? (
-          <>
-            <p className="section-label">Choose your seat</p>
-            <div className="accounts">
-              {ROLES.map((role) => {
-                const m = META[role];
-                const custodian = custodians[role];
-                return (
-                  <button key={role} className="account" type="button" data-role={role} onClick={() => choose(role)}>
-                    <span className="acc-avatar" aria-hidden="true">
-                      {m.avatar}
+        {/* Picking a seat expands its credentials INLINE, under the row — the list never
+            unmounts, so nothing on screen jumps or reflows away from the pointer. */}
+        <p className="section-label">Choose your seat</p>
+        <div className="accounts">
+          {ROLES.map((role) => {
+            const m = META[role];
+            const custodian = custodians[role];
+            const open = picked === role;
+            return (
+              <div key={role} className={`account-slot${open ? ' open' : ''}`}>
+                <button
+                  className="account"
+                  type="button"
+                  data-role={role}
+                  aria-expanded={open}
+                  onClick={() => (open ? setPicked(null) : choose(role))}
+                >
+                  <span className="acc-avatar" aria-hidden="true">
+                    {m.avatar}
+                  </span>
+                  <span>
+                    <span className="acc-name">{m.name}</span>
+                    <span className="acc-role" style={{ display: 'block' }}>
+                      {m.seat}
+                      {custodian ? ` · ${custodian}` : ''}
                     </span>
-                    <span>
-                      <span className="acc-name">{m.name}</span>
-                      <span className="acc-role" style={{ display: 'block' }}>
-                        {m.seat}
-                        {custodian ? ` · ${custodian}` : ''}
-                      </span>
-                    </span>
-                    <span className="acc-enter">{m.cta}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="portal-foot">
-              <span className="note">Demo credentials are prefilled — pick a seat and sign in.</span>
-              <button type="button" className="btn ghost" onClick={resetDemo} disabled={resetting}>
-                {resetting ? 'Resetting…' : 'Reset demo'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <LoginPanel
-            meta={META[picked]}
-            custodian={custodians[picked]}
-            username={username}
-            password={password}
-            busy={busy}
-            error={error}
-            onUsername={setUsername}
-            onPassword={setPassword}
-            onSubmit={submit}
-            onBack={() => setPicked(null)}
-          />
-        )}
+                  </span>
+                  <span className="acc-enter">{open ? 'Close' : m.cta}</span>
+                </button>
+                {open && (
+                  <InlineLogin
+                    cta={m.cta}
+                    username={username}
+                    password={password}
+                    busy={busy}
+                    error={error}
+                    onUsername={setUsername}
+                    onPassword={setPassword}
+                    onSubmit={submit}
+                    onBack={() => setPicked(null)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="portal-foot">
+          <span className="note">Demo credentials are prefilled — pick a seat and sign in.</span>
+          <button type="button" className="btn ghost" onClick={resetDemo} disabled={resetting}>
+            {resetting ? 'Resetting…' : 'Reset demo'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function LoginPanel(props: {
-  meta: RoleMeta;
-  custodian?: string;
+function InlineLogin(props: {
+  cta: string;
   username: string;
   password: string;
   busy: boolean;
@@ -204,29 +227,16 @@ function LoginPanel(props: {
   onSubmit: () => void;
   onBack: () => void;
 }) {
-  const { meta, custodian, username, password, busy, error, onUsername, onPassword, onSubmit, onBack } = props;
+  const { cta, username, password, busy, error, onUsername, onPassword, onSubmit, onBack } = props;
   return (
     <form
-      className="stack g4"
-      style={{ maxWidth: 440, marginTop: 14 }}
+      className="account-login"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
       }}
     >
-      <p className="section-label">Sign in to your custodian</p>
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span className="acc-avatar" aria-hidden="true">
-            {meta.avatar}
-          </span>
-          <div>
-            <div className="acc-name">{meta.name}</div>
-            <div className="acc-role">{meta.seat}</div>
-            {custodian ? <div className="acc-custodian">Custodian · {custodian}</div> : null}
-          </div>
-        </div>
-
+      <div className="form-grid">
         <div className="form-row">
           <label htmlFor="username">Username</label>
           <input
@@ -250,18 +260,18 @@ function LoginPanel(props: {
             aria-invalid={error ? true : undefined}
           />
         </div>
-        <span className="hint">Your custodian signs on your behalf — no signing key ever touches this browser.</span>
-        {error ? <div className="field-err">{error}</div> : null}
-
-        <div className="actions">
-          <button type="submit" className="btn primary" disabled={busy || !username.trim() || !password}>
-            {busy ? 'Signing in…' : meta.cta}
-          </button>
-          <button type="button" className="btn ghost" onClick={onBack} disabled={busy}>
-            Back
-          </button>
-        </div>
+      </div>
+      <span className="hint">Your custodian signs on your behalf — no signing key ever touches this browser.</span>
+      {error ? <div className="field-err">{error}</div> : null}
+      <div className="actions">
+        <button type="submit" className="btn primary" disabled={busy || !username.trim() || !password}>
+          {busy ? 'Signing in…' : cta}
+        </button>
+        <button type="button" className="btn ghost" onClick={onBack} disabled={busy}>
+          Cancel
+        </button>
       </div>
     </form>
   );
 }
+
