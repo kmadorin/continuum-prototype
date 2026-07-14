@@ -460,6 +460,9 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
                 onChange={setPrice}
                 disabled={!deal}
                 format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+                unit="% of NAV"
+                scale={100}
+                precision={1}
               />
             </div>
             <div className="actions">

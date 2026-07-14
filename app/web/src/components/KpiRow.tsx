@@ -33,13 +33,38 @@ export default function KpiRow({
   tiles,
   onInspect,
   variant = 'grid',
+  loading = false,
 }: {
   tiles: Kpi[];
   onInspect?: (updateId: string) => void;
   /** `grid` = the GP's sticky full-width row (columns sized to tile count);
    *  `strip` = a focused seat's compact left-aligned strip of 1–2 tiles. */
   variant?: 'grid' | 'strip';
+  /** First read not in yet (or the preloader's minimum display time not over):
+   *  render same-sized skeleton tiles so values never pop in and shift the page. */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <div
+        className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}
+        role="group"
+        aria-label="Deal key figures"
+        aria-busy="true"
+        data-testid="kpi-row"
+        style={variant === 'grid' ? ({ '--kpi-cols': tiles.length || 4 } as CSSProperties) : undefined}
+      >
+        {Array.from({ length: tiles.length || 4 }).map((_, i) => (
+          <div className="kpi-tile" key={i} data-testid="kpi-tile">
+            <span className="skeleton" style={{ width: 92, height: 12 }} />
+            <span className="skeleton" style={{ width: 128, height: 20, marginTop: 6 }} />
+            <span className="skeleton" style={{ width: 74, height: 11, marginTop: 5 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}

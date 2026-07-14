@@ -86,7 +86,7 @@ describe('DealPage shell', () => {
     );
     // Pending KPI placeholders show before any stage completes. The 'Winning bid' tile
     // was deleted globally (vanity derivation), so only Clearing price is Pending Auction.
-    expect(screen.getByText('— Pending Auction')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('— Pending Auction')).toBeTruthy(), { timeout: 2500 });
     expect(screen.getByText('— Pending Issuance')).toBeTruthy();
   });
 });

@@ -102,7 +102,7 @@ export default function Valuer() {
         {anchored ? (
           <div className="stack g3">
             <span className="chip ok">Valuation anchored <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
-            <p className="hint" style={{ margin: 0 }}>
+            <p className="hint">
               sha256 <span className="mono">{truncHash(anchoredHash)}</span> · verify it on the Valuation tab. This
               seat is now read-only — the anchor is immutable on-ledger.
             </p>

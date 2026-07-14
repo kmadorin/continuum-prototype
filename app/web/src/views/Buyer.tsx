@@ -160,6 +160,9 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
                 value={pct}
                 onChange={setPct}
                 format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+                unit="% of NAV"
+                scale={100}
+                precision={1}
               />
             </div>
             <div className="form-row">
@@ -172,6 +175,7 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
                 value={String(Number(capacity) / 1_000_000)}
                 onChange={(v) => setCapacity(`${v}000000.0`)}
                 format={(n) => `$${n.toFixed(0)}M`}
+                unit="$M"
               />
             </div>
             <div className="actions">

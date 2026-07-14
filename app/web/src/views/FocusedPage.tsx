@@ -173,6 +173,12 @@ export default function FocusedPage() {
   const [section, setSection] = useState('workspace');
 
   const [facts, setFacts] = useState<Facts>({ deal: null, hasReceipt: false, ownElection: false, ownUnits: 0, ownUsdc: 0 });
+  const [loaded, setLoaded] = useState(false);
+  const [minShown, setMinShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinShown(true), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Poll only what the chrome needs: the deal (stage + clearing) plus this seat's own
   // election / holdings / receipt. The role view does its own richer reads.
@@ -197,6 +203,7 @@ export default function FocusedPage() {
           ownUnits: units,
           ownUsdc: usdc,
         });
+        setLoaded(true);
       } catch {
         /* transient read error — next tick retries */
       }
@@ -229,7 +236,7 @@ export default function FocusedPage() {
       status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
     >
       {section === 'workspace' && tiles.length > 0 && (
-        <KpiRow tiles={tiles} variant="strip" onInspect={oversight ? inspector.open : undefined} />
+        <KpiRow tiles={tiles} variant="strip" onInspect={oversight ? inspector.open : undefined} loading={!loaded || !minShown} />
       )}
 
       <div className="deal-panel" role="tabpanel" id={`panel-${section}`} aria-labelledby={`tab-${section}`}>

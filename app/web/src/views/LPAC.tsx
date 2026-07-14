@@ -221,7 +221,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
               </div>
 
               {!consentRecorded && (
-                <div className="stack g3" style={{ marginTop: 24 }}>
+                <div className="stack g3" style={{ marginTop: 32 }}>
                   <div className="actions">
                     <button className="btn primary" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
                       {opinion ? (<>Fairness opinion signed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}

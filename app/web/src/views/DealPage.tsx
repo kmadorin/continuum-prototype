@@ -157,6 +157,15 @@ export default function DealPage() {
   const [tab, setTab] = useState<TabId>('overview');
 
   const [deal, setDeal] = useState<ActiveContract | null>(null);
+  // Values popping in one poll after mount shifted the whole page. The KPI row shows
+  // equal-sized skeletons until the first read lands AND a short floor elapses, then
+  // swaps once — same tile heights, no jump.
+  const [loaded, setLoaded] = useState(false);
+  const [minShown, setMinShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinShown(true), 500);
+    return () => clearTimeout(t);
+  }, []);
   const [receipts, setReceipts] = useState<ActiveContract[]>([]);
   const [elections, setElections] = useState<ActiveContract[]>([]);
   const [bids, setBids] = useState<ActiveContract[]>([]);
@@ -192,6 +201,7 @@ export default function DealPage() {
         setConsents(cons);
         setValuations(val);
         setOpinions(op);
+        setLoaded(true);
       } catch {
         /* transient read error — next tick retries */
       }
@@ -289,7 +299,7 @@ export default function DealPage() {
       status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
     >
       {/* Sticky KPI row -------------------------------------------------------- */}
-      <KpiRow tiles={tiles} onInspect={inspector.open} />
+      <KpiRow tiles={tiles} onInspect={inspector.open} loading={!loaded || !minShown} />
 
       <div className="deal-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && (
