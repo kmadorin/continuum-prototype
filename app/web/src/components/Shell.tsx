@@ -136,7 +136,10 @@ export default function Shell({
         <div className="side-deal">
           <span className="sd-eyebrow">GP-led continuation vehicle</span>
           <span className="sd-name">Meridian Growth Fund III → CV</span>
-          {status ? <span className="sd-status">{status}</span> : null}
+          {/* Always rendered: the chip arrives with the first ledger read, and an
+              appearing element here would shove the whole nav down (visible jump).
+              Empty state shows a quiet skeleton pill instead. */}
+          <span className="sd-status">{status}</span>
         </div>
 
         <nav className="side-nav" role="tablist" aria-orientation="vertical" aria-label={navLabel}>
