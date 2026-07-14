@@ -472,7 +472,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
                 {busy === 'elect' ? 'Signing…' : 'Open elections'}
               </button>
             </div>
-            <p className="hint" style={{ marginTop: 0 }}>
+            <p className="hint">
               Needs the clearing price set and the deal at <span className="mono">Consented</span> — the LPAC records consent from its Approval queue.
             </p>
           </div>

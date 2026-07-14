@@ -619,8 +619,7 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .fail-toggle input { width: 15px; height: 15px; accent-color: var(--err); cursor: pointer; }
 .sim-note { position: fixed; bottom: 14px; right: 20px; font-size: 11px; color: var(--disabled); z-index: 30; pointer-events: none; }
 
-.section-label { font-size: 12px; font-weight: 600; color: var(--mute); margin: 0 0 12px; display: flex; align-items: center; gap: 12px; }
-.section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.section-label { font-size: 12px; font-weight: 600; color: var(--mute); margin: 0 0 12px; }
 
 /* ---------- sign-in ---------- */
 .signin-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, 44%) 1fr; }

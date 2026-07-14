@@ -145,7 +145,7 @@ export default function SignIn() {
         <span className="wordmark">
           Continuum<span className="dot">.</span>
         </span>
-        <h1>Run a GP-led continuation deal, end to end.</h1>
+        <h1>Run a GP-led continuation deal, end to end</h1>
         <p>
           A single confidential workspace: a sealed-bid buyer auction sets the price, investors elect
           privately, and every leg settles at once or not at all. Each seat is held at its own qualified
