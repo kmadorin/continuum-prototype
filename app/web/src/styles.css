@@ -712,8 +712,20 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 /* ---------- toasts ---------- */
 .toast-stack {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;
-  display: flex; flex-direction: column; gap: 10px; max-width: min(92vw, 420px);
+  display: grid; justify-items: end; align-items: end;
+  max-width: min(92vw, 420px);
 }
+/* collapsed pile: everyone shares one cell; distance-from-newest drives lift + scale */
+.toast-stack > .toast {
+  grid-area: 1 / 1;
+  transform: translateY(calc(var(--n, 0) * -10px)) scale(calc(1 - var(--n, 0) * 0.05));
+  transform-origin: bottom center;
+  transition: transform var(--dur-ui) var(--ease-out), opacity var(--dur-ui) ease;
+}
+.toast-stack > .toast[data-behind] { animation: none; pointer-events: none; }
+/* hover fans the pile out into a readable list */
+.toast-stack:hover { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.toast-stack:hover > .toast { transform: none; opacity: 1 !important; pointer-events: auto; }
 .toast {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 14px; cursor: pointer; border-radius: var(--r-2);

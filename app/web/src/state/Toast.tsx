@@ -71,9 +71,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <C.Provider value={api}>
       {children}
+      {/* Newest toast in front; older ones peek behind it, scaled and lifted (hover the
+          stack to fan it out). `--n` is the distance from the newest. */}
       <div className="toast-stack" aria-live="polite" aria-atomic="false">
-        {items.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`} role="status">
+        {items.map((t, idx) => {
+          const n = items.length - 1 - idx;
+          return (
+          <div
+            key={t.id}
+            className={`toast toast-${t.kind}`}
+            role="status"
+            data-behind={n > 0 || undefined}
+            style={{ '--n': n, zIndex: 60 - n, opacity: n > 2 ? 0 : undefined } as React.CSSProperties}
+          >
             {t.kind === 'pending' ? <span className="toast-spinner" aria-hidden="true" /> : null}
             <span className="toast-msg" onClick={() => dismiss(t.id)}>
               {t.message}
@@ -91,7 +101,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </button>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
     </C.Provider>
   );
