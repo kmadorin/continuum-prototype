@@ -117,7 +117,7 @@ export default function LedgerInspector({ updateId, onClose }: { updateId: strin
   const [closing, setClosing] = useState(false);
   const close = useCallback(() => {
     setClosing(true);
-    setTimeout(onClose, 260);
+    setTimeout(onClose, 200);
   }, [onClose]);
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [tree, setTree] = useState<ParsedTree | null>(null);

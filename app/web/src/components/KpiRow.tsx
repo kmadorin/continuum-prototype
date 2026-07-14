@@ -54,11 +54,12 @@ export default function KpiRow({
         data-testid="kpi-row"
         style={variant === 'grid' ? ({ '--kpi-cols': tiles.length || 4 } as CSSProperties) : undefined}
       >
-        {Array.from({ length: tiles.length || 4 }).map((_, i) => (
-          <div className="kpi-tile" key={i} data-testid="kpi-tile">
-            <span className="skeleton" style={{ width: 92, height: 12 }} />
-            <span className="skeleton" style={{ width: 128, height: 20, marginTop: 6 }} />
-            <span className="skeleton" style={{ width: 74, height: 11, marginTop: 5 }} />
+        {(tiles.length ? tiles : Array.from({ length: 4 }, () => null)).map((t, i) => (
+          <div className="kpi-tile" key={t?.label ?? i} data-testid="kpi-tile">
+            <div className="kpi-top">
+              <span className="kpi-label">{t?.label ?? '\u00A0'}</span>
+            </div>
+            <div className="kpi-value loading">—</div>
           </div>
         ))}
       </div>
