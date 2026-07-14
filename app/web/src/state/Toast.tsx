@@ -97,6 +97,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           hairline at its foot drains over the dismiss window, then it leaves alone.
           Keyed by id+kind so a pending→success update restarts both animations. */}
       <div className="toast-stack" aria-live="polite" aria-atomic="false">
+        {/* two or more on screen → one quiet control clears the whole column */}
+        {items.filter((x) => !x.leaving).length >= 2 ? (
+          <button type="button" className="toast-clear" onClick={() => items.forEach((x) => dismiss(x.id))}>
+            Dismiss all
+          </button>
+        ) : null}
         {items.map((t) => {
           const life = AUTO_DISMISS_MS[t.kind];
           return (

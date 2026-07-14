@@ -1019,6 +1019,16 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 /* entrances are pure dissolves — no vertical travel anywhere in the system */
 @keyframes toast-in { from { opacity: 0; } to { opacity: 1; } }
 .toast.leaving { animation: fade-out 200ms ease both; pointer-events: none; }
+/* the "clear the column" control — appears with the second toast */
+.toast-clear {
+  align-self: flex-end; cursor: pointer;
+  font-family: var(--sans); font-size: 11.5px; font-weight: 600; color: var(--mute);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  border: 1px solid var(--border-hi); border-radius: var(--r-1); padding: 4px 10px;
+  animation: toast-in 0.32s var(--ease-out) both;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.toast-clear:hover { color: var(--text); border-color: var(--mute); }
 
 /* ---------- ledger inspector drawer ---------- */
 .drawer-backdrop {
