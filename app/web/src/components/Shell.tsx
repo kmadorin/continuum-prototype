@@ -81,6 +81,14 @@ export default function Shell({
 }) {
   const { role, custodianName, signOut } = useSession();
   const [trustOpen, setTrustOpen] = useState(false);
+  // Sign-out dissolves the workspace before the session actually drops — the swap
+  // to the sign-in screen reads as a crossfade instead of a hard cut.
+  const [leaving, setLeaving] = useState(false);
+  const onSignOut = () => {
+    if (leaving) return;
+    setLeaving(true);
+    setTimeout(signOut, 260);
+  };
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // The sign-in accordion leaves the window scrolled (SPA swap keeps scrollY);
@@ -115,7 +123,7 @@ export default function Shell({
 
 
   return (
-    <div className="appshell">
+    <div className={`appshell${leaving ? ' leaving' : ''}`}>
       <a className="skip-link" href="#page-content">
         Skip to content
       </a>
@@ -181,7 +189,7 @@ export default function Shell({
             <button type="button" className="btn ghost sm" onClick={() => setTrustOpen(true)}>
               Trust model
             </button>
-            <button type="button" className="btn ghost sm" onClick={signOut}>
+            <button type="button" className="btn ghost sm" onClick={onSignOut}>
               Sign out
             </button>
           </div>

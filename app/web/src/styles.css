@@ -121,6 +121,8 @@ a:hover { color: var(--tint); }
    APP SHELL — persistent sidebar · page header · full-width content
    ============================================================================ */
 .appshell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
+/* sign-out: the whole frame dissolves, then the session drops (see Shell.onSignOut) */
+.appshell.leaving { animation: fade-out 260ms ease both; pointer-events: none; }
 
 .sidebar {
   position: sticky; top: 0; align-self: start; height: 100vh;
@@ -786,7 +788,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 }
 .brand-flow .ff-slow path { stroke: var(--pale); opacity: 0.16; }
 .brand-flow .ff-fast path { stroke: var(--violet); opacity: 0.11; animation-duration: 24s; animation-direction: reverse; }
-/* the spotlight copy: same lines, brighter, revealed only inside the cursor mask */
+/* the spotlight copy: same lines, brighter, revealed only inside the cursor mask.
+   Asymmetric life: lights up quickly under the pointer, lingers and dies slowly
+   after the cursor leaves the panel. */
+.brand-flow .ff-hi { opacity: 1; transition: opacity 300ms ease; }
+.brand-flow.idle .ff-hi { opacity: 0; transition: opacity 1200ms ease; }
 .brand-flow .ff-hi .ff-slow path { stroke: var(--pale); opacity: 0.5; }
 .brand-flow .ff-hi .ff-fast path { stroke: var(--tint); opacity: 0.36; }
 .brand-flow path:nth-child(2) { animation-delay: -7s; }
@@ -890,6 +896,8 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .accounts .account-slot { border-top: 1px solid var(--border-soft); transition: background 150ms ease; }
 .accounts .account-slot:first-child { border-top: 0; }
 .accounts .account-slot.open { background: var(--surface); }
+/* the OPEN card hovers as one piece, a quiet half-step above its resting surface */
+.accounts .account-slot.open:hover { background: color-mix(in srgb, var(--surface) 55%, var(--panel)); }
 .accounts .account {
   background: transparent; border: 0; width: 100%;
   text-align: left; cursor: pointer;
@@ -902,8 +910,8 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .account-slot.open .account { padding-bottom: 6px; }
 .account-login { padding: 12px 20px 18px 82px; display: flex; flex-direction: column; gap: 14px; animation: fade-in 220ms var(--ease-out) both; }
 @media (max-width: 720px) { .account-login { padding-left: 20px; } }
-.accounts .account:hover { background: var(--active); }
-.accounts .account-slot.open .account:hover { background: var(--active); }
+.accounts .account:hover { background: var(--panel); }
+.accounts .account-slot.open .account:hover { background: transparent; }
 .accounts .account:focus-visible { outline-offset: -2px; }
 .accounts .account .acc-top { display: contents; }
 .accounts .account .acc-avatar {
@@ -927,9 +935,17 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .accounts .account:focus-visible .acc-enter { opacity: 1; }
 .accounts .account-slot.open .acc-enter { display: none; }
 .accounts .account:hover .acc-enter { color: var(--pale); }
-/* the open header carries a quiet X instead — the whole row is the close target */
-.accounts .account .acc-close { display: flex; align-items: center; color: var(--mute); transition: color 150ms ease; }
-.accounts .account-slot.open .account:hover .acc-close { color: var(--text); }
+/* per-role "open in a new window": a quiet corner affordance, revealed with the row */
+.accounts .account-slot { position: relative; }
+.accounts .account { padding-right: 56px; }
+.acc-newwin {
+  position: absolute; top: 24px; right: 14px; width: 32px; height: 32px;
+  display: grid; place-items: center; border-radius: var(--r-2);
+  color: var(--mute); opacity: 0;
+  transition: opacity 150ms ease, color 150ms ease, background 150ms ease;
+}
+.accounts .account-slot:hover .acc-newwin, .acc-newwin:focus-visible { opacity: 1; }
+.acc-newwin:hover { color: var(--text); background: var(--active); }
 .accounts .account .acc-enter::after {
   content: ""; width: 14px; height: 14px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/><path d='m12 5 7 7-7 7'/></svg>") center / contain no-repeat;

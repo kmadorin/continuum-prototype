@@ -7,7 +7,7 @@
 // SECURITY: NO wallet, NO mnemonic, NO key material anywhere here. The only secret
 // is the demo password, held in local component state and POSTed to /auth/login.
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { ROLES, useSession, type Role } from '../state/WalletSession';
 import { custodians } from '../lib/useLedger';
 import { AVATAR } from '../lib/avatars';
@@ -143,6 +143,14 @@ export default function SignIn() {
     setError(null);
   }
 
+  // Deep link: /?seat=<role> opens with that seat's login panel ready — this is
+  // where the per-role "open in a new window" links land.
+  useEffect(() => {
+    const seat = new URLSearchParams(window.location.search).get('seat');
+    if (seat && (ROLES as readonly string[]).includes(seat)) choose(seat as Role);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
+
   async function submit() {
     if (!picked || !username.trim() || !password) return;
     setBusy(true);
@@ -165,6 +173,9 @@ export default function SignIn() {
   const spotPos = useRef({ x: -600, y: -600 });
   const spotTarget = useRef({ x: -600, y: -600 });
   const spotRaf = useRef(0);
+  // Leaving the panel doesn't move the spotlight — it stays put and fades out slowly
+  // (the `idle` class drives a long opacity transition on the highlight layer).
+  const [flowIdle, setFlowIdle] = useState(true);
 
   const spotStep = () => {
     const pos = spotPos.current;
@@ -188,12 +199,13 @@ export default function SignIn() {
     if (!svg || !ctm) return;
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
     spotTarget.current = { x: p.x, y: p.y };
+    // First move after an idle spell: snap the spot to the cursor so the glow
+    // fades in where the pointer IS, instead of gliding in from its last spot.
+    if (flowIdle) spotPos.current = { x: p.x, y: p.y };
+    setFlowIdle(false);
     kickSpot();
   };
-  const onFlowLeave = () => {
-    spotTarget.current = { x: -600, y: spotPos.current.y };
-    kickSpot();
-  };
+  const onFlowLeave = () => setFlowIdle(true);
   useEffect(() => () => cancelAnimationFrame(spotRaf.current), []);
 
   return (
@@ -204,7 +216,13 @@ export default function SignIn() {
             aria-hidden, pointer-events none, paused under prefers-reduced-motion. A brighter
             copy of the same lines sits under a cursor-following radial mask, so the streams
             glow softly where the pointer travels (attributes only — no React re-renders). */}
-        <svg ref={flowSvg} className="brand-flow" viewBox="0 0 640 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <svg
+          ref={flowSvg}
+          className={`brand-flow${flowIdle ? ' idle' : ''}`}
+          viewBox="0 0 640 1000"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
           <defs>
             <radialGradient id="ff-spot" gradientUnits="userSpaceOnUse" cx="-600" cy="-600" r="210" ref={flowSpot}>
               <stop offset="0" stopColor="#fff" stopOpacity="0.9" />
@@ -291,12 +309,20 @@ export default function SignIn() {
                     </span>
                   </span>
                   <span className="acc-enter">{m.cta}</span>
-                  {open ? (
-                    <span className="acc-close" aria-hidden="true">
-                      <X size={15} strokeWidth={2} />
-                    </span>
-                  ) : null}
                 </button>
+                {/* The demo is meant to be watched from several seats at once — every
+                    role can open in its own window, with the login panel ready. */}
+                <a
+                  className="acc-newwin"
+                  href={`/?seat=${role}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open this seat in a new window"
+                  aria-label={`Open ${m.name} in a new window`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
+                </a>
                 {open && (
                   <InlineLogin
                     cta={m.cta}
