@@ -9,7 +9,7 @@
 // differences (wrapped `{CreatedEvent:{value}}` vs flat) both render.
 //
 // SECURITY: read-only. No key material, no transport token — the backend holds those.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const short = (s?: string, head = 10, tail = 6): string =>
   !s ? '—' : s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s;
@@ -112,6 +112,12 @@ export function parseUpdateTree(raw: any): ParsedTree {
 }
 
 export default function LedgerInspector({ updateId, onClose }: { updateId: string; onClose: () => void }) {
+  // Organic exit: play the slide-out, THEN unmount. `closing` drives the CSS.
+  const [closing, setClosing] = useState(false);
+  const close = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, 260);
+  }, [onClose]);
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [tree, setTree] = useState<ParsedTree | null>(null);
   const [raw, setRaw] = useState<string>('');
@@ -157,14 +163,14 @@ export default function LedgerInspector({ updateId, onClose }: { updateId: strin
   // Close on Escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [close]);
 
   return (
-    <div className="drawer-backdrop" role="presentation" onClick={onClose}>
+    <div className={`drawer-backdrop${closing ? ' closing' : ''}`} role="presentation" onClick={close}>
       <aside
         className="drawer"
         role="dialog"
@@ -177,8 +183,8 @@ export default function LedgerInspector({ updateId, onClose }: { updateId: strin
             <span className="drawer-eyebrow">Committed on Canton devnet</span>
             <h2 className="drawer-title mono">update {short(updateId)}</h2>
           </div>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Close inspector">
-            Close
+          <button type="button" className="icon-btn" onClick={close} aria-label="Close inspector">
+            ✕
           </button>
         </header>
 

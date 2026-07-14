@@ -6,6 +6,8 @@
 //
 // PUBLIC and read-only: no session, no ledger reads — App routes here on pathname
 // before the auth gate. "Enter the demo" returns to the sign-in at `/`.
+import logo from '../assets/logo.svg';
+
 const LEGS = [
   { v: '288,000,000', l: 'CV units → buyer' },
   { v: '192,000,000', l: 'CV units → rolling LP' },
@@ -40,9 +42,7 @@ export default function PitchDeck() {
   return (
     <div className="pd">
       <header className="pd-hero">
-        <span className="wordmark">
-          Continuum<span className="dot">.</span>
-        </span>
+        <img className="logo" src={logo} alt="Continuum" />
         <p className="pd-sub">
           A secure closing room for GP-led continuation deals — LPs and buyers commit privately, the system
           computes the close, and cash plus fund interests settle atomically on Canton.

@@ -26,8 +26,11 @@ function Gate() {
   // SignIn screen for an already-authenticated session.
   if (!ready) {
     return (
-      <div className="portal-wrap">
-        <p className="hint">Restoring session…</p>
+      <div className="boot">
+        <div className="boot-inner">
+          <span className="toast-spinner" aria-hidden="true" />
+          Restoring session…
+        </div>
       </div>
     );
   }

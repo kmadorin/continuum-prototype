@@ -220,7 +220,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
               </div>
 
               {!consentRecorded && (
-                <div className="stack g3" style={{ marginTop: 16 }}>
+                <div className="stack g3" style={{ marginTop: 24 }}>
                   <div className="actions">
                     <button className="btn primary" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
                       {opinion ? 'Fairness opinion signed ✓' : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
@@ -229,7 +229,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
                       {consent ? 'Conflict waiver on record ✓' : busy === 'grant' ? 'Signing…' : 'Grant conflict waiver'}
                     </button>
                   </div>
-                  <p className="hint" style={{ margin: 0 }}>
+                  <p className="hint">
                     Then record LPAC consent from your <b>Approval queue</b> below — the four-eyes release
                     advances the deal so the GP can open elections.
                   </p>

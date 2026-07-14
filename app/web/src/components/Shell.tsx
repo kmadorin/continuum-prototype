@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import { useSession } from '../state/WalletSession';
 import TrustPanel from '../views/TrustPanel';
 import { AVATAR } from '../lib/avatars';
+import logo from '../assets/logo.svg';
 
 export type ShellNavItem = { id: string; label: string; badge?: number };
 
@@ -113,10 +114,7 @@ export default function Shell({
       </a>
       <aside className="sidebar">
         <div className="side-brand">
-          <span className="wordmark">
-            Continuum<span className="dot">.</span>
-          </span>
-          <span className="side-conf">Confidential closing room</span>
+          <img className="logo" src={logo} alt="Continuum" />
         </div>
 
         <div className="side-deal">

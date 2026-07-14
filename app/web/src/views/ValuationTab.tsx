@@ -14,7 +14,7 @@
 // note the fallback (never stall). SECURITY: read-only + the verify GET.
 import { useEffect, useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { custodians } from '../lib/useLedger';
+import { custodians, DEMO } from '../lib/useLedger';
 import { shortParty } from '../lib/useLedger';
 import { fetchManifest, type DocManifestEntry } from '../lib/docs';
 import { fmtM } from './shared';
@@ -31,7 +31,7 @@ const FALLBACK = {
 const CLEARING_PCT = 0.96;
 const VALUER_NAME = 'Kroll Valuation Services';
 const DOC_NAME = 'valuation-report';
-const UNITS_ISSUED = 4_800_000;
+const UNITS_ISSUED = Number(DEMO.psaPrice); // 480,000,000 units @ $1.00 — the PSA price
 
 // On-chain NAV is expressed in the demo's scaled units; the report carries the
 // institutional figures directly (navLow 480000000.0 / navHigh 520000000.0).

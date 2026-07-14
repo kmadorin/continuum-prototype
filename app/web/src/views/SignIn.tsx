@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { ROLES, useSession, type Role } from '../state/WalletSession';
 import { custodians } from '../lib/useLedger';
 import { AVATAR } from '../lib/avatars';
+import logo from '../assets/logo.svg';
 
 type RoleMeta = {
   avatar: string;
@@ -143,9 +144,7 @@ export default function SignIn() {
             <path d="M-60,810 C150,760 300,880 460,820 S660,750 720,810" />
           </g>
         </svg>
-        <span className="wordmark">
-          Continuum<span className="dot">.</span>
-        </span>
+        <img className="logo" src={logo} alt="Continuum" />
         <span className="sb-eyebrow">GP-led continuation deals</span>
         <h1>The entire deal, in&nbsp;one confidential workspace</h1>
         <p>

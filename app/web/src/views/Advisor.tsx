@@ -23,6 +23,7 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { useInspector } from '../state/Inspector';
 import { truncHash } from '../lib/docs';
 import IssueUnitsGate, { type GateCheck } from '../components/IssueUnitsGate';
+import SliderField from '../components/SliderField';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
@@ -450,10 +451,16 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
             </div>
             <div className="form-row">
               <label htmlFor="price">Clearing price — % of NAV</label>
-              <div className="input-group">
-                <input className="input" id="price" type="number" step="0.01" min="0" max="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={!deal} />
-                <span className="suffix">of NAV</span>
-              </div>
+              <SliderField
+                id="price"
+                min={0.8}
+                max={1}
+                step={0.005}
+                value={price}
+                onChange={setPrice}
+                disabled={!deal}
+                format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+              />
             </div>
             <div className="actions">
               <button className="btn primary" type="button" disabled={!!busy || !deal} onClick={setClearing}>

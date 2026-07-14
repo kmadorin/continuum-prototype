@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import HoldingReceipt from '../components/HoldingReceipt';
+import SliderField from '../components/SliderField';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
@@ -151,17 +152,27 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
           <div className="stack g3">
             <div className="form-row">
               <label htmlFor="bp">Bid — % of NAV</label>
-              <div className="input-group">
-                <input className="input" id="bp" type="number" step="0.01" min="0" max="1" value={pct} onChange={(e) => setPct(e.target.value)} />
-                <span className="suffix">of NAV</span>
-              </div>
+              <SliderField
+                id="bp"
+                min={0.8}
+                max={1}
+                step={0.005}
+                value={pct}
+                onChange={setPct}
+                format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+              />
             </div>
             <div className="form-row">
               <label htmlFor="bc">Capacity — NAV you'll absorb</label>
-              <div className="input-group">
-                <span className="prefix">$</span>
-                <input className="input" id="bc" type="number" step="0.5" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
-              </div>
+              <SliderField
+                id="bc"
+                min={1}
+                max={600}
+                step={1}
+                value={String(Number(capacity) / 1_000_000)}
+                onChange={(v) => setCapacity(`${v}000000.0`)}
+                format={(n) => `$${n.toFixed(0)}M`}
+              />
             </div>
             <div className="actions">
               <button className="btn primary" type="button" disabled={!!busy} onClick={submitBid}>

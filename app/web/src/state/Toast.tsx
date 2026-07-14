@@ -23,8 +23,8 @@ const C = createContext<ToastApi>({ show: () => 0, update: () => {} });
 
 const AUTO_DISMISS_MS: Record<ToastKind, number | null> = {
   pending: null, // stays until updated
-  success: 5000,
-  error: 8000,
+  success: 9000,
+  error: 14000,
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -71,18 +71,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <C.Provider value={api}>
       {children}
-      {/* Newest toast in front; older ones peek behind it, scaled and lifted (hover the
-          stack to fan it out). `--n` is the distance from the newest. */}
+      {/* A plain column, newest at the bottom. Each toast wears its own countdown: the
+          hairline at its foot drains over the dismiss window, then it leaves alone.
+          Keyed by id+kind so a pending→success update restarts both animations. */}
       <div className="toast-stack" aria-live="polite" aria-atomic="false">
-        {items.map((t, idx) => {
-          const n = items.length - 1 - idx;
+        {items.map((t) => {
+          const life = AUTO_DISMISS_MS[t.kind];
           return (
           <div
-            key={t.id}
+            key={`${t.id}-${t.kind}`}
             className={`toast toast-${t.kind}`}
             role="status"
-            data-behind={n > 0 || undefined}
-            style={{ '--n': n, zIndex: 60 - n, opacity: n > 2 ? 0 : undefined } as React.CSSProperties}
+            style={life != null ? ({ '--life': `${life}ms` } as React.CSSProperties) : undefined}
           >
             {t.kind === 'pending' ? <span className="toast-spinner" aria-hidden="true" /> : null}
             <span className="toast-msg" onClick={() => dismiss(t.id)}>
