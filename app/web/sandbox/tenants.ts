@@ -1,15 +1,18 @@
-// Sandbox tenants — the six custody seats, with THROWAWAY keys.
+// Sandbox tenants — the six custody seats, with THROWAWAY but DETERMINISTIC keys.
 //
 // The real spine loads custody-keys.json (gitignored mnemonics for parties that exist
-// on devnet). The sandbox has no devnet and no secrets: it mints a fresh mnemonic per
-// seat at boot, derives a real Ed25519 key from it (so the audit trail shows a real
-// fingerprint and the signing code path is the real one), and synthesizes party ids in
-// Canton's `name::namespace` shape. Nothing here is a credential — the keys sign against
-// an in-memory ledger that lives and dies with the dev server.
+// on devnet). The sandbox has no devnet and no secrets: it derives each seat's mnemonic
+// from the role name, so a dev-server restart yields the SAME party ids — a signed-in
+// browser tab survives the restart instead of silently pointing at a party that no
+// longer exists (which read as "metrics never load": every query returned empty).
+// The ledger itself is in-memory and resets with the process — a pristine deal, same
+// seats. Nothing here is a credential: these keys sign an in-memory ledger only.
 //
 // Party ids carry the `-sbx` marker so a screenshot can never be mistaken for devnet.
 import { createHash } from 'node:crypto';
-import { generateMnemonic, keyFromMnemonic } from '../../ledger-client/src/ed25519';
+import { entropyToMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english.js';
+import { keyFromMnemonic } from '../../ledger-client/src/ed25519';
 import { tenantsFromRecords, type TenantRecord, type TenantStore } from '../../custody/tenants';
 
 /** Role → custodian display name. Verbatim from the deployed registry (institutional chrome). */
@@ -32,7 +35,9 @@ const fingerprintOf = (derPubB64: string): string =>
  */
 export function sandboxTenants(): TenantStore {
   const records: TenantRecord[] = SEATS.map(({ role, custodianName }) => {
-    const mnemonic = generateMnemonic();
+    // Deterministic 128-bit entropy from the role name → a stable, valid mnemonic.
+    const entropy = createHash('sha256').update(`continuum-sandbox-${role}`).digest().subarray(0, 16);
+    const mnemonic = entropyToMnemonic(entropy, wordlist);
     const fingerprint = fingerprintOf(keyFromMnemonic(mnemonic).derPubB64);
     return {
       tenant: role,
