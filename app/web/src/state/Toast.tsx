@@ -31,23 +31,43 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const inspector = useInspector();
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
-  const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  // Per-toast timer with its deadline, so hover can pause and resume with the
+  // exact remaining time (the CSS countdown bar pauses in lockstep via :hover).
+  const timers = useRef<Map<number, { t: ReturnType<typeof setTimeout> | null; until: number }>>(new Map());
 
   const dismiss = useCallback((id: number) => {
     setItems((xs) => xs.filter((x) => x.id !== id));
-    const t = timers.current.get(id);
-    if (t) {
-      clearTimeout(t);
-      timers.current.delete(id);
-    }
+    const e = timers.current.get(id);
+    if (e?.t) clearTimeout(e.t);
+    timers.current.delete(id);
   }, []);
 
   const arm = useCallback(
     (id: number, kind: ToastKind) => {
       const prev = timers.current.get(id);
-      if (prev) clearTimeout(prev);
+      if (prev?.t) clearTimeout(prev.t);
       const ms = AUTO_DISMISS_MS[kind];
-      if (ms != null) timers.current.set(id, setTimeout(() => dismiss(id), ms));
+      if (ms != null) timers.current.set(id, { t: setTimeout(() => dismiss(id), ms), until: Date.now() + ms });
+      else timers.current.delete(id);
+    },
+    [dismiss],
+  );
+
+  /** Hover in: freeze the clock, remember what's left. */
+  const pause = useCallback((id: number) => {
+    const e = timers.current.get(id);
+    if (!e?.t) return;
+    clearTimeout(e.t);
+    timers.current.set(id, { t: null, until: Math.max(0, e.until - Date.now()) });
+  }, []);
+
+  /** Hover out: restart with exactly what was left. */
+  const resume = useCallback(
+    (id: number) => {
+      const e = timers.current.get(id);
+      if (!e || e.t) return;
+      const remaining = e.until; // "ms left" while paused
+      timers.current.set(id, { t: setTimeout(() => dismiss(id), remaining), until: Date.now() + remaining });
     },
     [dismiss],
   );
@@ -83,6 +103,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={`toast toast-${t.kind}`}
             role="status"
             style={life != null ? ({ '--life': `${life}ms` } as React.CSSProperties) : undefined}
+            onMouseEnter={() => pause(t.id)}
+            onMouseLeave={() => resume(t.id)}
           >
             {t.kind === 'pending' ? <span className="toast-spinner" aria-hidden="true" /> : null}
             <span className="toast-msg" onClick={() => dismiss(t.id)}>

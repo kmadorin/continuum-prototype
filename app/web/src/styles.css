@@ -207,18 +207,29 @@ a:hover { color: var(--tint); }
 .col > * + * { margin-top: var(--sp-4); }
 @media (max-width: 1180px) { .cols-2, .cols-main-side { grid-template-columns: 1fr; } }
 
-@media (max-width: 960px) {
-  .appshell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: column; }
-  .side-nav { flex-direction: row; overflow-x: auto; padding: 8px 12px; }
-  .side-link { white-space: nowrap; border-bottom: 2px solid transparent; border-radius: var(--r-2) var(--r-2) 0 0; }
-  .side-link.current { border-bottom-color: var(--primary); }
-  .side-sec { display: none; }
-  .side-foot { border-top: 0; padding-top: 0; }
-  .page-head { position: static; padding: 14px 20px; flex-direction: column; align-items: stretch; gap: 12px; }
+/* the stepper needs ~620px — the moment it would crush the title, stack the header
+   and let the stepper scroll in its own lane */
+@media (max-width: 1240px) {
+  .page-head { flex-direction: column; align-items: stretch; gap: 12px; }
   .page-head h1 { white-space: normal; }
   .ph-side { overflow-x: auto; padding-bottom: 2px; }
   .ph-side .lifecycle { width: max-content; }
+}
+
+@media (max-width: 960px) {
+  .appshell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; flex-direction: column; }
+  .side-brand { padding: 14px 20px 12px; border-bottom: 0; }
+  .side-nav { flex-direction: row; overflow-x: auto; padding: 0 12px 8px; }
+  .side-link { white-space: nowrap; border-bottom: 2px solid transparent; border-radius: var(--r-2) var(--r-2) 0 0; }
+  .side-link.current { border-bottom-color: var(--primary); }
+  .side-sec { display: none; }
+  /* one compact row: identity left, actions right — not a stretched column */
+  .side-foot { margin-top: 0; border-top: 1px solid var(--border); padding: 10px 16px;
+    flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+  .side-foot-actions { flex: none; }
+  .side-foot-actions .btn { flex: none; }
+  .page-head { position: static; padding: 14px 20px; }
   .appbody { padding: 18px 20px 110px; }
   /* the page header already carries the deal identity — don't repeat it in the collapsed bar */
   .side-deal { display: none; }
@@ -886,6 +897,8 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .toast-error::after { background: var(--err); opacity: 0.5; }
 .toast-pending::after { display: none; }
 @keyframes toast-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* hover holds the toast: the JS timer pauses via mouseenter, the bar pauses here */
+.toast:hover::after { animation-play-state: paused; }
 .toast-msg { word-break: break-word; font-variant-numeric: tabular-nums; }
 .toast-pending { border-color: var(--border-hi); }
 .toast-success { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 8%, var(--panel)); }
@@ -1222,6 +1235,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 /* a pending or still-loading figure breathes, quietly */
 .kpi-tile.pending .kpi-value { animation: soft-pulse 2.6s ease-in-out infinite; }
 .kpi-value.loading { color: var(--disabled); font-weight: 500; animation: soft-pulse 2.2s ease-in-out infinite; }
+/* the one-time swap from placeholders to figures is a dissolve, not a pop */
+.kpi-row:not([aria-busy='true']) .kpi-value,
+.kpi-row:not([aria-busy='true']) .kpi-sub,
+.kpi-row:not([aria-busy='true']) .kpi-asof { animation: kpi-fade 280ms ease both; }
+@keyframes kpi-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes soft-pulse { 50% { opacity: 0.55; } }
 /* boot state: light, centered */
 .boot { min-height: 70vh; display: grid; place-items: center; }

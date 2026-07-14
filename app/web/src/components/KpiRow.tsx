@@ -60,6 +60,8 @@ export default function KpiRow({
               <span className="kpi-label">{t?.label ?? '\u00A0'}</span>
             </div>
             <div className="kpi-value loading">—</div>
+            <div className="kpi-sub">{'\u00A0'}</div>
+            <div className="kpi-asof">{'\u00A0'}</div>
           </div>
         ))}
       </div>
