@@ -145,16 +145,41 @@ export default function SignIn() {
         <span className="wordmark">
           Continuum<span className="dot">.</span>
         </span>
-        <h1>Run a GP-led continuation deal, end to end</h1>
+        <span className="sb-eyebrow">GP-led continuation deals</span>
+        <h1>The entire deal, in one confidential workspace</h1>
         <p>
-          A single confidential workspace: a sealed-bid buyer auction sets the price, investors elect
-          privately, and every leg settles at once or not at all. Each seat is held at its own qualified
-          custodian, which signs on the party's behalf under policy — no signing key ever touches this
-          browser.
+          A sealed-bid auction sets the price, investors elect privately, and every leg settles together —
+          or none do.
         </p>
+
+        <ul className="usp" aria-label="What you get">
+          <li>Sealed-bid price discovery</li>
+          <li>Private LP elections</li>
+          <li>Qualified custodian per seat</li>
+          <li>All-or-nothing settlement</li>
+          <li>No keys in the browser</li>
+        </ul>
+
+        <div className="actions sb-actions">
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => {
+              const first = document.querySelector<HTMLButtonElement>('.accounts .account');
+              first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              first?.focus({ preventScroll: true });
+            }}
+          >
+            Enter demo workspace
+          </button>
+          <a className="btn" href="/pitch-deck">
+            See how it works
+          </a>
+        </div>
+
         <div className="sb-foot">
-          <span>Canton devnet · custody-signed · atomic settlement</span>
-          <span>Open several seats in separate tabs to watch the same close from every side.</span>
+          <span>Canton devnet · Custody-signed execution · Atomic settlement</span>
+          <span>Open multiple seats in separate tabs to experience the same close from every side.</span>
         </div>
       </div>
 

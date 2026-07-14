@@ -10,11 +10,17 @@ import { InspectorProvider } from './state/Inspector';
 import DealPage from './views/DealPage';
 import FocusedPage from './views/FocusedPage';
 import SignIn from './views/SignIn';
+import PitchDeck from './views/PitchDeck';
 import Settlement from './views/Settlement';
 import './styles.css';
 
 function Gate() {
   const { isSignedIn, role, ready } = useSession();
+
+  // Temporary internal route: the pitch, as a public read-only page (linked from the
+  // sign-in's "See how it works"). Resolved on pathname so it works in dev and behind
+  // the custody spine's SPA fallback alike — no router needed for one page.
+  if (window.location.pathname === '/pitch-deck') return <PitchDeck />;
 
   // Wait for the initial /me restore + registry load so a reload doesn't flash the
   // SignIn screen for an already-authenticated session.
