@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSession } from '../state/WalletSession';
 import TrustPanel from '../views/TrustPanel';
+import { AVATAR } from '../lib/avatars';
 
 export type ShellNavItem = { id: string; label: string; badge?: number };
 
@@ -104,12 +105,6 @@ export default function Shell({
     }
   };
 
-  const initials = (custodianName ?? '··')
-    .split(/[\s—-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('');
 
   return (
     <div className="appshell">
@@ -160,7 +155,7 @@ export default function Shell({
         <div className="side-foot">
           <div className="identity" title="Signing custodian — holds this seat's key; the browser holds none">
             <span className="id-avatar" aria-hidden="true">
-              {initials}
+              {role ? <img src={AVATAR[role]} alt="" /> : null}
             </span>
             <span className="id-meta">
               <span className="id-name">{custodianName ?? '—'}</span>

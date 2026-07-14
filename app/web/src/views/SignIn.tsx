@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { ROLES, useSession, type Role } from '../state/WalletSession';
 import { custodians } from '../lib/useLedger';
+import { AVATAR } from '../lib/avatars';
 
 type RoleMeta = {
   avatar: string;
@@ -202,7 +203,7 @@ export default function SignIn() {
                   onClick={() => (open ? setPicked(null) : choose(role))}
                 >
                   <span className="acc-avatar" aria-hidden="true">
-                    {m.avatar}
+                    <img src={AVATAR[role]} alt="" />
                   </span>
                   <span>
                     <span className="acc-name">{m.name}</span>
