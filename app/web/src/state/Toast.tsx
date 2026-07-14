@@ -16,7 +16,7 @@ export type ToastApi = {
   update: (id: number, message: string, kind: ToastKind, updateId?: string) => void;
 };
 
-type ToastItem = { id: number; message: string; kind: ToastKind; updateId?: string };
+type ToastItem = { id: number; message: string; kind: ToastKind; updateId?: string; leaving?: boolean };
 
 // Default is a working no-op so `useToast()` never throws outside a provider.
 const C = createContext<ToastApi>({ show: () => 0, update: () => {} });
@@ -35,11 +35,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   // exact remaining time (the CSS countdown bar pauses in lockstep via :hover).
   const timers = useRef<Map<number, { t: ReturnType<typeof setTimeout> | null; until: number }>>(new Map());
 
+  // Leaving is a fade, not a pop: mark it, let the CSS fade-out play, then drop it.
   const dismiss = useCallback((id: number) => {
-    setItems((xs) => xs.filter((x) => x.id !== id));
+    setItems((xs) => xs.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
     const e = timers.current.get(id);
     if (e?.t) clearTimeout(e.t);
     timers.current.delete(id);
+    setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 220);
   }, []);
 
   const arm = useCallback(
@@ -100,7 +102,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
           <div
             key={`${t.id}-${t.kind}`}
-            className={`toast toast-${t.kind}`}
+            className={`toast toast-${t.kind}${t.leaving ? ' leaving' : ''}`}
             role="status"
             style={life != null ? ({ '--life': `${life}ms` } as React.CSSProperties) : undefined}
             onMouseEnter={() => pause(t.id)}

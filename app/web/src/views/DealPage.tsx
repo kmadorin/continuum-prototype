@@ -296,7 +296,15 @@ export default function DealPage() {
       // holds this seat's key — that lives in the sidebar identity, not on the sponsor line.
       subtitle="Sponsor: Whitfield Advisory · Meridian Growth Fund III"
       headSide={<Stepper stages={stages} size="compact" />}
-      status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
+      status={
+        !loaded || !minShown ? (
+          <span className="sd-ghost" aria-hidden="true" />
+        ) : stageName ? (
+          <span className="chip sealed">{stageName}</span>
+        ) : (
+          <span className="sd-none">—</span>
+        )
+      }
     >
       {/* Sticky KPI row -------------------------------------------------------- */}
       <KpiRow tiles={tiles} onInspect={inspector.open} loading={!loaded || !minShown} />

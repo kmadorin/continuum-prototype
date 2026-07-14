@@ -83,6 +83,12 @@ export default function Shell({
   const [trustOpen, setTrustOpen] = useState(false);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  // The sign-in accordion leaves the window scrolled (SPA swap keeps scrollY);
+  // entering the shell — and switching sections — always starts at the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [current]);
+
   const move = (from: number, delta: number) => {
     const n = nav.length;
     const next = (from + delta + n) % n;
@@ -114,8 +120,14 @@ export default function Shell({
         Skip to content
       </a>
       <aside className="sidebar">
+        {/* brand + deal + nav travel together: a sidebar column on desktop, the
+            fixed header row on mobile (the identity footer drops to the page foot) */}
+        <div className="side-top">
         <div className="side-brand">
-          <img className="logo" src={logo} alt="Continuum" />
+          <span className="logo-lockup">
+            <img className="logo" src={logo} alt="Continuum" />
+            <span className="logo-ver">v0.1</span>
+          </span>
         </div>
 
         <div className="side-deal">
@@ -153,6 +165,7 @@ export default function Shell({
             );
           })}
         </nav>
+        </div>
 
         <div className="side-foot">
           <div className="identity" title="Signing custodian — holds this seat's key; the browser holds none">

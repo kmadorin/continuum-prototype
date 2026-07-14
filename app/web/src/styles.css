@@ -12,9 +12,9 @@
   --surface:   #10141A;
   --panel:     #151A21;
   --active:    #1C222C;
-  --border:    #2B3442;
-  --border-soft: #212834;
-  --border-hi: #3A4554;
+  --border:    #232B36;
+  --border-soft: #1B212A;
+  --border-hi: #2F3947;
 
   /* text */
   --text:      #F7F8FA;
@@ -127,6 +127,8 @@ a:hover { color: var(--tint); }
   background: var(--bg-2); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; overflow-y: auto;
 }
+/* wrapper for brand + deal + nav: transparent on desktop, the fixed header on mobile */
+.side-top { display: contents; }
 .side-brand {
   padding: 22px 20px 18px; border-bottom: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 3px;
@@ -134,8 +136,12 @@ a:hover { color: var(--tint); }
 .wordmark { font-family: var(--serif); font-size: 26px; font-weight: 400; letter-spacing: -0.01em; color: var(--text); line-height: 1; }
 .wordmark .dot { color: var(--primary); }
 .logo { display: block; width: auto; align-self: flex-start; }
-.side-brand .logo { height: 16px; margin: 4px 0; }
-.signin-brand .logo { height: 19px; }
+.side-brand .logo { height: 19px; margin: 4px 0; }
+.signin-brand .logo { height: 22px; }
+/* logo + tiny version tag, baseline-ish aligned */
+.logo-lockup { display: flex; align-items: flex-end; gap: 8px; }
+.logo-lockup .logo { align-self: auto; }
+.logo-ver { font-size: 10px; font-weight: 600; color: var(--mute); line-height: 1; padding-bottom: 5px; letter-spacing: 0.03em; }
 .pd-hero .logo { height: 36px; align-self: flex-start; }
 .side-conf { font-size: 11.5px; color: var(--mute); }
 
@@ -143,6 +149,14 @@ a:hover { color: var(--tint); }
 .sd-eyebrow { font-size: 11.5px; color: var(--mute); }
 .sd-name { font-size: 13.5px; font-weight: 600; color: var(--text-2); line-height: 1.35; }
 .sd-status { align-self: flex-start; min-height: 24px; display: flex; align-items: center; }
+/* the slot is never a void: a breathing pill while reads land, a quiet dash when
+   this seat's projection simply has no deal stage to show */
+.sd-ghost {
+  width: 74px; height: 20px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border-soft);
+  animation: soft-pulse 2.2s ease-in-out infinite;
+}
+.sd-none { color: var(--disabled); font-size: 12px; }
 
 
 .side-nav { padding: 12px 12px 16px; display: flex; flex-direction: column; gap: 2px; }
@@ -166,7 +180,7 @@ a:hover { color: var(--tint); }
 .side-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .side-foot .identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .id-avatar {
-  width: 32px; height: 32px; flex: none; border-radius: var(--r-2);
+  width: 36px; height: 36px; flex: none; border-radius: var(--r-2);
   border: 1px solid var(--border-hi); background: var(--surface);
   color: var(--pale); font-size: 12px; font-weight: 600;
   display: flex; align-items: center; justify-content: center;
@@ -217,22 +231,40 @@ a:hover { color: var(--tint); }
 }
 
 @media (max-width: 960px) {
-  .appshell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: column; }
-  .side-brand { padding: 14px 20px 12px; border-bottom: 0; }
-  .side-nav { flex-direction: row; overflow-x: auto; padding: 0 12px 8px; }
-  .side-link { white-space: nowrap; border-bottom: 2px solid transparent; border-radius: var(--r-2) var(--r-2) 0 0; }
-  .side-link.current { border-bottom-color: var(--primary); }
+  /* The sidebar dissolves into the page flow: its top block (brand + section tabs)
+     becomes ONE fixed translucent header row, and the identity footer drops to the
+     very bottom of the page — an app frame, not a stacked sidebar. */
+  .appshell { display: flex; flex-direction: column; }
+  .sidebar { display: contents; }
+  .side-top {
+    display: flex; align-items: stretch; gap: 4px;
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg-2) 86%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .side-brand { padding: 0 10px 0 20px; border-bottom: 0; flex-direction: row; align-items: center; }
+  .side-nav { flex: 1; flex-direction: row; align-items: stretch; overflow-x: auto; padding: 0 12px 0 4px; gap: 2px; }
+  .side-link {
+    white-space: nowrap; align-items: center;
+    padding: 16px 12px 14px; border-radius: 0; border-bottom: 2px solid transparent;
+  }
+  .side-link.current { background: transparent; border-bottom-color: var(--primary); }
   .side-sec { display: none; }
-  /* one compact row: identity left, actions right — not a stretched column */
-  .side-foot { margin-top: 0; border-top: 1px solid var(--border); padding: 10px 16px;
-    flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+  /* the page header already carries the deal identity — don't repeat it in the header row */
+  .side-deal { display: none; }
+  /* profile footer: below the content, identity left, actions right */
+  .appmain { order: 1; flex: 1; }
+  .side-foot {
+    order: 2; margin-top: 0;
+    flex-direction: row; align-items: center; justify-content: space-between; gap: 12px;
+    border-top: 1px solid var(--border); background: var(--bg-2);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  }
   .side-foot-actions { flex: none; }
   .side-foot-actions .btn { flex: none; }
-  .page-head { position: static; padding: 14px 20px; }
-  .appbody { padding: 18px 20px 110px; }
-  /* the page header already carries the deal identity — don't repeat it in the collapsed bar */
-  .side-deal { display: none; }
+  .page-head { position: static; padding: 16px 20px 14px; }
+  .appbody { padding: 18px 20px 90px; }
 }
 
 /* legacy top bar (kept for any straggler) */
@@ -483,6 +515,8 @@ main { width: 100%; margin: 0 auto; padding: var(--sp-5) 32px 152px; }
 .stack { display: flex; flex-direction: column; }
 .stack.g4 > * + * { margin-top: var(--sp-4); }
 .stack.g3 > * + * { margin-top: var(--sp-3); }
+.stack.g2 > * + * { margin-top: var(--sp-2); }
+.stack.g1 > * + * { margin-top: var(--sp-1); }
 
 /* ---------- workflow stepper ---------- */
 .lifecycle {
@@ -711,9 +745,38 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   position: sticky; top: 0; height: 100vh; overflow: hidden;
 }
 .signin-brand > * { position: relative; z-index: 1; }
+/* Aurora: two oversized layers of pre-softened radial glows in the brand palette,
+   drifting on transform only (compositor-friendly — no filter or opacity animation).
+   Oversized inset keeps edges out of frame through the whole drift. */
+.signin-brand::before,
+.signin-brand::after {
+  content: ""; position: absolute; inset: -45% -35%; z-index: 0; pointer-events: none;
+  will-change: transform;
+}
+.signin-brand::before {
+  background:
+    radial-gradient(36% 28% at 24% 30%, rgba(79, 103, 232, 0.17), transparent 68%),
+    radial-gradient(30% 24% at 76% 14%, rgba(130, 114, 230, 0.10), transparent 70%),
+    radial-gradient(34% 30% at 60% 84%, rgba(102, 87, 217, 0.13), transparent 70%);
+  animation: aurora-a 44s ease-in-out infinite alternate;
+}
+.signin-brand::after {
+  background:
+    radial-gradient(28% 22% at 70% 60%, rgba(111, 143, 251, 0.09), transparent 70%),
+    radial-gradient(24% 20% at 18% 78%, rgba(130, 114, 230, 0.08), transparent 72%);
+  animation: aurora-b 58s ease-in-out infinite alternate;
+}
+@keyframes aurora-a {
+  from { transform: translate3d(-4%, -3%, 0) rotate(-2deg) scale(1); }
+  to   { transform: translate3d(5%, 4%, 0) rotate(3deg) scale(1.14); }
+}
+@keyframes aurora-b {
+  from { transform: translate3d(4%, 3%, 0) rotate(2deg) scale(1.1); }
+  to   { transform: translate3d(-5%, -4%, 0) rotate(-3deg) scale(1); }
+}
 /* two auto margins split the free space: logo rides the top, the pitch block sits
    centred between them, the small print holds the bottom line */
-.signin-brand .logo { margin-bottom: auto; }
+.signin-brand .logo-lockup { margin-bottom: auto; }
 /* the flow field: interweaving hairlines drifting in an endless stream */
 .brand-flow { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
 .brand-flow path {
@@ -723,6 +786,9 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 }
 .brand-flow .ff-slow path { stroke: var(--pale); opacity: 0.16; }
 .brand-flow .ff-fast path { stroke: var(--violet); opacity: 0.11; animation-duration: 24s; animation-direction: reverse; }
+/* the spotlight copy: same lines, brighter, revealed only inside the cursor mask */
+.brand-flow .ff-hi .ff-slow path { stroke: var(--pale); opacity: 0.5; }
+.brand-flow .ff-hi .ff-fast path { stroke: var(--tint); opacity: 0.36; }
 .brand-flow path:nth-child(2) { animation-delay: -7s; }
 .brand-flow path:nth-child(3) { animation-delay: -13s; }
 .brand-flow path:nth-child(4) { animation-delay: -19s; }
@@ -730,15 +796,19 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 @keyframes brand-flow-drift { to { stroke-dashoffset: -760; } }
 .signin-brand .wordmark { font-size: 32px; }
 .signin-brand h1 {
-  font-family: var(--serif); font-size: clamp(36px, 4vw, 52px); font-weight: 400;
-  line-height: 1.1; letter-spacing: 0; margin: 48px 0 18px; max-width: 16ch; text-wrap: balance;
+  font-family: var(--serif); font-size: clamp(40px, 4.6vw, 58px); font-weight: 400;
+  line-height: 1.08; letter-spacing: 0; margin: 48px 0 20px; max-width: 16ch; text-wrap: balance;
 }
-.signin-brand p { font-size: 14.5px; line-height: 1.6; color: var(--text-2); margin: 0; max-width: 52ch; text-wrap: pretty; }
-.signin-brand .sb-foot { margin-top: auto; padding-top: 40px; font-size: 12px; color: var(--mute); display: flex; flex-direction: column; gap: 6px; }
+.signin-brand p { font-size: 16px; line-height: 1.6; color: var(--text-2); margin: 0; max-width: 56ch; text-wrap: pretty; }
+/* the description breaks where the sentence breaks — only when there's room for it */
+@media (max-width: 720px) { .br-wide { display: none; } }
+/* same type as the portal-foot note across the divide: 12px / 1.55, line pitch
+   from line-height alone (no extra gap) so both bottoms read as one style */
+.signin-brand .sb-foot { margin-top: auto; padding-top: 40px; font-size: 12px; line-height: 1.55; color: var(--mute); display: flex; flex-direction: column; gap: 0; }
 .sb-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pale); margin: 40px 0 -34px; }
 .sb-key { font-size: 14.5px; color: var(--text); font-weight: 500; margin: 14px 0 0 !important; }
 .usp { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.usp li { font-size: 14px; color: var(--text-2); display: flex; align-items: baseline; gap: 10px; }
+.usp li { font-size: 15px; color: var(--text-2); display: flex; align-items: baseline; gap: 10px; }
 .usp li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex: none; transform: translateY(-1px); }
 .sb-actions { margin-top: 28px; }
 .sb-actions .btn { text-decoration: none; }
@@ -802,13 +872,13 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   .pd-leg { border-right: 0; border-bottom: 1px solid var(--border); }
   .pd-leg:last-child { border-bottom: 0; }
 }
-.signin-accounts { padding: 56px 48px 31px; display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
+.signin-accounts { padding: 56px 48px 40px; display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
 .signin-accounts .portal-foot { margin-top: auto; }
 .signin-accounts .section-label { margin-bottom: 4px; }
 @media (max-width: 1020px) {
   .signin-shell { grid-template-columns: 1fr; }
   .signin-brand { position: static; height: auto; padding: 36px 24px 28px; }
-  .signin-brand .logo { margin-bottom: 28px; }
+  .signin-brand .logo-lockup { margin-bottom: 28px; }
   .signin-brand h1 { font-size: clamp(30px, 8.4vw, 40px); margin-top: 28px; }
   .sb-eyebrow { margin: 24px 0 -22px; }
   .signin-brand .sb-foot { margin-top: 32px; padding-top: 0; }
@@ -817,37 +887,49 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 }
 
 .accounts { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; margin-top: 14px; }
-.accounts .account-slot { border-top: 1px solid var(--border-soft); }
+.accounts .account-slot { border-top: 1px solid var(--border-soft); transition: background 150ms ease; }
 .accounts .account-slot:first-child { border-top: 0; }
 .accounts .account-slot.open { background: var(--surface); }
 .accounts .account {
   background: transparent; border: 0; width: 100%;
   text-align: left; cursor: pointer;
-  padding: 16px 20px; display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; align-items: center;
+  padding: 16px 20px; display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center;
   font-family: var(--sans); color: var(--text);
-  transition: background var(--dur-ui) ease;
+  transition: background 120ms ease;
 }
-.account-login { padding: 2px 20px 18px 74px; display: flex; flex-direction: column; gap: 12px; }
+/* even vertical rhythm inside the open slot: header → form → actions → foot,
+   and the unfold is a light dissolve, not a jump */
+.account-slot.open .account { padding-bottom: 6px; }
+.account-login { padding: 12px 20px 18px 82px; display: flex; flex-direction: column; gap: 14px; animation: fade-in 220ms var(--ease-out) both; }
 @media (max-width: 720px) { .account-login { padding-left: 20px; } }
 .accounts .account:hover { background: var(--active); }
-.accounts .account-slot.open .account:hover { background: transparent; }
+.accounts .account-slot.open .account:hover { background: var(--active); }
 .accounts .account:focus-visible { outline-offset: -2px; }
 .accounts .account .acc-top { display: contents; }
 .accounts .account .acc-avatar {
-  width: 40px; height: 40px; flex: none; border: 1px solid var(--border-hi); border-radius: var(--r-2);
+  width: 48px; height: 48px; flex: none; border: 1px solid var(--border-hi); border-radius: var(--r-2);
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 600; color: var(--pale); background: var(--surface);
 }
-.accounts .account .acc-name { font-size: 14.5px; font-weight: 600; letter-spacing: 0; }
-.accounts .account .acc-role { font-size: 12px; color: var(--mute); margin-top: 1px; }
+.accounts .account .acc-name { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.accounts .account .acc-role { font-size: 13px; color: var(--mute); margin-top: 2px; }
 .accounts .account .acc-org { display: none; }
 .accounts .account .acc-custodian { display: none; }
+/* the CTA stays quiet until the row is pointed at or focused; the open slot drops it
+   entirely — its header row hovers as a whole instead (clicking collapses) */
 .accounts .account .acc-enter {
-  font-size: 12.5px; font-weight: 500; color: var(--mute);
+  font-size: 13px; font-weight: 500; color: var(--mute);
   display: flex; align-items: center; gap: 8px; white-space: nowrap;
-  transition: color var(--dur-ui) ease;
+  opacity: 0;
+  transition: color var(--dur-ui) ease, opacity 150ms ease;
 }
+.accounts .account:hover .acc-enter,
+.accounts .account:focus-visible .acc-enter { opacity: 1; }
+.accounts .account-slot.open .acc-enter { display: none; }
 .accounts .account:hover .acc-enter { color: var(--pale); }
+/* the open header carries a quiet X instead — the whole row is the close target */
+.accounts .account .acc-close { display: flex; align-items: center; color: var(--mute); transition: color 150ms ease; }
+.accounts .account-slot.open .account:hover .acc-close { color: var(--text); }
 .accounts .account .acc-enter::after {
   content: ""; width: 14px; height: 14px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/><path d='m12 5 7 7-7 7'/></svg>") center / contain no-repeat;
@@ -855,8 +937,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 }
 .accounts .account.wide { grid-column: auto; }
 
-.portal-foot { margin-top: var(--sp-4); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.portal-foot .note { font-size: 12px; color: var(--mute); }
+/* note wraps to two quiet lines on the left; Reset holds the bottom-right corner,
+   bottoms aligned with the brand panel's small print across the divide */
+.portal-foot { margin-top: var(--sp-4); display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.portal-foot .note { font-size: 12px; color: var(--mute); max-width: 52ch; line-height: 1.55; }
+.portal-foot .btn { flex: none; }
 
 /* legacy portal lede (unused after redesign, kept harmless) */
 .portal-lede h1 { font-family: var(--serif); font-size: 40px; font-weight: 400; margin: 0 0 14px; }
@@ -915,7 +1000,9 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 }
 .toast-inspect:hover { color: var(--tint); border-color: var(--primary); }
 @keyframes toast-spin { to { transform: rotate(360deg); } }
-@keyframes toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* entrances are pure dissolves — no vertical travel anywhere in the system */
+@keyframes toast-in { from { opacity: 0; } to { opacity: 1; } }
+.toast.leaving { animation: fade-out 200ms ease both; pointer-events: none; }
 
 /* ---------- ledger inspector drawer ---------- */
 .drawer-backdrop {
@@ -1219,16 +1306,16 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .demo-menu a:hover { background: var(--active); }
 .demo-menu .dm-foot { border-top: 1px solid var(--border-hi); padding: 4px; }
 
-/* ── soft entrances: content rises in, staggered; loading blocks breathe ── */
-@keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* ── soft entrances: content dissolves in, staggered; loading blocks breathe ── */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .appbody > *, .signin-accounts > *, .pd-section, .pd-hero {
-  animation: rise-in 0.5s var(--ease-out) both;
+  animation: fade-in 0.5s var(--ease-out) both;
 }
 .appbody > *:nth-child(2), .signin-accounts > *:nth-child(2), .pd-section:nth-of-type(2) { animation-delay: 60ms; }
 .appbody > *:nth-child(3), .signin-accounts > *:nth-child(3), .pd-section:nth-of-type(3) { animation-delay: 120ms; }
 .appbody > *:nth-child(4), .pd-section:nth-of-type(4) { animation-delay: 180ms; }
 .appbody > *:nth-child(n + 5), .pd-section:nth-of-type(n + 5) { animation-delay: 240ms; }
-.signin-brand > * { animation: rise-in 0.55s var(--ease-out) both; }
+.signin-brand > * { animation: fade-in 0.55s var(--ease-out) both; }
 .signin-brand > *:nth-child(n + 3) { animation-delay: 80ms; }
 .signin-brand > *:nth-child(n + 5) { animation-delay: 150ms; }
 .brand-flow { animation: none; }
@@ -1241,9 +1328,10 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .kpi-row:not([aria-busy='true']) .kpi-asof { animation: kpi-fade 280ms ease both; }
 @keyframes kpi-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes soft-pulse { 50% { opacity: 0.55; } }
-/* boot state: light, centered */
-.boot { min-height: 70vh; display: grid; place-items: center; }
-.boot-inner { display: flex; align-items: center; gap: 12px; color: var(--mute); font-size: 13px; }
+/* boot state: light, centered — readable, not a whisper */
+.boot { min-height: 70vh; display: grid; place-items: center; padding: 48px 24px; }
+.boot-inner { display: flex; align-items: center; gap: 14px; color: var(--text-2); font-size: 15px; padding: 24px 32px; }
+.boot-inner .toast-spinner { width: 18px; height: 18px; }
 
 /* ============================================================================
    REDUCED MOTION — colour and opacity still carry state; movement goes.
@@ -1256,6 +1344,7 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   .skeleton { animation: none; }
   .toast, .drawer, .settled-overlay, .dialog-backdrop { animation-name: reduced-fade; }
   .brand-flow path { animation: none; }
+  .signin-brand::before, .signin-brand::after { animation: none; }
   .appbody > *, .signin-accounts > *, .signin-brand > *, .pd-section, .pd-hero { animation: none; }
   .kpi-tile.pending .kpi-value { animation: none; }
 }

@@ -233,7 +233,15 @@ export default function FocusedPage() {
       title="Project Continuum CV I, L.P."
       subtitle={SEAT_PURPOSE[role]}
       headSide={stages.length > 0 ? <Stepper stages={stages} size="compact" /> : undefined}
-      status={stageName ? <span className="chip sealed">{stageName}</span> : undefined}
+      status={
+        !loaded || !minShown ? (
+          <span className="sd-ghost" aria-hidden="true" />
+        ) : stageName ? (
+          <span className="chip sealed">{stageName}</span>
+        ) : (
+          <span className="sd-none">—</span>
+        )
+      }
     >
       {section === 'workspace' && tiles.length > 0 && (
         <KpiRow tiles={tiles} variant="strip" onInspect={oversight ? inspector.open : undefined} loading={!loaded || !minShown} />
