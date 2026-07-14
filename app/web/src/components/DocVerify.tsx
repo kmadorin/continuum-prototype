@@ -6,6 +6,7 @@
 //
 // SECURITY: read-only. Copy uses the clipboard API only; verify is a GET.
 import { useCallback, useState } from 'react';
+import { Check } from 'lucide-react';
 import { useToast } from '../state/Toast';
 import { verifyDoc, truncHash, shortCid, type VerifyResult } from '../lib/docs';
 
@@ -83,7 +84,7 @@ export function VerifyBadge({ state, result }: { state: VerifyState; result: Ver
   if (state === 'match') {
     return (
       <span className="chip ok" role="status" data-testid="verify-badge">
-        ✓ Hash matches on-chain anchor · contract #{shortCid(result?.contractId)}
+        <Check size={12} strokeWidth={2} aria-hidden="true" /> Hash matches on-chain anchor · contract #{shortCid(result?.contractId)}
       </span>
     );
   }

@@ -8,6 +8,7 @@
 // interest + participation pair the Close has nothing to burn, and the roller's old
 // position would survive its own rollover.
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, positionNav, atClearing, shortParty } from '../lib/useLedger';
 import HoldingReceipt from '../components/HoldingReceipt';
@@ -226,7 +227,7 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
         (closed ? (
           <Card title="Pre-authorize the close">
             <div className="stack g3">
-              <span className="chip ok">Pre-authorization consumed by the close ✓</span>
+              <span className="chip ok">Pre-authorization consumed by the close <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
               <span className="hint">
                 Your delegation and your old-fund interest were spent inside the atomic Close — the old
                 position was burned in the same transaction that issued your rolled units.
@@ -238,19 +239,19 @@ export default function RollingLP({ embedded }: { embedded?: LpSection[] } = {})
             <div className="stack g3">
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
-                  {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
+                  {deleg ? (<>Delegation accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
                 </button>
                 {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
               </div>
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
-                  {interest ? 'Old-fund interest accepted ✓' : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
+                  {interest ? (<>Old-fund interest accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
                 </button>
                 {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
               </div>
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
-                  {participation ? 'Participation proposed ✓' : busy === 'part' ? 'Signing…' : 'Propose participation'}
+                  {participation ? (<>Participation proposed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'part' ? 'Signing…' : 'Propose participation'}
                 </button>
                 <span className="hint">Your old position is burned as the rolled units are issued — one transaction.</span>
               </div>

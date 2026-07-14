@@ -6,6 +6,7 @@
 // Reads its own election + post-close USDC RegistryHolding. Cash-out leg settles
 // at the GP's atomic Close.
 import { useState } from 'react';
+import { ArrowRight, Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, positionNav, atClearing, shortParty } from '../lib/useLedger';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
@@ -183,7 +184,7 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               <dt>Valuation</dt>
               <dd>
                 <a className="link-mono" href="/docs/valuation-report" target="_blank" rel="noopener noreferrer">
-                  Independent valuation summary →
+                  Independent valuation summary <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
                 </a>
               </dd>
             </dl>
@@ -214,7 +215,7 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
         (closed ? (
           <Card title="Pre-authorize the close">
             <div className="stack g3">
-              <span className="chip ok">Pre-authorization consumed by the close ✓</span>
+              <span className="chip ok">Pre-authorization consumed by the close <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
               <span className="hint">
                 Your delegation and your old-fund interest were spent inside the atomic Close — the old
                 position was burned in the same transaction that paid your cash.
@@ -226,19 +227,19 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
             <div className="stack g3">
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
-                  {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
+                  {deleg ? (<>Delegation accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
                 </button>
                 {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
               </div>
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
-                  {interest ? 'Interest accepted ✓' : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
+                  {interest ? (<>Interest accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
                 </button>
                 {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
               </div>
               <div className="actions">
                 <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
-                  {participation ? 'Participation proposed ✓' : busy === 'part' ? 'Signing…' : 'Propose participation'}
+                  {participation ? (<>Participation proposed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'part' ? 'Signing…' : 'Propose participation'}
                 </button>
               </div>
             </div>

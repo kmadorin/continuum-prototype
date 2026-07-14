@@ -14,6 +14,7 @@
 // only reviews/verifies it. Reads (its scoped oversight window): the deal,
 // SettlementReceipt, FairnessDisclosure.
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import { useSession } from '../state/WalletSession';
@@ -223,10 +224,10 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
                 <div className="stack g3" style={{ marginTop: 24 }}>
                   <div className="actions">
                     <button className="btn primary" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
-                      {opinion ? 'Fairness opinion signed ✓' : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
+                      {opinion ? (<>Fairness opinion signed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
                     </button>
                     <button className="btn ghost" type="button" disabled={!!busy || !!consent} onClick={grantConsent}>
-                      {consent ? 'Conflict waiver on record ✓' : busy === 'grant' ? 'Signing…' : 'Grant conflict waiver'}
+                      {consent ? (<>Conflict waiver on record <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'grant' ? 'Signing…' : 'Grant conflict waiver'}
                     </button>
                   </div>
                   <p className="hint">

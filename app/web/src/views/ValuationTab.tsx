@@ -13,6 +13,7 @@
 // current role can't see it, we fall back to the manifest + the spec's range and
 // note the fallback (never stall). SECURITY: read-only + the verify GET.
 import { useEffect, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { custodians, DEMO } from '../lib/useLedger';
 import { shortParty } from '../lib/useLedger';
@@ -224,7 +225,7 @@ export default function ValuationTab({
             {UNITS_ISSUED.toLocaleString()} CV units were issued under an IssuanceBasis referencing this report's
             hash.{' '}
             <button type="button" className="link-mono" onClick={() => onNavigate?.('settlement')}>
-              View the settlement →
+              View the settlement <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </p>
         </div>

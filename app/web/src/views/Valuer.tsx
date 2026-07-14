@@ -14,6 +14,7 @@
 //
 // SECURITY: read-only polling + a single custody-signed create. No key material.
 import { useState } from 'react';
+import { ArrowRight, Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import { truncHash } from '../lib/docs';
@@ -93,14 +94,14 @@ export default function Valuer() {
           <dt>Report</dt>
           <dd>
             <a className="link-mono" href={`/docs/${DOC_NAME}`} target="_blank" rel="noopener noreferrer">
-              View valuation report →
+              View valuation report <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
             </a>
           </dd>
         </dl>
 
         {anchored ? (
           <div className="stack g3">
-            <span className="chip ok">Valuation anchored ✓</span>
+            <span className="chip ok">Valuation anchored <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
             <p className="hint" style={{ margin: 0 }}>
               sha256 <span className="mono">{truncHash(anchoredHash)}</span> · verify it on the Valuation tab. This
               seat is now read-only — the anchor is immutable on-ledger.
