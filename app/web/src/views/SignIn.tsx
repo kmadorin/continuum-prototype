@@ -146,7 +146,7 @@ export default function SignIn() {
           Continuum<span className="dot">.</span>
         </span>
         <span className="sb-eyebrow">GP-led continuation deals</span>
-        <h1>The entire deal, in one confidential workspace</h1>
+        <h1>The entire deal, in&nbsp;one confidential workspace</h1>
         <p>
           A sealed-bid auction sets the price, investors elect privately, and every leg settles together —
           or none do.
