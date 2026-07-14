@@ -496,27 +496,14 @@ main { width: 100%; margin: 0 auto; padding: var(--sp-5) 32px 152px; }
 
 /* ---------- KPI stat row ---------- */
 .kpi-row {
-  position: sticky; top: var(--head-h, 84px); z-index: 20;
   display: grid; grid-template-columns: repeat(var(--kpi-cols, 4), 1fr); gap: 0;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-3);
-  transition: background var(--dur-layer) ease, border-radius var(--dur-layer) ease, border-color var(--dur-layer) ease;
 }
 .kpi-tile {
   background: transparent; padding: 14px 18px; display: flex; flex-direction: column; gap: 2px;
   border-right: 1px solid var(--border-soft);
 }
 .kpi-row:not(.strip) .kpi-tile:last-child { border-right: 0; }
-/* pinned under the header → the compact chrome strip */
-.kpi-row.stuck {
-  margin: 0 -32px; padding: 0 16px;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-color: transparent; border-bottom-color: var(--border); border-radius: 0;
-}
-@media (max-width: 960px) { .kpi-row.stuck { margin: 0 -20px; padding: 0 8px; } }
-.kpi-row.stuck .kpi-tile { padding: 8px 18px; }
-.kpi-row.stuck .kpi-asof, .kpi-row.stuck .kpi-sub { display: none; }
-.kpi-row.stuck .kpi-value { font-size: 16px; }
 .kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .kpi-label { font-size: 12px; font-weight: 500; color: var(--mute); }
 .kpi-shield { background: transparent; border: 0; color: var(--disabled); padding: 2px; cursor: pointer; display: inline-flex; line-height: 0; border-radius: var(--r-1); }
@@ -536,7 +523,7 @@ main { width: 100%; margin: 0 auto; padding: var(--sp-5) 32px 152px; }
 }
 .kpi-row.strip .kpi-tile { flex: 1 1 220px; min-width: 220px; background: var(--panel); padding: 14px 18px; border-right: 0; }
 
-@media (max-width: 900px) { .kpi-row { grid-template-columns: repeat(2, 1fr); position: static; } .kpi-row:not(.strip) .kpi-tile:nth-child(2n) { border-right: 0; } }
+@media (max-width: 900px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } .kpi-row:not(.strip) .kpi-tile:nth-child(2n) { border-right: 0; } }
 
 /* ---------- tab nav (in-page, legacy) ---------- */
 .deal-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
