@@ -110,6 +110,10 @@ const META: Record<Role, RoleMeta> = {
 // Demo credentials: username = role, password = `<role>-demo` (see custody spine).
 const demoPassword = (role: Role): string => `${role}-demo`;
 
+// For now the demo enters a seat in ONE click — the credential form is hidden, not
+// removed. Flip this back on to restore the inline username/password panel.
+const SHOW_LOGIN_FORM: boolean = false;
+
 export default function SignIn() {
   const { signIn } = useSession();
   const [picked, setPicked] = useState<Role | null>(null);
@@ -143,11 +147,28 @@ export default function SignIn() {
     setError(null);
   }
 
-  // Deep link: /?seat=<role> opens with that seat's login panel ready — this is
-  // where the per-role "open in a new window" links land.
+  // One-click entry: the demo credentials are known, so a seat signs in directly.
+  async function enter(role: Role) {
+    if (busy) return;
+    setPicked(role);
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(role, demoPassword(role));
+      // On success the app re-renders into the role workspace (App gate).
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  // Deep link: /?seat=<role> — the per-role "open in a new window" links land here.
+  // With the login form hidden it enters the seat directly; otherwise it opens the panel.
   useEffect(() => {
     const seat = new URLSearchParams(window.location.search).get('seat');
-    if (seat && (ROLES as readonly string[]).includes(seat)) choose(seat as Role);
+    if (!seat || !(ROLES as readonly string[]).includes(seat)) return;
+    if (SHOW_LOGIN_FORM) choose(seat as Role);
+    else void enter(seat as Role);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 
@@ -281,22 +302,26 @@ export default function SignIn() {
       </div>
 
       <div className="signin-accounts">
-        {/* Picking a seat expands its credentials INLINE, under the row — the list never
-            unmounts, so nothing on screen jumps or reflows away from the pointer. */}
+        {/* One-click seats: the row itself signs in (demo credentials are known).
+            With SHOW_LOGIN_FORM the row expands its credentials inline instead. */}
         <p className="section-label">Choose your seat</p>
         <div className="accounts">
           {ROLES.map((role) => {
             const m = META[role];
             const custodian = custodians[role];
-            const open = picked === role;
+            const open = SHOW_LOGIN_FORM && picked === role;
+            const entering = !SHOW_LOGIN_FORM && busy && picked === role;
             return (
               <div key={role} className={`account-slot${open ? ' open' : ''}`}>
                 <button
                   className="account"
                   type="button"
                   data-role={role}
-                  aria-expanded={open}
-                  onClick={() => (open ? setPicked(null) : choose(role))}
+                  aria-expanded={SHOW_LOGIN_FORM ? open : undefined}
+                  disabled={!SHOW_LOGIN_FORM && busy}
+                  onClick={() =>
+                    SHOW_LOGIN_FORM ? (open ? setPicked(null) : choose(role)) : void enter(role)
+                  }
                 >
                   <span className="acc-avatar" aria-hidden="true">
                     <img src={AVATAR[role]} alt="" />
@@ -308,7 +333,9 @@ export default function SignIn() {
                       {custodian ? ` · ${custodian}` : ''}
                     </span>
                   </span>
-                  <span className="acc-enter">{m.cta}</span>
+                  <span className={`acc-enter${entering ? ' entering' : ''}`}>
+                    {entering ? 'Signing in…' : m.cta}
+                  </span>
                 </button>
                 {/* The demo is meant to be watched from several seats at once — every
                     role can open in its own window, with the login panel ready. */}
@@ -323,18 +350,20 @@ export default function SignIn() {
                 >
                   <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
                 </a>
-                {open && (
-                  <InlineLogin
-                    cta={m.cta}
-                    username={username}
-                    password={password}
-                    busy={busy}
-                    error={error}
-                    onUsername={setUsername}
-                    onPassword={setPassword}
-                    onSubmit={submit}
-                    onBack={() => setPicked(null)}
-                  />
+                {SHOW_LOGIN_FORM && open && (
+                  <div className="account-login-wrap">
+                    <InlineLogin
+                      cta={m.cta}
+                      username={username}
+                      password={password}
+                      busy={busy}
+                      error={error}
+                      onUsername={setUsername}
+                      onPassword={setPassword}
+                      onSubmit={submit}
+                      onBack={() => setPicked(null)}
+                    />
+                  </div>
                 )}
               </div>
             );

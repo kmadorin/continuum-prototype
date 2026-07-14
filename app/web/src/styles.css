@@ -63,8 +63,9 @@
 
   --shadow-layer: 0 12px 40px rgba(0, 0, 0, 0.5);
 
-  /* motion — arrive fast, stop dead */
+  /* motion — arrive fast, stop dead; in-out for on-screen movement */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --dur-press: 120ms;
   --dur-ui:    180ms;
   --dur-layer: 240ms;
@@ -113,7 +114,7 @@ a:hover { color: var(--tint); }
   position: absolute; left: 8px; top: -48px; z-index: 100;
   background: var(--panel); border: 1px solid var(--primary); color: var(--tint);
   font-size: 13px; padding: 9px 14px; text-decoration: none; border-radius: var(--r-2);
-  transition: top 0.15s ease;
+  transition: top 0.15s ease-out;
 }
 .skip-link:focus-visible { top: 8px; }
 
@@ -155,7 +156,7 @@ a:hover { color: var(--tint); }
    this seat's projection simply has no deal stage to show */
 .sd-ghost {
   width: 74px; height: 20px; border-radius: 999px;
-  background: var(--surface); border: 1px solid var(--border-soft);
+  background: var(--active);
   animation: soft-pulse 2.2s ease-in-out infinite;
 }
 .sd-none { color: var(--disabled); font-size: 12px; }
@@ -315,43 +316,36 @@ a:hover { color: var(--tint); }
 
 .btn.big { height: 42px; padding: 0 22px; font-size: 14px; font-weight: 600; }
 
-/* ---------- status chips ---------- */
+/* ---------- status chips — flat fills, no borders, no dots ---------- */
 .chip {
   font-size: 12px; font-weight: 500; letter-spacing: 0;
-  padding: 3px 9px; border: 1px solid var(--border-hi); border-radius: var(--r-1);
-  color: var(--text-2); background: var(--surface);
+  padding: 4px 10px; border: 0; border-radius: var(--r-1);
+  color: var(--text-2); background: var(--active);
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  width: fit-content; /* a chip never stretches to fill a column */
 }
-.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mute); flex: none; }
 /* green = a CONFIRMED on-ledger fact, nothing else */
-.chip.ok      { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
-.chip.ok::before { background: var(--ok); }
-.chip.pending { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-soft); }
-.chip.pending::before { background: var(--warn); }
-.chip.sealed  { color: var(--mute); border-color: var(--border-hi); background: transparent; }
-.chip.sealed::before { background: var(--border-hi); }
-.chip.fail    { color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, transparent); background: var(--err-soft); }
-.chip.fail::before { background: var(--err); }
+.chip.ok      { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.chip.pending { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.chip.sealed  { color: var(--mute); background: var(--active); }
+.chip.fail    { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .badge-action {
   font-size: 11.5px; font-weight: 600;
-  color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
-  background: var(--warn-soft); padding: 4px 10px; border-radius: var(--r-1); white-space: nowrap;
+  color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent);
+  padding: 5px 11px; border: 0; border-radius: var(--r-1); white-space: nowrap;
   display: inline-flex; align-items: center; gap: 7px;
 }
-.badge-action::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
 
 .status-pill {
-  font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: var(--r-1);
-  border: 1px solid var(--border-hi); color: var(--text-2); background: var(--surface);
+  font-size: 12px; font-weight: 500; padding: 6px 13px; border-radius: var(--r-1);
+  border: 0; color: var(--text-2); background: var(--active);
   display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  width: fit-content;
 }
-.status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--info); }
-.status-pill.settling { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-soft); }
-.status-pill.settling::before { background: var(--warn); }
-.status-pill.fail { color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, transparent); background: var(--err-soft); }
-.status-pill.fail::before { background: var(--err); }
+.status-pill.settling { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.status-pill.fail { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
 
 /* privacy note — the product working, informational tone */
 .cant-see { font-size: 12px; color: var(--mute); }
@@ -464,6 +458,8 @@ input[type='number']::-webkit-outer-spin-button, input[type='number']::-webkit-i
   color: var(--mute); font-size: 13px; cursor: pointer;
 }
 .icon-btn:hover { color: var(--text); border-color: var(--mute); }
+/* every small pressable answers the press, like .btn does */
+.icon-btn:active, .choice:active, .hash-chip:active, .toast-inspect:active, .toast-clear:active, .sl-cap:active, .acc-newwin:active { transform: translateY(1px); }
 
 .field-err { font-size: 12px; color: var(--fail-text); margin: 6px 0 0; display: flex; align-items: center; gap: 8px; }
 .field-err::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--err); flex: none; }
@@ -692,11 +688,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   position: relative; z-index: 1; white-space: nowrap;
 }
 .leg .sweep { position: absolute; inset: 0; transform-origin: left center; background: var(--ok-soft); transform: scaleX(0); z-index: 0; }
-.leg.filling .sweep { transform: scaleX(1); transition: transform 0.35s ease; }
+.leg.filling .sweep { transform: scaleX(1); transition: transform 0.35s var(--ease-out); }
 .leg.settled .sweep { transform: scaleX(1); }
 .leg.settled .st { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
-.leg.failing .sweep { transform: scaleX(1); background: var(--err-soft); transition: transform 0.25s ease; }
-.leg.reverted .sweep { transform: scaleX(0); transition: transform 0.4s ease; }
+.leg.failing .sweep { transform: scaleX(1); background: var(--err-soft); transition: transform 0.25s var(--ease-out); }
+.leg.reverted .sweep { transform: scaleX(0); transition: transform 0.4s var(--ease-in-out); }
 .leg.failing .st { color: var(--err); border-color: var(--err); }
 .leg.reverted .st { color: var(--mute); }
 
@@ -905,10 +901,16 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   font-family: var(--sans); color: var(--text);
   transition: background 120ms ease;
 }
-/* even vertical rhythm inside the open slot: header → form → actions → foot,
-   and the unfold is a light dissolve, not a jump */
+/* even vertical rhythm inside the open slot: header → form → actions → foot.
+   The unfold is real height: the wrapper's grid row grows 0fr → 1fr from
+   @starting-style while the form dissolves in on top of it. */
 .account-slot.open .account { padding-bottom: 6px; }
-.account-login { padding: 12px 20px 18px 82px; display: flex; flex-direction: column; gap: 14px; animation: fade-in 220ms var(--ease-out) both; }
+.account-login-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 320ms var(--ease-out); }
+@starting-style {
+  .account-login-wrap { grid-template-rows: 0fr; }
+}
+.account-login-wrap > form { min-height: 0; overflow: hidden; }
+.account-login { padding: 12px 20px 18px 82px; display: flex; flex-direction: column; gap: 14px; animation: fade-in 320ms var(--ease-out) both; }
 @media (max-width: 720px) { .account-login { padding-left: 20px; } }
 .accounts .account:hover { background: var(--panel); }
 .accounts .account-slot.open .account:hover { background: transparent; }
@@ -919,8 +921,8 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 600; color: var(--pale); background: var(--surface);
 }
-.accounts .account .acc-name { font-size: 16px; font-weight: 600; letter-spacing: 0; }
-.accounts .account .acc-role { font-size: 13px; color: var(--mute); margin-top: 2px; }
+.accounts .account .acc-name { font-size: 16px; font-weight: 600; letter-spacing: 0; line-height: 1.45; }
+.accounts .account .acc-role { font-size: 13px; color: var(--mute); margin-top: 3px; line-height: 1.5; }
 .accounts .account .acc-org { display: none; }
 .accounts .account .acc-custodian { display: none; }
 /* the CTA stays quiet until the row is pointed at or focused; the open slot drops it
@@ -944,8 +946,9 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   color: var(--mute); opacity: 0;
   transition: opacity 150ms ease, color 150ms ease, background 150ms ease;
 }
-.accounts .account-slot:hover .acc-newwin, .acc-newwin:focus-visible { opacity: 1; }
-.acc-newwin:hover { color: var(--text); background: var(--active); }
+/* revealed with the row, in the same voice as the CTA text */
+.accounts .account-slot:hover .acc-newwin, .acc-newwin:focus-visible { opacity: 1; color: var(--pale); }
+.acc-newwin:hover { color: var(--tint); background: var(--active); }
 .accounts .account .acc-enter::after {
   content: ""; width: 14px; height: 14px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/><path d='m12 5 7 7-7 7'/></svg>") center / contain no-repeat;
@@ -1084,9 +1087,10 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   padding: var(--sp-5);
   background: rgba(4, 6, 9, 0.78);
   backdrop-filter: blur(6px);
-  animation: settled-in 0.35s ease both;
+  animation: settled-in 0.32s var(--ease-out) both;
 }
 @keyframes settled-in { from { opacity: 0; transform: scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes dialog-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 .settled-inner {
   position: relative;
   width: min(680px, 100%);
@@ -1123,12 +1127,15 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .dialog-backdrop {
   position: fixed; inset: 0; z-index: 150; background: rgba(4, 6, 9, 0.66);
   display: flex; align-items: center; justify-content: center; padding: var(--sp-5);
-  animation: toast-in 140ms ease-out;
+  /* the dim just appears; the panel below carries the motion */
+  animation: fade-in 180ms ease-out;
 }
 .dialog {
   width: min(620px, 100%); max-height: 88vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--border-hi); border-radius: var(--r-3);
   box-shadow: var(--shadow-layer); padding: 24px 26px;
+  /* modal: scales from centre (not a trigger-anchored popover), never from zero */
+  animation: dialog-in 220ms var(--ease-out) both;
   display: flex; flex-direction: column; gap: 12px; position: relative;
 }
 .dialog h2 { font-family: var(--serif); font-size: 24px; font-weight: 400; margin: 0; }
@@ -1368,9 +1375,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   .gate-check .gc-mark { animation: none; }
   .btn:active { transform: none; }
   .skeleton { animation: none; }
-  .toast, .drawer, .settled-overlay, .dialog-backdrop { animation-name: reduced-fade; }
+  .toast, .drawer, .settled-overlay, .dialog-backdrop, .dialog { animation-name: reduced-fade; }
+  .icon-btn:active, .choice:active, .hash-chip:active, .toast-inspect:active, .toast-clear:active, .sl-cap:active, .acc-newwin:active { transform: none; }
   .brand-flow path { animation: none; }
   .signin-brand::before, .signin-brand::after { animation: none; }
+  .account-login-wrap { transition: none; }
   .appbody > *, .signin-accounts > *, .signin-brand > *, .pd-section, .pd-hero { animation: none; }
   .kpi-tile.pending .kpi-value { animation: none; }
 }
