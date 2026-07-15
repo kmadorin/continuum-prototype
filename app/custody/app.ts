@@ -339,6 +339,13 @@ export function createApp(deps: AppDeps) {
   // the LPAC governance seat's live decisions, and pre-seeding them would misrepresent
   // sequencing.
   const VALUATION_TEMPLATE = '#continuum-contracts:Continuum.Valuation:ValuationReport';
+  // Reads must filter by the module:entity SUFFIX, never by the package-NAME form above.
+  // activeContracts matches with `templateId.endsWith(opts.templateId)`, and the ledger
+  // returns package-HASH ids (b51d78dc…:Continuum.Valuation:ValuationReport) which can never
+  // end with '#continuum-contracts:…'. Filtering by the full constant matched nothing, so the
+  // idempotency check below always came up empty and re-seeded a duplicate report on EVERY
+  // boot (prod reached three). The create at submit-time still uses the package-name form.
+  const VALUATION_SUFFIX = 'Continuum.Valuation:ValuationReport';
   const SEED_NAV = { navLow: '480000000.0', navHigh: '520000000.0', asOfDate: '2026-06-30' };
   const seedingByEpoch = new Map<number, Promise<void>>(); // in-flight dedup (double-click Reset)
 
@@ -354,7 +361,7 @@ export function createApp(deps: AppDeps) {
       // do nothing (covers restarts + reset replays).
       if (deps.reads) {
         try {
-          const existing = await deps.reads.activeContracts(valuer.party, { templateId: VALUATION_TEMPLATE });
+          const existing = await deps.reads.activeContracts(valuer.party, { templateId: VALUATION_SUFFIX });
           if (existing.some((c) => c.args?.dealId === keys.dealId)) return;
         } catch {
           /* read failed — fall through and attempt the create (worst case a harmless dup) */
