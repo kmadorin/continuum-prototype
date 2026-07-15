@@ -1,0 +1,229 @@
+[
+  {
+    "contractId": "1220b0150ec75c87771048d87f13dec271af95256507f49243b87419677e05f2c17c",
+    "templateId": "#continuum-contracts:Continuum.Deal:ContinuationDeal",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "vehicle": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "oldFund": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "lpac": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "regulator": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "room": [
+        "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+        "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+        "continuum-lpRolling-mock::1220a26cb2764df1e38791efcf0e59f03d28c517073852876493230b1b65de151f3b"
+      ],
+      "fund": "Meridian Growth Fund III",
+      "cv": "Meridian CV I",
+      "asset": "Project Atlas",
+      "refNav": "500000000.0",
+      "electionDeadline": "2026-12-31T00:00:00Z",
+      "clearingPrice": "0.96",
+      "gpCommitment": "0.0",
+      "carryCrystallized": "0.0",
+      "stage": "Electing"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+      "continuum-lpRolling-mock::1220a26cb2764df1e38791efcf0e59f03d28c517073852876493230b1b65de151f3b",
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea"
+    ]
+  },
+  {
+    "contractId": "1220bf941061dc8dc08bc16f1de9f7e291b623c3e69667efca849156c2cfabf410e4",
+    "templateId": "#continuum-contracts:Continuum.Auction:SealedBid",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "buyer": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "dealId": "M1",
+      "pctOfNav": "0.96",
+      "capacity": "600000000.0"
+    },
+    "stakeholders": [
+      "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8"
+    ]
+  },
+  {
+    "contractId": "1220173e160eae32a6447e139bcb7f56c44cb45b7bdb9cca5c0e78c8753c24128794",
+    "templateId": "#continuum-contracts:Continuum.Election:LPElection",
+    "args": {
+      "lp": "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+      "dealId": "M1",
+      "positionNav": "100000000.0",
+      "rollNav": "0.0",
+      "sellNav": "100000000.0",
+      "disclosureHash": "deadbeef"
+    },
+    "stakeholders": [
+      "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc"
+    ]
+  },
+  {
+    "contractId": "12200132f2b8dc679f37c0a76a25c7e2fd64348daa22fe4e0173b56a7135b1add3a1",
+    "templateId": "#continuum-contracts:Continuum.Valuation:ValuationReport",
+    "args": {
+      "agent": "continuum-valuer-mock::12209e995d09b72530f1a67c87bbe7024fedf5a479f082f2f16dbce4a3a1a312a59d",
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "dealId": "M1",
+      "navLow": "480000000.0",
+      "navHigh": "520000000.0",
+      "asOfDate": "2026-06-30",
+      "contentHash": "ab5a539d8b780626370a095f2eb5f1c245abe242a772462e644706b73607de09"
+    },
+    "stakeholders": [
+      "continuum-valuer-mock::12209e995d09b72530f1a67c87bbe7024fedf5a479f082f2f16dbce4a3a1a312a59d",
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea"
+    ]
+  },
+  {
+    "contractId": "12208bc3eded2a66cb046d5a4508e7f4cc52e78146b04b0bbc11568409901c46abb8",
+    "templateId": "#continuum-contracts:Continuum.Valuation:FairnessOpinion",
+    "args": {
+      "provider": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "lpac": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "dealId": "M1",
+      "fairLow": "0.9",
+      "fairHigh": "1.0",
+      "opinionDate": "2026-06-30",
+      "contentHash": "9a3ca06cd71f318717500357625d414f2d052611244b2826f0c1ce506dd42f8c"
+    },
+    "stakeholders": [
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e"
+    ]
+  },
+  {
+    "contractId": "1220a1936de99ddd587eb71e8e2f953c8621f2d363d46729bf4dbfdf372bdb11ec52",
+    "templateId": "#continuum-contracts:Continuum.Auction:AuctionCertificate",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "lpac": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "dealId": "M1",
+      "clearingPct": "0.96",
+      "leadBuyer": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "bidTabulationHash": "deadbeef"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea"
+    ]
+  },
+  {
+    "contractId": "12205b7e946c41e2cf49de2a78f863c0014c1a40d4fe060813648b94704045491ed2",
+    "templateId": "#continuum-contracts:Continuum.Consent:LPACConsent",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "lpac": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+      "dealId": "M1",
+      "recusals": [],
+      "granted": true
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea"
+    ]
+  },
+  {
+    "contractId": "1220c6a611c15b45632a67a8e25a475c9ae27beba6f9af0ac79e82addc35b8e28f87",
+    "templateId": "#continuum-contracts:Continuum.Issuance:PurchaseAgreement",
+    "args": {
+      "oldFund": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "vehicle": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "dealId": "M1",
+      "price": "480000000.0",
+      "refNav": "500000000.0",
+      "clearingPct": "0.96",
+      "asOfDate": "2026-06-30"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea"
+    ]
+  },
+  {
+    "contractId": "12204b7244e70b6ec8f88671ba6fd83646348d4c0548ff312f46f31f412425b909c6",
+    "templateId": "#continuum-contracts:Continuum.Issuance:IssuanceBasis",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "dealId": "M1",
+      "reconciledNav": "500000000.0",
+      "clearingPct": "0.96",
+      "psaPrice": "480000000.0",
+      "reconciliation": "InRangeOfAll",
+      "closeDate": "2026-06-30",
+      "maxAsOfDays": "120"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e"
+    ]
+  },
+  {
+    "contractId": "12202f9bb3aa8bb2c49e6a19bb38f2edaace1491caf5ffc48484b23fbb5dd688553c",
+    "templateId": "#continuum-contracts:Continuum.Registry:RegistryHolding",
+    "args": {
+      "admin": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "owner": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "instId": "MERIDIAN-CV-I",
+      "amount": "480000000.0",
+      "locked": false,
+      "meta_": {
+        "continuum/valuation-sha256": "ab5a539d8b780626370a095f2eb5f1c245abe242a772462e644706b73607de09",
+        "continuum/issuance-basis": "12204b7244e70b6ec8f88671ba6fd83646348d4c0548ff312f46f31f412425b909c6"
+      }
+    },
+    "stakeholders": [
+      "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e"
+    ]
+  },
+  {
+    "contractId": "1220281f34963a680f9ebb6cc280d179791ce724cc02124fd4033d190810924b0606",
+    "templateId": "#continuum-contracts:Continuum.Registry:RegistryHolding",
+    "args": {
+      "admin": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "owner": "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+      "instId": "USDC",
+      "amount": "460800000.0",
+      "locked": false,
+      "meta_": {}
+    },
+    "stakeholders": [
+      "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e"
+    ]
+  },
+  {
+    "contractId": "122081e28a7e8e7f6b1d6aaeed0e59e4c36aa9f967d79cfcedf17176cd8bb74b84e9",
+    "templateId": "#continuum-contracts:Continuum.Participation:AcceptedParticipation",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "lp": "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc"
+    ]
+  },
+  {
+    "contractId": "122075919ca0586c1dc8bea8670565637b7c2e5114254796ab16be6a0b04f4989d5a",
+    "templateId": "#continuum-contracts:Continuum.Deal:SettlementReceipt",
+    "args": {
+      "gp": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "dealId": "Meridian CV I",
+      "buyer": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "lp": "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+      "unitAmount": "480000000.0",
+      "cashAmount": "460800000.0",
+      "closeDate": "2026-06-30"
+    },
+    "stakeholders": [
+      "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+      "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+      "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc"
+    ]
+  }
+]
