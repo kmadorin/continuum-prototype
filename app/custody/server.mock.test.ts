@@ -123,10 +123,12 @@ describe('mock app', () => {
     expect((await (await app.request('/registry')).json()).deal.dealId).toBe('M1');
   });
 
-  it('injects the PREVIEW banner into index.html', async () => {
+  it('serves index.html untouched — the SPA renders its own PREVIEW banner (host-gated)', async () => {
     const { app: withSpa } = createMockApp({ indexHtml: '<html><body><div id="root"></div></body></html>' });
     const res = await withSpa.request('/');
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain('PREVIEW');
+    const html = await res.text();
+    expect(html).toContain('<div id="root">');
+    expect(html).not.toContain('PREVIEW'); // no server-side injection on top of the app's own strip
   });
 });
