@@ -48,3 +48,57 @@ username = role, password = `<role>-demo`:
 - Confirm `custody-keys.json`, `wallet-keys.json`, `.env` are all gitignored (they are).
 - Seed the public repo from the scrubbed tree (see the Stream-C plan) or push `integration` after a gitleaks pass.
 - Rotate the 5N M2M secret after the event.
+
+## CI/CD
+
+- Push to `main` → GitHub Actions deploys **https://continuum-custody.fly.dev** (prod).
+- Push to `ui-ux` → deploys **https://continuum-custody-preview.fly.dev** (designer preview).
+- Both gated on the `test` job (custody vitest, plus web lint + `tsc -b` + web vitest).
+- Deploy tokens are **app-scoped** (`fly tokens create deploy -a <app>`), stored as
+  `FLY_API_TOKEN_PROD` / `FLY_API_TOKEN_PREVIEW`. The preview token cannot deploy to prod —
+  this is what makes "the mock can never be served as the live demo" a guarantee, not a
+  promise. Never replace them with a personal org-wide token.
+- Design + plan: `docs/superpowers/specs/2026-07-15-continuum-cicd-preview-design.md`,
+  `docs/superpowers/plans/2026-07-15-continuum-cicd-preview.md`.
+
+## The designer preview (continuum-custody-preview)
+
+Runs `custody/server.mock.ts`: the **same** `createApp()` as prod, wired to an in-memory
+mock ledger seeded from `app/custody/fixtures/`. **No secrets, no devnet, no key material.**
+The SPA is byte-for-byte identical to prod's — there is no mock-conditional frontend code,
+which is what keeps a `ui-ux` → `main` merge diff pure UI.
+
+Logins are the same as prod (`gp`/`gp-demo`, `buyer`/`buyer-demo`, `lpExiting`, `lpRolling`,
+`lpac`, `valuer` — password is always `<role>-demo`).
+
+- **Reset demo** in the preview restores pristine fixture state (it does *not* bump the demo
+  epoch — the preview is pinned to `M1` so fixtures always match).
+- Never run `fly secrets set` on the preview app. `server.mock.ts` refuses to boot when
+  `FN_SECRET` or `CUSTODY_KEYS_JSON` is present, by design.
+- Regenerate fixtures after changing the demo shape:
+  `cd app && npx tsx scripts/generate-fixtures.ts` (authors them offline from the
+  close-wallets arg shapes — no network, no prod). Read the diff before committing; fixtures
+  are public.
+- Known limit: the fixtures are an authored post-close **snapshot**; the mock does **not**
+  replay the full lifecycle (its exercise semantics are `SetClearing` / `OpenElections`
+  only). It is for designing views, not walking state machines.
+
+### Seam freeze on `ui-ux` PRs
+
+- **Hard fail, no override:** `app/custody/**`, `app/ledger-client/**`.
+- **Soft gate:** `app/web/src/lib/**`, `app/web/src/ledger/**` — add the `seam-change` PR
+  label to pass. The label is a prompt to *read those hunks*, not a rubber stamp.
+
+### Before merging `ui-ux` → `main` (REQUIRED — CI does not cover this)
+
+CI proves it compiles and the mock is happy; it cannot prove the UI still drives the real
+ledger. So run the branch against real devnet with the **staging** party set:
+
+```
+cd app && npx tsx --env-file=.env custody/provision.ts   # once; mv custody-keys.json custody-keys.staging.json
+CUSTODY_KEYS_JSON="$(cat custody-keys.staging.json)" npx tsx custody/server.ts
+```
+
+Click through a full deal. **Never smoke-test with the prod keys** — two servers sharing
+parties with independent in-memory epoch counters collide on `dealId` and can corrupt the
+live demo mid-pitch.
