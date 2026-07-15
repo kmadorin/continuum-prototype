@@ -34,6 +34,13 @@ export const T = {
   cert: '#continuum-contracts:Continuum.Auction:AuctionCertificate',
   sealedBid: '#continuum-contracts:Continuum.Auction:SealedBid',
   election: '#continuum-contracts:Continuum.Election:LPElection',
+  // The contentless markers. A SealedBid / LPElection has ONE signatory and no observers —
+  // nobody else can ever see it, the GP included. These carry no amounts and are observed by
+  // the GP (and, for bids, the LPAC), so oversight can count WHO responded without learning
+  // WHAT they said. They are what makes "private inputs, aggregate oversight" true rather
+  // than a slogan: without them the GP's deal page is blind to its own auction.
+  bidFiled: '#continuum-contracts:Continuum.Auction:BidFiled',
+  electionFiled: '#continuum-contracts:Continuum.Election:ElectionFiled',
   consent: '#continuum-contracts:Continuum.Consent:LPACConsent',
   psa: '#continuum-contracts:Continuum.Issuance:PurchaseAgreement',
   basis: '#continuum-contracts:Continuum.Issuance:IssuanceBasis',
@@ -61,6 +68,8 @@ export const R = {
   cert: 'Auction:AuctionCertificate',
   sealedBid: 'Auction:SealedBid',
   election: 'Election:LPElection',
+  bidFiled: 'Auction:BidFiled',
+  electionFiled: 'Election:ElectionFiled',
   consent: 'Consent:LPACConsent',
   psa: 'Issuance:PurchaseAgreement',
   basis: 'Issuance:IssuanceBasis',
@@ -123,14 +132,22 @@ export const DEMO = {
   fund: 'Meridian Growth Fund III',
   asset: 'Project Atlas',
   clearingPct: '0.96',
-  // $500M institutional scale — matches the Kroll valuation report ($500M NAV, $480–520M range)
-  // and the headless close-wallets.ts. 96% × $500M = $480M PSA = 480,000,000 units @ $1.00.
+  // ── the cap table ──────────────────────────────────────────────────────────────
+  // $500M institutional scale — matches the Kroll valuation report ($500M NAV, $480–520M
+  // range). The CV buys the asset from the old fund at 96% of that: a $480M PurchaseAgreement.
   refNav: '500000000.0',
   reconciledNav: '500000000.0',
   psaPrice: '480000000.0',
-  unitAmt: '480000000.0',
-  cashAmt: '460800000.0',
-  interestNav: '100000000.0',
+  // The LP base is modelled as TWO positions that sum to refNav — the same identity
+  // Clearing.daml uses (`refNav = rollNav + sellNav`). Every per-seat number below is
+  // derived from these, so no screen can promise a figure the close does not pay.
+  exitingNav: '300000000.0', // the exiting LP's stake — sells
+  rollingNav: '200000000.0', // the rolling LP's stake — rolls
+  // The three legs of the atomic close. The two UNIT legs must sum to psaPrice, which
+  // Deal.daml's Close asserts on-ledger (conservation): 288M + 192M = 480M.
+  buyerUnits: '288000000.0', // 96% × 300M — the buyer funds the cash paid to the seller
+  rollerUnits: '192000000.0', // 96% × 200M — the roller's stake, repriced into CV units
+  cashAmt: '288000000.0', // 96% × 300M — proceeds to the exiting LP
   navLow: '480000000.0',
   navHigh: '520000000.0',
   // Real sha256 of the anchored documents (so the Valuation tab's Verify matches on-ledger).
@@ -142,6 +159,17 @@ export const DEMO = {
   usdc: 'USDC',
   unit: 'MERIDIAN-CV-I',
 };
+
+/** An LP's own stake in the old fund. The two positions sum to the deal's reference NAV. */
+export const positionNav = (role: 'lpExiting' | 'lpRolling'): number =>
+  Number(role === 'lpRolling' ? DEMO.rollingNav : DEMO.exitingNav);
+
+/**
+ * What a position is worth at the clearing price — cash if you sell, CV units if you roll.
+ * Both sides are priced at the SAME clearing price: Clearing.daml mints
+ * `rollerUnits = roundDollar (clearing × rollNav)`, so a roll is not a par-value swap.
+ */
+export const atClearing = (nav: number, clearingPct: number): number => Math.round(nav * clearingPct);
 
 export const shortParty = (p?: string | null): string => (p ? p.split('::')[0] : '—');
 const shortId = (id?: string): string => (id ? (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id) : '—');

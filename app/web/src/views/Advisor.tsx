@@ -23,6 +23,7 @@ import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useL
 import { useInspector } from '../state/Inspector';
 import { truncHash } from '../lib/docs';
 import IssueUnitsGate, { type GateCheck } from '../components/IssueUnitsGate';
+import SliderField from '../components/SliderField';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
@@ -49,7 +50,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
     clearingPct: number | null;
     consentGranted: boolean;
     unitsToIssue: number;
-  }>({ valuationHash: '', fairnessHash: '', clearingPct: null, consentGranted: false, unitsToIssue: Number(DEMO.unitAmt) });
+  }>({ valuationHash: '', fairnessHash: '', clearingPct: null, consentGranted: false, unitsToIssue: Number(DEMO.psaPrice) });
 
   // Read the GP's own ACS: the deal + presence of each settlement antecedent so
   // the stepper reflects real on-ledger state, not local flags.
@@ -84,12 +85,14 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       psa: !!psaC,
       basis: !!basisC,
       allocUnit: !!pick(allocs, (c) => legId(c) === 'unit-buyer'),
+      allocRoll: !!pick(allocs, (c) => legId(c) === 'unit-roller'),
       allocCash: !!pick(allocs, (c) => legId(c) === 'cash-lp'),
       valuation: !!valC,
       opinion: !!opC,
       // Consent counts only when the LPAC actually GRANTED it (not merely present).
       consent: !!consC && (consC.args.granted as boolean) !== false,
-      interestOffer: !!pick(interestOffer, (c) => c.args.lp === counter.lpExiting),
+      interestExiting: !!pick(interestOffer, (c) => c.args.lp === counter.lpExiting),
+      interestRolling: !!pick(interestOffer, (c) => c.args.lp === counter.lpRolling),
     });
     setReceipt(pick(receiptC, forDeal) ?? pick(receiptC));
     setFacts({
@@ -97,7 +100,7 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       fairnessHash: (opC?.args.contentHash as string) || '',
       clearingPct: certC ? Number(certC.args.clearingPct) : null,
       consentGranted: !!consC && (consC.args.granted as boolean) !== false,
-      unitsToIssue: Number(basisC?.args.psaPrice ?? psaC?.args.price ?? DEMO.unitAmt),
+      unitsToIssue: Number(basisC?.args.psaPrice ?? psaC?.args.price ?? DEMO.psaPrice),
     });
   };
   useRefresh(refresh, [L.me]);
@@ -138,11 +141,24 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       return 'Closing room opened — deal created and signed by the GP custodian.';
     });
 
+  /**
+   * The CURRENT deal cid, re-read at the moment of use.
+   *
+   * Every ContinuationDeal choice is consuming — `create this with …` — so the contract id
+   * changes on each one, including the LPAC's `RecordConsent`, which is exercised in ANOTHER
+   * session. A GP acting on the id it cached at page load would then submit against an
+   * archived contract and fail for reasons that look like nothing to do with what it clicked.
+   */
+  const currentDealCid = async (): Promise<string> => {
+    const d = pick(await L.myAcs(R.deal), (c) => c.args.cv === DEMO.cv);
+    if (!d) throw new Error('Open the closing room first.');
+    return d.contractId;
+  };
+
   const exerciseDeal = (label: string, choice: string, arg: Record<string, unknown>, ok: string) =>
     run(label, async () => {
-      if (!deal) throw new Error('Open the closing room first.');
       await L.submit(
-        [{ ExerciseCommand: { templateId: T.deal, contractId: deal.contractId, choice, choiceArgument: arg } }],
+        [{ ExerciseCommand: { templateId: T.deal, contractId: await currentDealCid(), choice, choiceArgument: arg } }],
         R.deal,
       );
       await refresh();
@@ -219,8 +235,20 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
     );
   };
 
-  const allocUnit = () => step('allocUnit', 'Unit leg minted + allocated to the buyer.', () => allocateLeg(counter.buyer, DEMO.unit, DEMO.unitAmt, 'unit-buyer'));
-  const allocCash = () => step('allocCash', 'Cash leg minted + allocated to the exiting LP.', () => allocateLeg(counter.lpExiting, DEMO.usdc, DEMO.cashAmt, 'cash-lp'));
+  // The three legs. The two UNIT legs sum to the PSA price — Deal.daml's Close asserts it
+  // on-ledger, so an incoherent cap table cannot settle: it aborts the whole transaction.
+  const allocUnit = () =>
+    step('allocUnit', 'Unit leg minted + allocated to the buyer.', () =>
+      allocateLeg(counter.buyer, DEMO.unit, DEMO.buyerUnits, 'unit-buyer'),
+    );
+  const allocRoll = () =>
+    step('allocRoll', 'Rolled-unit leg minted + allocated to the rolling LP.', () =>
+      allocateLeg(counter.lpRolling, DEMO.unit, DEMO.rollerUnits, 'unit-roller'),
+    );
+  const allocCash = () =>
+    step('allocCash', 'Cash leg minted + allocated to the exiting LP.', () =>
+      allocateLeg(counter.lpExiting, DEMO.usdc, DEMO.cashAmt, 'cash-lp'),
+    );
 
   const createBasis = () =>
     step('basis', 'Issuance basis assembled from the antecedent DAG.', async () => {
@@ -263,15 +291,17 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       await L.submit(create(T.execDelegProp, { admin: L.me, party }), R.execDelegProp);
     });
 
-  const offerInterest = () =>
-    step('interest', 'Old-fund interest offered to the exiting LP.', async () => {
-      await L.submit(create(T.interestOffer, { oldFund: L.me, lp: counter.lpExiting, nav: DEMO.interestNav }), R.interestOffer);
+  // Both LPs leave the old fund — the seller for cash, the roller for units — so both
+  // hand back an old-fund interest for the close to burn.
+  const offerInterest = (lp: string, nav: string, who: string) =>
+    step(`interest-${who}`, `Old-fund interest offered to the ${who}.`, async () => {
+      await L.submit(create(T.interestOffer, { oldFund: L.me, lp, nav }), R.interestOffer);
     });
 
-  const acceptParticipation = () =>
-    step('accpart', 'Exiting LP participation accepted.', async () => {
-      const dp = pick(await L.myAcs(R.dealPart), (c) => c.args.lp === counter.lpExiting);
-      if (!dp) throw new Error('No DealParticipation from the exiting LP yet — they propose it in their tab.');
+  const acceptParticipation = (lp: string, who: string) =>
+    step(`accpart-${who}`, `${who} participation accepted.`, async () => {
+      const dp = pick(await L.myAcs(R.dealPart), (c) => c.args.lp === lp);
+      if (!dp) throw new Error(`No DealParticipation from the ${who} yet — they propose it in their tab.`);
       await L.submit([{ ExerciseCommand: { templateId: T.dealPart, contractId: dp.contractId, choice: 'Accept', choiceArgument: {} } }], R.accPart);
     });
 
@@ -288,21 +318,35 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       const legId = (c: ActiveContract) => (c.args.spec as { transferLegId?: string })?.transferLegId;
       const basisCid = await need(R.basis, forDeal, 'IssuanceBasis (assemble it above)');
       const execBuyerCid = await need(R.execDeleg, (c) => c.args.party === counter.buyer, "buyer's accepted ExecDelegation");
-      const execLpCid = await need(R.execDeleg, (c) => c.args.party === counter.lpExiting, "exiting LP's accepted ExecDelegation");
-      const allocUnitCid = await need(R.alloc, (c) => legId(c) === 'unit-buyer', 'allocated unit leg');
+      const execExitingCid = await need(R.execDeleg, (c) => c.args.party === counter.lpExiting, "exiting LP's accepted ExecDelegation");
+      const execRollingCid = await need(R.execDeleg, (c) => c.args.party === counter.lpRolling, "rolling LP's accepted ExecDelegation");
+      const allocUnitCid = await need(R.alloc, (c) => legId(c) === 'unit-buyer', "allocated unit leg (buyer's)");
+      const allocRollCid = await need(R.alloc, (c) => legId(c) === 'unit-roller', "allocated rolled-unit leg (rolling LP's)");
       const allocCashCid = await need(R.alloc, (c) => legId(c) === 'cash-lp', 'allocated cash leg');
-      const accLpCid = await need(R.accPart, (c) => c.args.lp === counter.lpExiting, 'AcceptedParticipation');
-      const interestLpCid = await need(R.interest, (c) => c.args.lp === counter.lpExiting, "exiting LP's accepted OldFundInterest");
+      const accExitingCid = await need(R.accPart, (c) => c.args.lp === counter.lpExiting, "exiting LP's AcceptedParticipation");
+      const accRollingCid = await need(R.accPart, (c) => c.args.lp === counter.lpRolling, "rolling LP's AcceptedParticipation");
+      const interestExitingCid = await need(R.interest, (c) => c.args.lp === counter.lpExiting, "exiting LP's accepted OldFundInterest");
+      const interestRollingCid = await need(R.interest, (c) => c.args.lp === counter.lpRolling, "rolling LP's accepted OldFundInterest");
+      // Cash out, units in, rolled units in, both old interests burned — one transaction.
       const closeArg = {
         basisCid,
         legExecs: [
           { _1: execBuyerCid, _2: allocUnitCid },
-          { _1: execLpCid, _2: allocCashCid },
+          { _1: execRollingCid, _2: allocRollCid },
+          { _1: execExitingCid, _2: allocCashCid },
         ],
-        burns: [{ _1: accLpCid, _2: interestLpCid }],
+        burns: [
+          { _1: accExitingCid, _2: interestExitingCid },
+          { _1: accRollingCid, _2: interestRollingCid },
+        ],
         fairnessHash: DEMO.fairnessHash,
       };
-      const res = await L.submit([{ ExerciseCommand: { templateId: T.deal, contractId: deal.contractId, choice: 'Close', choiceArgument: closeArg } }], R.receipt);
+      // Re-read the cid: the LPAC's consent (another session, consuming) has almost certainly
+      // replaced the deal since this page loaded.
+      const res = await L.submit(
+        [{ ExerciseCommand: { templateId: T.deal, contractId: await currentDealCid(), choice: 'Close', choiceArgument: closeArg } }],
+        R.receipt,
+      );
       setCloseUpdateId(res.updateId ?? null);
       await refresh();
       return 'Close signed — one atomic transaction moved every leg and produced the settlement receipt.';
@@ -337,11 +381,37 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
     },
   ];
 
+  // One backstage step = one status row: what it is, its on-ledger state, and the
+  // signing action. Done → confirmed (green, no button); blocked → the button says
+  // nothing until its prerequisites exist; available → sign. Post-close, every step
+  // that no longer reads as done was CONSUMED by the Close (allocations executed,
+  // basis validated, authority spent) — offering to re-sign it would describe a deal
+  // that has already settled.
+  const dealClosed = !!receipt || stage === 'Closed';
   const StepRow = ({ id, label, done, onClick, disabled }: { id: string; label: string; done: boolean; onClick: () => void; disabled?: boolean }) => (
-    <div className="actions">
-      <button className="btn" type="button" disabled={!!busy || done || disabled} onClick={onClick}>
-        {done ? `${label} ✓` : busy === id ? 'Signing…' : label}
-      </button>
+    <div className={`task${done || dealClosed ? ' muted' : ''}`}>
+      <span className={`tk-dot${done || dealClosed ? ' done' : disabled ? ' blocked' : ''}`} aria-hidden="true" />
+      <div className="tk-main">
+        <span className="tk-title">{label}</span>
+        <span className="tk-where">
+          {done
+            ? 'Signed — on-ledger'
+            : dealClosed
+              ? 'Spent inside the atomic Close'
+              : disabled
+                ? 'Blocked — prerequisites missing'
+                : 'Ready to sign'}
+        </span>
+      </div>
+      {done ? (
+        <span className="chip ok">Signed</span>
+      ) : dealClosed ? (
+        <span className="chip ok">Consumed by the close</span>
+      ) : (
+        <button className="btn sm" type="button" disabled={!!busy || disabled} onClick={onClick}>
+          {busy === id ? 'Signing…' : 'Sign'}
+        </button>
+      )}
     </div>
   );
 
@@ -375,19 +445,28 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         <Card title="Set the clearing price">
           <div className="stack g3">
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
+              <button className="btn primary" type="button" disabled={!!busy || !!deal} onClick={openRoom}>
                 {busy === 'open' ? 'Signing…' : 'Open closing room'}
               </button>
             </div>
             <div className="form-row">
               <label htmlFor="price">Clearing price — % of NAV</label>
-              <div className="input-group">
-                <input className="input" id="price" type="number" step="0.01" min="0" max="1" value={price} onChange={(e) => setPrice(e.target.value)} disabled={!deal} />
-                <span className="suffix">of NAV</span>
-              </div>
+              <SliderField
+                id="price"
+                min={0.8}
+                max={1}
+                step={0.005}
+                value={price}
+                onChange={setPrice}
+                disabled={!deal}
+                format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+                unit="% of NAV"
+                scale={100}
+                precision={1}
+              />
             </div>
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !deal} onClick={setClearing}>
+              <button className="btn primary" type="button" disabled={!!busy || !deal} onClick={setClearing}>
                 {busy === 'price' ? 'Signing…' : 'Set price & disclose to room'}
               </button>
             </div>
@@ -399,11 +478,11 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
         <Card title="Open elections">
           <div className="stack g3">
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
+              <button className="btn primary" type="button" disabled={!!busy || !deal || !deal.args.clearingPrice} onClick={openElections}>
                 {busy === 'elect' ? 'Signing…' : 'Open elections'}
               </button>
             </div>
-            <p className="hint" style={{ marginTop: 0 }}>
+            <p className="hint">
               Needs the clearing price set and the deal at <span className="mono">Consented</span> — the LPAC records consent from its Approval queue.
             </p>
           </div>
@@ -431,17 +510,21 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
           counterparty accepts (buyer/LP delegations, LP interest + participation) are signed in those tabs; run
           Close once they're in — the coordinated live close is Task 9.
         </p>
-        <div className="stack g3" style={{ marginTop: 14 }}>
+        <div className="taskq" style={{ marginTop: 14 }}>
           <StepRow id="factory" label="Create registry allocation factory" done={!!have.factory} onClick={createFactory} />
           <StepRow id="cert" label="Sign auction certificate" done={!!have.cert} onClick={createCert} />
           <StepRow id="psa" label="Sign purchase agreement" done={!!have.psa} onClick={createPsa} />
-          <StepRow id="allocUnit" label="Mint + allocate unit leg → buyer" done={!!have.allocUnit} onClick={allocUnit} disabled={!have.factory} />
-          <StepRow id="allocCash" label="Mint + allocate cash leg → exiting LP" done={!!have.allocCash} onClick={allocCash} disabled={!have.factory} />
+          <StepRow id="allocUnit" label={`Mint + allocate unit leg → buyer (${fmtM(DEMO.buyerUnits)})`} done={!!have.allocUnit} onClick={allocUnit} disabled={!have.factory} />
+          <StepRow id="allocRoll" label={`Mint + allocate rolled-unit leg → rolling LP (${fmtM(DEMO.rollerUnits)})`} done={!!have.allocRoll} onClick={allocRoll} disabled={!have.factory} />
+          <StepRow id="allocCash" label={`Mint + allocate cash leg → exiting LP (${fmtM(DEMO.cashAmt)})`} done={!!have.allocCash} onClick={allocCash} disabled={!have.factory} />
           <StepRow id="basis" label="Assemble issuance basis" done={!!have.basis} onClick={createBasis} disabled={!have.cert || !have.psa || !have.valuation || !have.opinion || !have.consent} />
           <StepRow id="deleg-buyer" label="Propose exec delegation → buyer" done={false} onClick={() => proposeDelegation(counter.buyer, 'buyer')} />
-          <StepRow id="deleg-lp" label="Propose exec delegation → exiting LP" done={false} onClick={() => proposeDelegation(counter.lpExiting, 'exiting LP')} />
-          <StepRow id="interest" label="Offer old-fund interest → exiting LP" done={!!have.interestOffer} onClick={offerInterest} />
-          <StepRow id="accpart" label="Accept exiting-LP participation" done={false} onClick={acceptParticipation} />
+          <StepRow id="deleg-exiting LP" label="Propose exec delegation → exiting LP" done={false} onClick={() => proposeDelegation(counter.lpExiting, 'exiting LP')} />
+          <StepRow id="deleg-rolling LP" label="Propose exec delegation → rolling LP" done={false} onClick={() => proposeDelegation(counter.lpRolling, 'rolling LP')} />
+          <StepRow id="interest-exiting LP" label={`Offer old-fund interest → exiting LP (${fmtM(DEMO.exitingNav)})`} done={!!have.interestExiting} onClick={() => offerInterest(counter.lpExiting, DEMO.exitingNav, 'exiting LP')} />
+          <StepRow id="interest-rolling LP" label={`Offer old-fund interest → rolling LP (${fmtM(DEMO.rollingNav)})`} done={!!have.interestRolling} onClick={() => offerInterest(counter.lpRolling, DEMO.rollingNav, 'rolling LP')} />
+          <StepRow id="accpart-exiting LP" label="Accept exiting-LP participation" done={false} onClick={() => acceptParticipation(counter.lpExiting, 'exiting LP')} />
+          <StepRow id="accpart-rolling LP" label="Accept rolling-LP participation" done={false} onClick={() => acceptParticipation(counter.lpRolling, 'rolling LP')} />
         </div>
       </Card>
       )}

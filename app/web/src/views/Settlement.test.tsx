@@ -62,12 +62,11 @@ describe('Settlement money-shot', () => {
     expect(screen.getByText(DEMO.cv)).toBeTruthy();
   });
 
-  it('renders nothing until the close is settled (deal state lives in the Stepper)', async () => {
+  it('shows the compact awaiting state (deal stage) when no receipt is present', async () => {
     stub(false);
-    const { container } = render(signedIn(<Settlement />));
-    // Give the poll a tick; with no receipt the overlay must not appear.
-    await new Promise((r) => setTimeout(r, 50));
+    render(signedIn(<Settlement />));
+    await waitFor(() => expect(screen.getByText(/awaiting atomic settlement/i)).toBeTruthy());
     expect(screen.queryByTestId('settled')).toBeNull();
-    expect(container.querySelector('.awaiting-strip')).toBeNull();
+    expect(screen.getByText('Electing')).toBeTruthy();
   });
 });

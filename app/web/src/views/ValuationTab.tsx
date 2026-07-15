@@ -13,8 +13,9 @@
 // current role can't see it, we fall back to the manifest + the spec's range and
 // note the fallback (never stall). SECURITY: read-only + the verify GET.
 import { useEffect, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { custodians } from '../lib/useLedger';
+import { custodians, DEMO } from '../lib/useLedger';
 import { shortParty } from '../lib/useLedger';
 import { fetchManifest, type DocManifestEntry } from '../lib/docs';
 import { fmtM } from './shared';
@@ -31,7 +32,7 @@ const FALLBACK = {
 const CLEARING_PCT = 0.96;
 const VALUER_NAME = 'Kroll Valuation Services';
 const DOC_NAME = 'valuation-report';
-const UNITS_ISSUED = 4_800_000;
+const UNITS_ISSUED = Number(DEMO.psaPrice); // 480,000,000 units @ $1.00 — the PSA price
 
 // On-chain NAV is expressed in the demo's scaled units; the report carries the
 // institutional figures directly (navLow 480000000.0 / navHigh 520000000.0).
@@ -224,7 +225,7 @@ export default function ValuationTab({
             {UNITS_ISSUED.toLocaleString()} CV units were issued under an IssuanceBasis referencing this report's
             hash.{' '}
             <button type="button" className="link-mono" onClick={() => onNavigate?.('settlement')}>
-              View the settlement →
+              View the settlement <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </p>
         </div>

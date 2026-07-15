@@ -33,13 +33,41 @@ export default function KpiRow({
   tiles,
   onInspect,
   variant = 'grid',
+  loading = false,
 }: {
   tiles: Kpi[];
   onInspect?: (updateId: string) => void;
   /** `grid` = the GP's sticky full-width row (columns sized to tile count);
    *  `strip` = a focused seat's compact left-aligned strip of 1–2 tiles. */
   variant?: 'grid' | 'strip';
+  /** First read not in yet (or the preloader's minimum display time not over):
+   *  render same-sized skeleton tiles so values never pop in and shift the page. */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <div
+        className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}
+        role="group"
+        aria-label="Deal key figures"
+        aria-busy="true"
+        data-testid="kpi-row"
+        style={variant === 'grid' ? ({ '--kpi-cols': tiles.length || 4 } as CSSProperties) : undefined}
+      >
+        {(tiles.length ? tiles : Array.from({ length: 4 }, () => null)).map((t, i) => (
+          <div className="kpi-tile" key={t?.label ?? i} data-testid="kpi-tile">
+            <div className="kpi-top">
+              <span className="kpi-label">{t?.label ?? '\u00A0'}</span>
+            </div>
+            <div className="kpi-value loading">—</div>
+            <div className="kpi-sub">{'\u00A0'}</div>
+            <div className="kpi-asof">{'\u00A0'}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`kpi-row${variant === 'strip' ? ' strip' : ''}`}

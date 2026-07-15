@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import HoldingReceipt from '../components/HoldingReceipt';
+import SliderField from '../components/SliderField';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
@@ -47,6 +48,11 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
   };
   useRefresh(refresh, [L.me]);
 
+  // The bid and its marker go in ONE transaction: you cannot file a bid without announcing
+  // THAT you bid. The SealedBid carries the amount and has no observers — not even the GP.
+  // The BidFiled carries nothing at all and is observed by the GP and the LPAC, so the room
+  // can count bidders (and the LPAC can recuse a bidding member) without anyone learning the
+  // price. Splitting these into two submits would let a bid exist that oversight cannot see.
   const submitBid = () =>
     run('bid', async () => {
       await L.submit(
@@ -63,11 +69,22 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
               },
             },
           },
+          {
+            CreateCommand: {
+              templateId: T.bidFiled,
+              createArguments: {
+                gp: counter.gp,
+                lpac: counter.lpac,
+                buyer: L.me,
+                dealId: DEAL_ID,
+              },
+            },
+          },
         ],
         R.sealedBid,
       );
       await refresh();
-      return 'Sealed bid signed and submitted — blind to every other buyer and to the GP until select.';
+      return 'Sealed bid signed and submitted — the room sees THAT you bid, never what you bid.';
     });
 
   const acceptDelegation = () =>
@@ -135,20 +152,34 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
           <div className="stack g3">
             <div className="form-row">
               <label htmlFor="bp">Bid — % of NAV</label>
-              <div className="input-group">
-                <input className="input" id="bp" type="number" step="0.01" min="0" max="1" value={pct} onChange={(e) => setPct(e.target.value)} />
-                <span className="suffix">of NAV</span>
-              </div>
+              <SliderField
+                id="bp"
+                min={0.8}
+                max={1}
+                step={0.005}
+                value={pct}
+                onChange={setPct}
+                format={(n) => `${(n * 100).toFixed(1).replace(/\.0$/, '')}% of NAV`}
+                unit="% of NAV"
+                scale={100}
+                precision={1}
+              />
             </div>
             <div className="form-row">
               <label htmlFor="bc">Capacity — NAV you'll absorb</label>
-              <div className="input-group">
-                <span className="prefix">$</span>
-                <input className="input" id="bc" type="number" step="0.5" min="0" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
-              </div>
+              <SliderField
+                id="bc"
+                min={1}
+                max={600}
+                step={1}
+                value={String(Number(capacity) / 1_000_000)}
+                onChange={(v) => setCapacity(`${v}000000.0`)}
+                format={(n) => `$${n.toFixed(0)}M`}
+                unit="$M"
+              />
             </div>
             <div className="actions">
-              <button className="btn" type="button" disabled={!!busy} onClick={submitBid}>
+              <button className="btn primary" type="button" disabled={!!busy} onClick={submitBid}>
                 {busy === 'bid' ? 'Signing…' : 'Submit sealed bid'}
               </button>
               <span className="cant-see">Signed by your custodian — blind to other buyers.</span>

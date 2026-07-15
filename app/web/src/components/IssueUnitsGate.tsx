@@ -15,6 +15,7 @@
 //
 // SECURITY: read-only presentation; no key material, no direct submits.
 import { useEffect, useRef, useState } from 'react';
+import { Check, X } from 'lucide-react';
 
 export type GateCheck = {
   key: string;
@@ -56,15 +57,7 @@ function useCountUp(target: number, run: boolean, ms = 850): number {
 }
 
 const CheckGlyph = ({ ok }: { ok: boolean }) =>
-  ok ? (
-    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-      <path d="M3 8.4 6.3 11.6 13 4.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-      <path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
+  ok ? <Check size={13} strokeWidth={2.4} aria-hidden="true" /> : <X size={13} strokeWidth={2.4} aria-hidden="true" />;
 
 export default function IssueUnitsGate({
   unitsToIssue,
@@ -130,8 +123,8 @@ export default function IssueUnitsGate({
               <span className="gc-label">{c.label}</span>
               <span className={`gc-fact mono ${c.ok ? '' : 'miss'}`}>{c.ok ? c.fact : 'missing'}</span>
             </span>
-            <span className="gc-state mono" aria-hidden="true">
-              {c.ok ? '✓' : '✗'}
+            <span className="gc-state" aria-hidden="true">
+              {c.ok ? <Check size={15} strokeWidth={2.2} /> : <X size={15} strokeWidth={2.2} />}
             </span>
           </li>
         ))}

@@ -18,13 +18,14 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, R, DEMO, shortParty } from '../lib/useLedger';
+import { useLedger, R, DEMO, custodians, shortParty } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
 import Stepper, { type Stage } from '../components/Stepper';
 import KpiRow, { type Kpi } from '../components/KpiRow';
-import Tabs, { type TabDef } from '../components/Tabs';
+import { type TabDef } from '../components/Tabs';
+import Shell from '../components/Shell';
 import Advisor from './Advisor';
 import AuditTrail from './AuditTrail';
 import ApprovalQueue, { usePendingApprovals } from './ApprovalQueue';
@@ -75,40 +76,42 @@ export function deriveStages(
 
 /** One-liner steering the signed-in role at the current lifecycle stage. */
 function whatNext(role: Role, activeLabel: string | null): string {
-  if (!activeLabel) return 'Deal closed. Settlement receipt anchored — verify it in the Ledger tab.';
+  if (!activeLabel) return 'Deal closed — the settlement receipt is anchored on-ledger. Verify it in the Ledger tab.';
   const m: Record<string, Partial<Record<Role, string>>> = {
     Valuation: {
-      gp: 'Ready: open the closing room.',
-      valuer: 'Sign and anchor the valuation on the Valuation tab.',
-      lpac: 'Review the valuation and fairness documents on the Valuation tab.',
-      buyer: 'Review the valuation, then ready your sealed bid.',
-      lpExiting: 'Awaiting the valuation before your election.',
-      lpRolling: 'Awaiting the valuation before your election.',
+      gp: 'Open the closing room, then set the clearing price once the independent valuation is in.',
+      valuer: 'The GP opened the closing room — that is the request for your independent valuation. Sign and anchor it on the Valuation tab; your hash becomes the reference every seat verifies.',
+      lpac: 'Review and verify the valuation + fairness documents on the Valuation tab.',
+      buyer: 'Review the independent valuation, then ready your sealed bid.',
+      lpExiting: 'Await the independent valuation — your sell decision comes after the price is set.',
+      lpRolling: 'Await the independent valuation — weigh roll vs sell once the price is set.',
     },
     'LPAC Consent': {
-      gp: 'Awaiting LPAC consent.',
-      lpac: 'Record consent from your Approval queue.',
+      gp: 'Awaiting LPAC consent — it advances the deal so you can open elections.',
+      lpac: 'Record LPAC consent from your Approval queue to open the room.',
     },
     Auction: {
-      gp: 'Ready: set the clearing price.',
-      buyer: 'Submit your sealed bid on the Auction & Elections tab.',
-      lpExiting: 'Your election opens next.',
-      lpRolling: 'Your election opens next.',
+      gp: 'Set the clearing price and disclose it to the room (Valuation tab).',
+      buyer: 'Submit your sealed bid on the Auction & Elections tab — blind to every other buyer.',
+      lpExiting: 'The auction is clearing — your election opens next.',
+      lpRolling: 'The auction is clearing — your roll/sell election opens next.',
     },
     Elections: {
-      gp: 'Ready: open elections.',
-      buyer: 'Accept your execution delegation.',
-      lpExiting: 'File your election on the Auction & Elections tab.',
-      lpRolling: 'File your election on the Auction & Elections tab.',
+      // Elections is the ACTIVE stage — they are already open. Telling the GP to open them is
+      // the stalest possible instruction at exactly the wrong moment.
+      gp: 'Elections are open — LPs file privately; you see only that they filed. Run the settlement backstage on the Settlement tab.',
+      buyer: 'Accept your execution delegation so the GP can settle your unit leg at Close.',
+      lpExiting: 'Elect to sell at the clearing price on the Auction & Elections tab.',
+      lpRolling: 'Compare roll vs sell, then file your election on the Auction & Elections tab.',
     },
     Issuance: {
-      gp: 'Ready: issue units, then Close.',
+      gp: 'Issue units and run the atomic Close on the Settlement tab.',
     },
     Close: {
-      gp: 'Ready: run the Close.',
+      gp: 'Run the atomic Close on the Settlement tab — one transaction settles every leg.',
     },
   };
-  return m[activeLabel]?.[role] ?? `Awaiting the ${activeLabel} stage.`;
+  return m[activeLabel]?.[role] ?? `Awaiting the GP to progress the ${activeLabel} stage.`;
 }
 
 // ── activity feed ─────────────────────────────────────────────────────────────
@@ -132,12 +135,15 @@ function buildFeed(s: {
     const pct = Math.round(Number(s.deal.args.clearingPrice) * 100);
     f.push({ text: `Clearing price set — ${pct}% of NAV`, tone: 'ok' });
   }
-  s.bids.forEach(() => f.push({ text: 'Sealed bid submitted — blind to peers and to the GP', tone: 'info' }));
-  for (const e of s.elections) {
-    const lp = shortParty(String(e.args.lp));
-    const sell = Number(e.args.sellNav) > 0;
-    f.push({ text: `${lp} elected to ${sell ? 'SELL' : 'ROLL'}`, tone: 'info' });
-  }
+  // Both feeds are built from the CONTENTLESS markers — the only thing the GP can see. The
+  // amounts behind them are in contracts the GP is not a stakeholder of, which is the point:
+  // the organizer of the auction cannot read the auction.
+  s.bids.forEach((b) =>
+    f.push({ text: `${shortParty(String(b.args.buyer))} filed a sealed bid — amount blind to you`, tone: 'info' }),
+  );
+  s.elections.forEach((e) =>
+    f.push({ text: `${shortParty(String(e.args.lp))} filed an election — roll/sell sealed`, tone: 'info' }),
+  );
   for (const r of s.receipts) {
     f.push({ text: `Settlement receipt issued — ${String(r.args.totalUnits)} CV units`, tone: 'ok' });
   }
@@ -151,6 +157,15 @@ export default function DealPage() {
   const [tab, setTab] = useState<TabId>('overview');
 
   const [deal, setDeal] = useState<ActiveContract | null>(null);
+  // Values popping in one poll after mount shifted the whole page. The KPI row shows
+  // equal-sized skeletons until the first read lands AND a short floor elapses, then
+  // swaps once — same tile heights, no jump.
+  const [loaded, setLoaded] = useState(false);
+  const [minShown, setMinShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinShown(true), 500);
+    return () => clearTimeout(t);
+  }, []);
   const [receipts, setReceipts] = useState<ActiveContract[]>([]);
   const [elections, setElections] = useState<ActiveContract[]>([]);
   const [bids, setBids] = useState<ActiveContract[]>([]);
@@ -165,11 +180,15 @@ export default function DealPage() {
     let on = true;
     const tick = async () => {
       try {
+        // Elections + bids come from the MARKERS (ElectionFiled / BidFiled), never from the
+        // private LPElection / SealedBid: those have a single signatory and no observers, so
+        // this seat could poll them forever and always read zero — which is exactly what the
+        // deal page used to do ("0 of 2 responded" with both elections filed).
         const [d, rec, el, sb, cons, val, op] = await Promise.all([
           L.myAcs(R.deal),
           L.myAcs(R.receipt),
-          L.myAcs(R.election),
-          L.myAcs(R.sealedBid),
+          L.myAcs(R.electionFiled),
+          L.myAcs(R.bidFiled),
           L.myAcs(R.consent),
           L.myAcs(R.valuation),
           L.myAcs(R.opinion),
@@ -182,6 +201,7 @@ export default function DealPage() {
         setConsents(cons);
         setValuations(val);
         setOpinions(op);
+        setLoaded(true);
       } catch {
         /* transient read error — next tick retries */
       }
@@ -226,7 +246,14 @@ export default function DealPage() {
           ...(clearingUsd != null ? { sub: fmtUsdM(clearingUsd) } : {}),
           asOf: DEMO.closeDate,
         }
-      : { label: 'Clearing price', value: '— Pending Auction', pending: true },
+      : {
+          label: 'Clearing price',
+          value: '— Pending Auction',
+          pending: true,
+          // Pre-clearing, the count of filed bids is everything the organizer of the auction
+          // is entitled to know — and, until now, more than it could see.
+          ...(bids.length ? { sub: `${bids.length} sealed ${bids.length === 1 ? 'bid' : 'bids'} filed — amounts blind` } : {}),
+        },
     electionsPhase
       ? {
           label: 'Elections',
@@ -245,7 +272,7 @@ export default function DealPage() {
       : { label: 'CV units issued', value: '— Pending Issuance', pending: true },
   ];
 
-  // ── tabs ──────────────────────────────────────────────────────────────────
+  // ── sections (sidebar nav) ────────────────────────────────────────────────
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview', badge: approvals.length || undefined },
     { id: 'valuation', label: 'Valuation' },
@@ -258,26 +285,34 @@ export default function DealPage() {
   const feed = buildFeed({ deal, elections, bids, consents, valuations, opinions, receipts });
 
   return (
-    <div className="deal-page stack g4">
-      {/* Header ---------------------------------------------------------------- */}
-      <header className="deal-header">
-        <div className="dh-titles">
-          <span className="dh-eyebrow">GP-Led Continuation Vehicle</span>
-          <h1>Project Continuum CV I, L.P.</h1>
-          <p className="dh-sponsor">Sponsor: Fireblocks — GP Treasury</p>
-        </div>
-        <Stepper stages={stages} size="compact" />
-      </header>
-
+    <Shell
+      nav={tabs}
+      current={tab}
+      onNav={(id) => setTab(id as TabId)}
+      navLabel="Deal"
+      eyebrow="GP-led continuation vehicle"
+      title="Project Continuum CV I, L.P."
+      // The sponsor is the advisory firm running the deal. Fireblocks is the CUSTODIAN that
+      // holds this seat's key — that lives in the sidebar identity, not on the sponsor line.
+      subtitle="Sponsor: Whitfield Advisory · Meridian Growth Fund III"
+      headSide={<Stepper stages={stages} size="compact" />}
+      status={
+        !loaded || !minShown ? (
+          <span className="sd-ghost" aria-hidden="true" />
+        ) : stageName ? (
+          <span className="chip sealed">{stageName}</span>
+        ) : (
+          <span className="sd-none">—</span>
+        )
+      }
+    >
       {/* Sticky KPI row -------------------------------------------------------- */}
-      <KpiRow tiles={tiles} onInspect={inspector.open} />
-
-      {/* Tab nav --------------------------------------------------------------- */}
-      <Tabs tabs={tabs} current={tab} onChange={(id) => setTab(id as TabId)} />
+      <KpiRow tiles={tiles} onInspect={inspector.open} loading={!loaded || !minShown} />
 
       <div className="deal-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && (
           <OverviewTab
+            role={role}
             whatNext={whatNext(role ?? 'gp', activeLabel)}
             feed={feed}
             hasApprovals={approvals.length > 0}
@@ -294,7 +329,7 @@ export default function DealPage() {
         {tab === 'auction' && (
           <TabActions
             title="Auction & Elections"
-            note="Bids and elections are sealed until close."
+            note="Sealed-bid auction and per-LP roll/sell elections. Amounts stay peer-blind — you see only that a bid or election was filed, never the figures, until the atomic Close. Open elections once the deal is Consented."
           >
             <Advisor embedded={['elections']} />
           </TabActions>
@@ -303,7 +338,7 @@ export default function DealPage() {
         {tab === 'settlement' && (
           <TabActions
             title="Settlement"
-            note="Close requires all four anchored proofs."
+            note="Issue units through the gate-ceremony — the ledger will not mint until all four proofs are anchored — then fire one atomic Close that moves every leg. Counterparties pre-authorize their legs in their own seats."
           >
             <Advisor embedded={['ceremony', 'settlement']} />
           </TabActions>
@@ -313,52 +348,109 @@ export default function DealPage() {
 
         {tab === 'ledger' && <AuditTrail />}
       </div>
-    </div>
+    </Shell>
   );
 }
 
-// Overview tab: large stepper + what-happens-next + recent activity, plus the
-// four-eyes Approval queue when this party has items awaiting its signature.
+// Overview tab: what-happens-next + recent activity, plus the four-eyes Approval
+// queue when this party has items awaiting its signature. (The stepper lives in the
+// page header — it used to be repeated here verbatim.)
 function OverviewTab({
+  role,
   whatNext,
   feed,
   hasApprovals,
 }: {
+  role: Role | null;
   whatNext: string;
   feed: FeedItem[];
   hasApprovals: boolean;
 }) {
+  // The header already carries the stepper; repeating it verbatim in a "Lifecycle" card said
+  // the same thing twice and pushed the only thing the Overview adds — what to do next, and
+  // what just happened — below the fold.
+  // Two columns on wide screens: your move (and anything awaiting your signature)
+  // on the left, the projection's event feed on the right.
   return (
-    <div className="stack g4">
-      <p className="status-line">{whatNext}</p>
+    <div className="cols-main-side">
+      <div className="col">
+        <div className="callout">
+          <div className="ct">What happens next{role ? ` · ${role}` : ''}</div>
+          <p>{whatNext}</p>
+        </div>
 
-      {hasApprovals && (
-        <div>
-          <ApprovalQueue />
-        </div>
-      )}
+        {hasApprovals && <ApprovalQueue />}
 
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Recent activity</h2>
-          <span className="ph-meta">{feed.length ? `${feed.length} event${feed.length === 1 ? '' : 's'}` : 'nothing yet'}</span>
+        <ParticipantsPanel />
+      </div>
+
+      <div className="col">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Recent activity</h2>
+            <span className="ph-meta">{feed.length ? `${feed.length} event${feed.length === 1 ? '' : 's'}` : 'nothing yet'}</span>
+          </div>
+          <div className="panel-body flush">
+            {feed.length ? (
+              <ul className="activity">
+                {feed.map((f, i) => (
+                  <li key={`${f.text}-${i}`} className={f.tone}>
+                    <span className="a-dot" aria-hidden="true" />
+                    <span className="a-text">{f.text}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="hint" style={{ padding: 18, margin: 0 }}>
+                No on-ledger activity in your projection yet. As the deal progresses, each event you can see appears here.
+              </p>
+            )}
+          </div>
         </div>
-        <div className="panel-body flush">
-          {feed.length ? (
-            <ul className="activity">
-              {feed.map((f, i) => (
-                <li key={`${f.text}-${i}`} className={f.tone}>
-                  <span className="a-dot" aria-hidden="true" />
-                  <span className="a-text">{f.text}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="hint" style={{ padding: 18, margin: 0 }}>
-              No activity yet.
-            </p>
-          )}
-        </div>
+      </div>
+    </div>
+  );
+}
+
+// Participants & visibility — who is in the room, which custodian signs for them,
+// and what the LEDGER lets each of them see. The visibility column is the privacy
+// model stated as fact (Daml signatories/observers), not aspiration: it is exactly
+// what this demo proves when you open two seats side by side.
+const PARTICIPANTS: Array<{ role: keyof typeof custodians; seat: string; sees: string }> = [
+  { role: 'gp', seat: 'Advisor / Organizer', sees: 'Deal state, proofs — never sealed bids or elections' },
+  { role: 'valuer', seat: 'Independent valuer', sees: 'Its own valuation and anchor hash only' },
+  { role: 'lpac', seat: 'LPAC oversight', sees: 'Bid markers, fairness scope — never amounts pre-close' },
+  { role: 'buyer', seat: 'Secondary buyer', sees: 'Its own bid and leg — no other bids or elections' },
+  { role: 'lpExiting', seat: 'Exiting LP', sees: 'Its own election and cash leg — no peer elections' },
+  { role: 'lpRolling', seat: 'Rolling LP', sees: 'Its own election and rolled units — no peer elections' },
+];
+
+function ParticipantsPanel() {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>Participants &amp; visibility</h2>
+        <span className="ph-meta">enforced by the ledger, not the app</span>
+      </div>
+      <div className="panel-body flush">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Seat</th>
+              <th>Signing custodian</th>
+              <th>Sees</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PARTICIPANTS.map((p) => (
+              <tr key={p.role}>
+                <td className="nm">{p.seat}</td>
+                <td>{custodians[p.role] ?? '—'}</td>
+                <td className="mute">{p.sees}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

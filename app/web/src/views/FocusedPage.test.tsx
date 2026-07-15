@@ -59,7 +59,7 @@ describe('FocusedPage — role-scoped shells', () => {
     expect(await screen.findByText('Sealed bid')).toBeTruthy();
     // Projection-safe KPI strip: exactly the Clearing price tile (pending pre-auction).
     await waitFor(() => expect(screen.getByTestId('kpi-row')).toBeTruthy());
-    expect(screen.getByText('Clearing price')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Clearing price')).toBeTruthy(), { timeout: 2500 });
     // A 3-cue mini-stepper (not the full 6-stage lifecycle).
     expect(screen.getByTestId('lifecycle-stepper')).toBeTruthy();
     expect(screen.getByText('Bid open')).toBeTruthy();

@@ -18,6 +18,7 @@
 //
 // SECURITY: read-only. No key material is touched, logged, persisted, or sent.
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { reads, R, DEMO } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
@@ -69,8 +70,13 @@ function ownOutcome(role: Role | null, holdings: ActiveContract[], me: string): 
  */
 export default function Settlement() {
   const { party, role } = useSession();
+  const [stage, setStage] = useState<string | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [outcome, setOutcome] = useState<string>('');
+  // The takeover is the climax, not a wall: it must be dismissable. Everything that PROVES
+  // the close — the Ledger Inspector, the audit trail, the settled holdings — lives on the
+  // workspace behind it, and a proof you cannot reach is not a proof.
+  const [dismissed, setDismissed] = useState(false);
   const settledRef = useRef(false);
 
   useEffect(() => {
@@ -78,18 +84,23 @@ export default function Settlement() {
     let on = true;
     settledRef.current = false;
     setSettled(null);
+    setStage(null);
 
     const forCv = (c: ActiveContract) => c.args.dealId === DEMO.cv;
 
     const poll = async () => {
       if (settledRef.current) return; // stop once settled
       try {
-        const [receipts, disclosures, holdings] = await Promise.all([
+        const [deal, receipts, disclosures, holdings] = await Promise.all([
+          reads.activeContracts(party, { templateId: R.deal }),
           reads.activeContracts(party, { templateId: R.receipt }),
           reads.activeContracts(party, { templateId: R.disclosure }),
           reads.activeContracts(party, { templateId: R.holding }),
         ]);
         if (!on) return;
+
+        const d = deal.find((c) => c.args.cv === DEMO.cv) ?? deal[deal.length - 1] ?? null;
+        setStage((d?.args.stage as string) ?? null);
 
         // Prefer the room's SettlementReceipt (its cid is the shared proof value).
         // The LPAC is not in `room`, so fall back to its FairnessDisclosure.
@@ -121,23 +132,82 @@ export default function Settlement() {
     };
   }, [party, role]);
 
-  // Only the post-close SETTLED overlay is shown; deal state lives in the Stepper.
-  if (!settled) return null;
+  // Esc dismisses the takeover, as any modal should.
+  useEffect(() => {
+    if (!settled || dismissed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDismissed(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [settled, dismissed]);
+
+  // Pre-deal: nothing to show, keep the workspace clean.
+  if (!settled && !stage) return null;
+
+  if (!settled) {
+    return (
+      <div className="awaiting-strip" role="status">
+        <span className="chip pending">Live · awaiting atomic settlement</span>
+        <span className="hint">
+          Stage <span className="mono">{stage}</span> — this window flips to SETTLED the moment your own
+          ledger projection sees the close.
+        </span>
+      </div>
+    );
+  }
 
   const clearingPctNum = Number(settled.clearingPct);
   const clearingLabel = Number.isFinite(clearingPctNum) ? `${(clearingPctNum * 100).toFixed(0)}%` : settled.clearingPct;
 
+  // Dismissed: the deal stays visibly settled, and the takeover is one click away again.
+  if (dismissed) {
+    return (
+      <div className="awaiting-strip settled-strip" role="status">
+        <span className="chip ok">Settled · atomic close</span>
+        <span className="hint">
+          Receipt <span className="mono">{settled.sharedId}</span> — the same on-ledger contract in every
+          window.
+        </span>
+        <button type="button" className="btn ghost" onClick={() => setDismissed(false)}>
+          View settlement
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="settled-overlay" role="dialog" aria-label="Settlement complete" data-testid="settled">
+    <div
+      className="settled-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settlement complete"
+      data-testid="settled"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setDismissed(true);
+      }}
+    >
       <div className="settled-inner">
-        <span className="settled-eyebrow">Atomic close</span>
+        <button
+          type="button"
+          className="settled-close"
+          aria-label="Dismiss settlement"
+          onClick={() => setDismissed(true)}
+        >
+          <X size={15} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+        <span className="settled-eyebrow">Atomic close · one transaction · every window</span>
         <h1 className="settled-title">SETTLED</h1>
 
         <div className="settled-idblock">
           <span className="settled-idlabel">
-            {settled.isReceipt ? 'Settlement receipt id' : 'Fairness disclosure id (LPAC scoped view)'}
+            {settled.isReceipt ? 'Settlement receipt id — identical in every window' : 'Fairness disclosure id (LPAC scoped view)'}
           </span>
           <code className="settled-id mono" data-testid="settled-id">{settled.sharedId}</code>
+          <span className="hint">
+            Same id in the buyer, exiting-LP, rolling-LP and GP windows = the same on-ledger contract from the
+            same atomic transaction. Not five animations — one Close.
+          </span>
         </div>
 
         <dl className="kv settled-facts">
@@ -159,6 +229,11 @@ export default function Settlement() {
           <span className="settled-idlabel">Your outcome</span>
           <span className="settled-figure mono">{outcome}</span>
         </div>
+
+        <p className="hint settled-dismiss-hint">
+          Press <span className="mono">Esc</span> or dismiss to inspect the transaction behind this — the
+          ledger tree, the audit trail and your settled holding are all on the workspace.
+        </p>
       </div>
     </div>
   );

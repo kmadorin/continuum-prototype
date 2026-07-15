@@ -4,27 +4,43 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fairness Opinion — Project Continuum CV I, L.P.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
-  :root { --ink:#12151c; --muted:#5b6472; --line:#d8dde5; --accent:#5a3b8b; --paper:#ffffff; }
+  /* Continuum design system — same tokens as the workspace */
+  :root {
+    --bg:#07090D; --bg-2:#0C0F14; --surface:#10141A; --panel:#151A21;
+    --border:#232B36; --border-soft:#1B212A; --border-hi:#2F3947;
+    --text:#F7F8FA; --text-2:#C7CDD6; --mute:#949DAA;
+    --primary:#4F67E8; --pale:#B7C2F8; --tint:#D8DDF5;
+    --serif:"Signifier","Newsreader",Georgia,"Times New Roman",serif;
+    --sans:"Söhne","Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
   * { box-sizing:border-box; }
-  html,body { margin:0; padding:0; background:#eef1f5; color:var(--ink); font-family:"Georgia","Times New Roman",serif; }
-  .page { max-width:816px; margin:32px auto; background:var(--paper); padding:64px 72px 80px;
-    box-shadow:0 1px 3px rgba(0,0,0,.12),0 8px 32px rgba(0,0,0,.08); }
-  .letterhead { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid var(--accent); padding-bottom:18px; }
-  .brand { font-family:"Helvetica Neue",Arial,sans-serif; }
-  .brand .mark { font-size:24px; font-weight:700; letter-spacing:.3px; color:var(--accent); }
-  .brand .sub { font-size:11px; letter-spacing:2.5px; text-transform:uppercase; color:var(--muted); margin-top:4px; }
-  .lh-right { text-align:right; font-family:"Helvetica Neue",Arial,sans-serif; font-size:11px; color:var(--muted); line-height:1.6; }
-  h1 { font-size:20px; margin:40px 0 4px; }
-  .subject { font-size:14px; color:var(--muted); margin:0 0 28px; }
-  p { font-size:14px; line-height:1.75; margin:0 0 16px; }
-  h2 { font-family:"Helvetica Neue",Arial,sans-serif; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); margin:30px 0 10px; }
-  .opinion { border-left:3px solid var(--accent); padding:4px 0 4px 20px; margin:18px 0 28px; }
-  .sig { margin-top:44px; display:flex; justify-content:space-between; align-items:flex-end; }
-  .sig .who { font-family:"Helvetica Neue",Arial,sans-serif; font-size:12px; color:var(--muted); line-height:1.7; }
-  .sig .who b { color:var(--ink); font-size:14px; }
-  .sigline { font-family:"Segoe Script","Snell Roundhand",cursive; font-size:28px; color:#3a2a52; border-bottom:1px solid var(--ink); padding:0 40px 2px 4px; }
-  .foot { margin-top:52px; border-top:1px solid var(--line); padding-top:14px; font-family:"Helvetica Neue",Arial,sans-serif; font-size:10px; color:var(--muted); line-height:1.6; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--text-2);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+  .page { max-width:816px; margin:40px auto; background:var(--bg-2);
+    border:1px solid var(--border); border-radius:10px; padding:56px 64px 64px; }
+  .letterhead { display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:1px solid var(--border-hi); padding-bottom:20px; }
+  .brand .mark { font-size:19px; font-weight:600; letter-spacing:.2px; color:var(--text); }
+  .brand .sub { font-size:10.5px; letter-spacing:2.2px; text-transform:uppercase; color:var(--mute); margin-top:6px; }
+  .lh-right { text-align:right; font-size:11.5px; color:var(--mute); line-height:1.65; }
+  h1 { font-family:var(--serif); font-size:30px; font-weight:400; letter-spacing:0; color:var(--text); margin:42px 0 6px; }
+  .subject { font-size:13px; color:var(--mute); margin:0 0 30px; }
+  p { font-size:13.5px; line-height:1.75; margin:0 0 16px; color:var(--text-2); }
+  p b { color:var(--text); font-weight:600; }
+  h2 { font-size:11.5px; font-weight:600; letter-spacing:1.6px; text-transform:uppercase; color:var(--pale); margin:32px 0 12px; }
+  .opinion { border-left:2px solid var(--primary); background:rgba(79,103,232,.07);
+    border-radius:0 6px 6px 0; padding:14px 18px; margin:18px 0 28px; }
+  .sig { margin-top:48px; display:flex; justify-content:space-between; align-items:flex-end; }
+  .sig .who { font-size:12px; color:var(--mute); line-height:1.7; }
+  .sig .who b { color:var(--text); font-size:13.5px; }
+  .sigline { font-family:"Snell Roundhand","Segoe Script",cursive; font-size:28px; color:var(--tint);
+    border-bottom:1px solid var(--border-hi); padding:0 40px 4px 4px; }
+  .foot { margin-top:52px; border-top:1px solid var(--border-soft); padding-top:14px;
+    font-size:10.5px; color:var(--mute); line-height:1.65; }
 </style>
 </head>
 <body>

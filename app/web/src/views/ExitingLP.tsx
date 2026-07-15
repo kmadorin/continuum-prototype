@@ -6,14 +6,17 @@
 // Reads its own election + post-close USDC RegistryHolding. Cash-out leg settles
 // at the GP's atomic Close.
 import { useState } from 'react';
+import { ArrowRight, Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
+import { useLedger, T, R, counter, DEAL_ID, DEMO, positionNav, atClearing, shortParty } from '../lib/useLedger';
 import { Card, StageHead, fmtM, fmtPct } from './shared';
 import { ErrNote, pick, useAction, useRefresh } from './parts';
 
-// $100.0M — matches the $500M institutional scale. The LP's OWN stake record (an LP
-// does not observe the independent ValuationReport), so it is never labelled "independent".
-const POSITION_NAV = DEMO.interestNav;
+// $300.0M — this seat's own stake record. With the rolling LP's $200M it sums to the
+// deal's $500M reference NAV, so the cash leg the close pays is exactly what this screen
+// promises. An LP does not observe the independent ValuationReport, so its own position is
+// never labelled "independent".
+const POSITION_NAV = String(positionNav('lpExiting'));
 
 // `embedded` mounts only the cards for a given Deal Page tab (dropping the
 // standalone StageHead + deal-summary chrome the page already renders).
@@ -64,7 +67,13 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
   // constant. Sealed until the GP sets the clearing price.
   const clearingPct = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : null;
   const refNav = deal?.args.refNav != null ? Number(deal.args.refNav) : null;
+  /** Settled from this seat's OWN projection: the deal is Closed, or the cash has landed. */
+  const closed = deal?.args.stage === 'Closed' || usdc > 0;
 
+  // The election and its marker go in ONE transaction. The LPElection carries the roll/sell
+  // split and has no observers — not the GP, not another LP. The ElectionFiled carries no
+  // amounts and is observed by the GP, so the deal page can say "2 of 2 responded" without
+  // anyone learning who sold and who rolled.
   const electSell = () =>
     run('elect', async () => {
       await L.submit(
@@ -80,6 +89,12 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
                 sellNav: POSITION_NAV,
                 disclosureHash: DEMO.contentHash,
               },
+            },
+          },
+          {
+            CreateCommand: {
+              templateId: T.electionFiled,
+              createArguments: { lp: L.me, gp: counter.gp, dealId: DEAL_ID },
             },
           },
         ],
@@ -159,7 +174,8 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               <dd className="mono">
                 {clearingPct != null ? (
                   <>
-                    {fmtM(Number(POSITION_NAV) * clearingPct)} <span className="hint">= stake × {Math.round(clearingPct * 100)}%</span>
+                    {fmtM(atClearing(Number(POSITION_NAV), clearingPct))}{' '}
+                    <span className="hint">= stake × {Math.round(clearingPct * 100)}%</span>
                   </>
                 ) : (
                   <span className="chip sealed">sealed — clearing not set</span>
@@ -168,7 +184,7 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               <dt>Valuation</dt>
               <dd>
                 <a className="link-mono" href="/docs/valuation-report" target="_blank" rel="noopener noreferrer">
-                  Independent valuation summary →
+                  Independent valuation summary <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
                 </a>
               </dd>
             </dl>
@@ -182,7 +198,7 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
               </div>
             ) : (
               <div className="actions">
-                <button className="btn" type="button" disabled={!!busy} onClick={electSell}>
+                <button className="btn primary" type="button" disabled={!!busy} onClick={electSell}>
                   {busy === 'elect' ? 'Signing…' : 'Elect to sell'}
                 </button>
                 <span className="cant-see">Signed by your custodian — blind to every other LP.</span>
@@ -192,29 +208,43 @@ export default function ExitingLP({ embedded }: { embedded?: LpSection[] } = {})
         </div>
       )}
 
-      {show('preauth') && (
-      <Card title="Pre-authorize the close">
-        <div className="stack g3">
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
-              {deleg ? 'Delegation accepted ✓' : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
-            </button>
-            {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
-          </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
-              {interest ? 'Interest accepted ✓' : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
-            </button>
-            {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
-          </div>
-          <div className="actions">
-            <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
-              {participation ? 'Participation proposed ✓' : busy === 'part' ? 'Signing…' : 'Propose participation'}
-            </button>
-          </div>
-        </div>
-      </Card>
-      )}
+      {show('preauth') &&
+        // Post-close these contracts are gone — spent by the Close itself. Offering the
+        // buttons again (or claiming to be "waiting on the GP") describes a deal that has
+        // already settled in this seat's own projection.
+        (closed ? (
+          <Card title="Pre-authorize the close">
+            <div className="stack g3">
+              <span className="chip ok">Pre-authorization consumed by the close <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
+              <span className="hint">
+                Your delegation and your old-fund interest were spent inside the atomic Close — the old
+                position was burned in the same transaction that paid your cash.
+              </span>
+            </div>
+          </Card>
+        ) : (
+          <Card title="Pre-authorize the close">
+            <div className="stack g3">
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!deleg || !prop} onClick={acceptDelegation}>
+                  {deleg ? (<>Delegation accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'deleg' ? 'Signing…' : 'Accept execution delegation'}
+                </button>
+                {!prop && !deleg && <span className="hint">Waiting on the GP's delegation proposal.</span>}
+              </div>
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!interest || !offer} onClick={acceptOffer}>
+                  {interest ? (<>Interest accepted <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'offer' ? 'Signing…' : 'Accept interest offer'}
+                </button>
+                {!offer && !interest && <span className="hint">Waiting on the GP's old-fund interest offer.</span>}
+              </div>
+              <div className="actions">
+                <button className="btn" type="button" disabled={!!busy || !!participation} onClick={proposeParticipation}>
+                  {participation ? (<>Participation proposed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'part' ? 'Signing…' : 'Propose participation'}
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
 
       {show('holding') && (
         <Card title="Post-close cash">

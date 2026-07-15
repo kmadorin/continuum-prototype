@@ -14,6 +14,7 @@
 // only reviews/verifies it. Reads (its scoped oversight window): the deal,
 // SettlementReceipt, FairnessDisclosure.
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import { useSession } from '../state/WalletSession';
@@ -47,7 +48,7 @@ function ReviewDoc({
     <div className="card review-doc" data-testid="review-doc">
       <div className="stack g2">
         <div className="rd-head">
-          <span className="chip ok val-badge">{anchored ? 'Anchored' : 'Not yet anchored'}</span>
+          <span className={`chip ${anchored ? 'ok' : 'pending'} val-badge`}>{anchored ? 'Anchored' : 'Not yet anchored'}</span>
           <span className="ph-meta mono">{docName}</span>
         </div>
         <div className="doc-title">{title}</div>
@@ -220,16 +221,16 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
               </div>
 
               {!consentRecorded && (
-                <div className="stack g3" style={{ marginTop: 16 }}>
+                <div className="stack g3" style={{ marginTop: 32 }}>
                   <div className="actions">
-                    <button className="btn" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
-                      {opinion ? 'Fairness opinion signed ✓' : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
+                    <button className="btn primary" type="button" disabled={!!busy || !!opinion} onClick={signFairness}>
+                      {opinion ? (<>Fairness opinion signed <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'fairness' ? 'Signing…' : 'Sign fairness opinion'}
                     </button>
                     <button className="btn ghost" type="button" disabled={!!busy || !!consent} onClick={grantConsent}>
-                      {consent ? 'Conflict waiver on record ✓' : busy === 'grant' ? 'Signing…' : 'Grant conflict waiver'}
+                      {consent ? (<>Conflict waiver on record <Check size={13} strokeWidth={2} aria-hidden="true" /></>) : busy === 'grant' ? 'Signing…' : 'Grant conflict waiver'}
                     </button>
                   </div>
-                  <p className="hint" style={{ margin: 0 }}>
+                  <p className="hint">
                     Then record LPAC consent from your <b>Approval queue</b> below — the four-eyes release
                     advances the deal so the GP can open elections.
                   </p>
@@ -250,7 +251,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
                   <dt>Clearing %</dt>
                   <dd>{fmtPct(d.args.clearingPct)}</dd>
                   <dt>Total units</dt>
-                  <dd className="mono">{String(d.args.totalUnits)}</dd>
+                  <dd className="mono">{Number(d.args.totalUnits).toLocaleString()}</dd>
                   <dt>Fairness hash</dt>
                   <dd className="mono">{String(d.args.fairnessHash)}</dd>
                 </dl>
@@ -261,7 +262,7 @@ export default function LPAC({ embedded }: { embedded?: LpacSection[] } = {}) {
             {receipts.map((r) => (
               <dl className="kv" key={r.contractId}>
                 <dt>Settlement receipt — units</dt>
-                <dd className="mono">{String(r.args.totalUnits)}</dd>
+                <dd className="mono">{Number(r.args.totalUnits).toLocaleString()}</dd>
                 <dt>Clearing %</dt>
                 <dd>{fmtPct(r.args.clearingPct)}</dd>
               </dl>

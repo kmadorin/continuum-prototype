@@ -14,6 +14,7 @@
 //
 // SECURITY: read-only polling + a single custody-signed create. No key material.
 import { useState } from 'react';
+import { ArrowRight, Check } from 'lucide-react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
 import { useLedger, T, R, counter, DEAL_ID, DEMO, shortParty } from '../lib/useLedger';
 import { truncHash } from '../lib/docs';
@@ -68,9 +69,15 @@ export default function Valuer() {
   return (
     <Card title="Independent Valuation Agent · Kroll Valuation Services">
       <div className="stack g3">
+        {/* It used to say the GP, buyer, LPs and LPAC "each verify" this document. They cannot:
+            ValuationReport is `signatory agent, observer gp`, so the report reaches the GP and
+            nobody else. Claiming an audience the projection does not give it is the one thing a
+            seat about verifiable anchoring must not do. */}
         <p className="hint" style={{ marginTop: 0 }}>
-          Sign and anchor the NAV range. The on-ledger <span className="mono">contentHash</span> below is what
-          every seat verifies against the served document.
+          You are the independent agent. The GP opened the closing room for Project Continuum CV I, L.P. —
+          that is the request for your independent valuation. Your sole action is to respond: sign and anchor
+          the NAV range. The on-ledger <span className="mono">contentHash</span> below is what the GP verifies
+          against the served document — your Canton signature is the anchor.
         </p>
 
         <dl className="kv">
@@ -87,15 +94,15 @@ export default function Valuer() {
           <dt>Report</dt>
           <dd>
             <a className="link-mono" href={`/docs/${DOC_NAME}`} target="_blank" rel="noopener noreferrer">
-              View valuation report →
+              View valuation report <ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
             </a>
           </dd>
         </dl>
 
         {anchored ? (
           <div className="stack g3">
-            <span className="chip ok">Valuation anchored ✓</span>
-            <p className="hint" style={{ margin: 0 }}>
+            <span className="chip ok">Valuation anchored <Check size={12} strokeWidth={2} aria-hidden="true" /></span>
+            <p className="hint">
               sha256 <span className="mono">{truncHash(anchoredHash)}</span> · verify it on the Valuation tab. This
               seat is now read-only — the anchor is immutable on-ledger.
             </p>

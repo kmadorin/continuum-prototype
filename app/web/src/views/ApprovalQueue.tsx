@@ -14,7 +14,7 @@
 // SECURITY: read-only polling + action-via-backend. No key material in the browser.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, T, R, DEMO, shortParty, type SubmitResult } from '../lib/useLedger';
+import { useLedger, T, R, DEMO, positionNav, atClearing, shortParty, type SubmitResult } from '../lib/useLedger';
 import { useSession } from '../state/WalletSession';
 import { fmtM, fmtPct } from './shared';
 
@@ -85,32 +85,33 @@ export function usePendingApprovals(): { items: PendingItem[]; refresh: () => vo
         const props = (await L.myAcs(R.execDelegProp)).filter((c) => c.args.party === me);
         return props.map((p) => ({
           ...acceptDelegation(p),
-          terms: [...dealTerms(deal), { label: 'Unit leg you receive', value: `${fmtM(DEMO.unitAmt)} (${DEMO.unit})` }],
+          terms: [...dealTerms(deal), { label: 'Unit leg you receive', value: `${fmtM(DEMO.buyerUnits)} (${DEMO.unit})` }],
         }));
       }
+      // Both LPs leave the old fund — one for cash, one for units — so both queues carry
+      // the same two approvals: the delegation, and the old-fund interest the Close burns.
+      // Only the leg they receive differs.
+      case 'lpExiting':
       case 'lpRolling': {
-        const props = (await L.myAcs(R.execDelegProp)).filter((c) => c.args.party === me);
-        return props.map((p) => ({
-          ...acceptDelegation(p),
-          terms: [...dealTerms(deal), { label: 'Your position', value: `${fmtM(DEMO.interestNav)} NAV — rolled into the new vehicle` }],
-        }));
-      }
-      case 'lpExiting': {
-        const [props, offers] = await Promise.all([
-          L.myAcs(R.execDelegProp),
-          L.myAcs(R.interestOffer),
-        ]);
+        const rolling = role === 'lpRolling';
+        const [props, offers] = await Promise.all([L.myAcs(R.execDelegProp), L.myAcs(R.interestOffer)]);
+        const clearing = deal?.args.clearingPrice != null ? Number(deal.args.clearingPrice) : Number(DEMO.clearingPct);
+        const leg = rolling
+          ? {
+              label: 'Rolled-unit leg you receive',
+              value: `${atClearing(positionNav('lpRolling'), clearing).toLocaleString()} (${DEMO.unit})`,
+            }
+          : { label: 'Cash leg you receive', value: `${fmtM(DEMO.cashAmt)} (${DEMO.usdc})` };
         const out: PendingItem[] = props
           .filter((c) => c.args.party === me)
-          .map((p) => ({
-            ...acceptDelegation(p),
-            terms: [...dealTerms(deal), { label: 'Cash leg you receive', value: `${fmtM(DEMO.cashAmt)} (${DEMO.usdc})` }],
-          }));
+          .map((p) => ({ ...acceptDelegation(p), terms: [...dealTerms(deal), leg] }));
         for (const offer of offers.filter((c) => c.args.lp === me)) {
           out.push({
             id: offer.contractId,
             kind: 'Old-fund interest',
-            title: 'Accept the old-fund interest the Close will burn for your cash',
+            title: rolling
+              ? 'Accept the old-fund interest the Close burns as your rolled units are issued'
+              : 'Accept the old-fund interest the Close will burn for your cash',
             terms: [
               ...dealTerms(deal),
               { label: 'Position NAV', value: fmtM(offer.args.nav) },
@@ -266,7 +267,7 @@ export default function ApprovalQueue() {
           </p>
 
           <div className="actions">
-            <button className="btn" type="button" disabled={busy === item.id} onClick={() => approve(item)}>
+            <button className="btn primary" type="button" disabled={busy === item.id} onClick={() => approve(item)}>
               {busy === item.id ? 'Signing…' : item.approveLabel}
             </button>
             <button className="btn ghost" type="button" disabled={busy === item.id} onClick={() => reject(item.id)}>
