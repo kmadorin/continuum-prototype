@@ -27,7 +27,10 @@ jobs:
           npx vitest run
 
   seam-freeze:
-    if: github.event_name == 'pull_request'
+    # ONLY the designer's branch. The freeze exists to stop a UI redesign from silently
+    # rewiring the backend — a normal backend PR legitimately touches app/custody/**, so
+    # gating every PR would make this fire constantly and train everyone to ignore it.
+    if: github.event_name == 'pull_request' && github.head_ref == 'ui-ux'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
