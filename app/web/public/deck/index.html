@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Continuum&nbsp;— a secure closing room for GP-led continuation deals</title>
+<title>Continuum&nbsp;— a&nbsp;secure closing room for&nbsp;GP-led continuation deals</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,7 +41,8 @@
   #strip { position: absolute; inset: 0; will-change: transform; }
   .slide {
     position: absolute; left: 0; width: 1920px; height: 1080px;
-    padding: 84px 110px 96px;
+    /* uniform frame: top = left = right; bottom a touch deeper for the HUD */
+    padding: 96px 96px 104px;
     display: flex; flex-direction: column;
     overflow: hidden; /* strip layout: a slide must never bleed into its neighbour */
     background:
@@ -150,12 +151,12 @@
   /* mirror table (slide 5) */
   .mirror2 { border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
   .mhead { display: grid; grid-template-columns: 1fr 1fr; }
-  .mhead div { font-family: var(--sans); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; padding: 20px 34px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .mhead div { font-family: var(--sans); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; padding: 16px 30px; border-bottom: 1px solid var(--border); background: var(--panel); }
   .mhead div:first-child { border-right: 1px solid var(--border); }
   .mrow2 { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); background: var(--bg-2); }
   .mrow2:last-child { border-bottom: 0; }
-  .mrow2 .l { padding: 30px 34px; border-right: 1px solid var(--border); font-size: 24px; color: var(--dim); line-height: 1.4; }
-  .mrow2 .r { padding: 30px 34px; font-size: 24px; color: var(--text); line-height: 1.4; }
+  .mrow2 .l { padding: 25px 30px; border-right: 1px solid var(--border); font-size: 24px; color: var(--dim); line-height: 1.4; }
+  .mrow2 .r { padding: 25px 30px; font-size: 24px; color: var(--text); line-height: 1.4; }
   .mrow2 .r b { color: var(--pale); font-weight: 600; }
 
   /* projection diagram (slide 9) */
@@ -271,13 +272,13 @@
 
   /* ---------- flow-field deco (the demo's left-panel background) ---------- */
   .flowfx path, .flowbg path { fill: none; stroke-width: 1.2; }
-  .ff-slow path { stroke: var(--pale); opacity: .11; stroke-dasharray: 340 520; animation: ffdrift-a 17s linear infinite; }
-  .ff-fast path { stroke: var(--primary-strong); opacity: .09; stroke-dasharray: 260 440; animation: ffdrift-b 11s linear infinite; }
+  .ff-slow path { stroke: var(--pale); opacity: .11; stroke-dasharray: 760 420; animation: ffdrift-a 17s linear infinite; }
+  .ff-fast path { stroke: var(--primary-strong); opacity: .09; stroke-dasharray: 620 380; animation: ffdrift-b 11s linear infinite; }
   .ff-slow path:nth-child(2) { animation-delay: -6s; } .ff-slow path:nth-child(3) { animation-delay: -12s; }
   .ff-slow path:nth-child(4) { animation-delay: -18s; } .ff-slow path:nth-child(5) { animation-delay: -23s; }
   .ff-fast path:nth-child(2) { animation-delay: -5s; } .ff-fast path:nth-child(3) { animation-delay: -11s; }
-  @keyframes ffdrift-a { to { stroke-dashoffset: -860; } }
-  @keyframes ffdrift-b { to { stroke-dashoffset: -700; } }
+  @keyframes ffdrift-a { to { stroke-dashoffset: -1180; } }
+  @keyframes ffdrift-b { to { stroke-dashoffset: -1000; } }
   /* cursor spotlight: a brighter copy of the streams under a radial mask */
   .flowfx .ff-hi { opacity: 1; transition: opacity 300ms ease; }
   .flowfx.idle .ff-hi { opacity: 0; transition: opacity 1200ms ease; }
@@ -311,6 +312,17 @@
   @keyframes aur-a { to { transform: translate(340px, -230px) scale(1.32); } }
   @keyframes aur-b { to { transform: translate(-320px, 230px) rotate(14deg) scale(1.22); } }
   @keyframes aur-c { to { transform: translate(-270px, 180px) scale(1.42); } }
+
+  /* KEY slides (solution · demo · how-it-works): a quieter aurora, an accent
+     rule in the head, and a faint indigo sheen across the headline. */
+  .aurora.soft i { opacity: .55; filter: blur(110px); }
+  .slide.key .head .rule { background: linear-gradient(90deg, var(--primary-strong), var(--border) 72%); }
+  .slide.key .eyebrow .n { color: var(--primary-strong); }
+  .slide.key .head .tag { color: var(--pale); }
+  .slide.key h1.lead {
+    background: linear-gradient(102deg, var(--text) 55%, var(--pale) 86%, var(--primary-strong));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
 
   /* ---------- chrome ---------- */
   #progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--primary-strong); width: 0; transition: width .3s ease; z-index: 60; }
@@ -560,12 +572,12 @@
         </span>
       </div>
       <div class="title-mid">
-        <h1 class="title-sub" data-reveal>A secure closing room for GP-led continuation deals</h1>
-        <p class="title-lead" data-reveal>LPs and buyers commit privately, the system computes the close, and cash plus fund interests settle atomically on Canton.</p>
+        <h1 class="title-sub" data-reveal>A&nbsp;secure closing room for&nbsp;GP-led continuation deals</h1>
+        <p class="title-lead" data-reveal>LPs and&nbsp;buyers commit privately, the&nbsp;system computes the&nbsp;close, and&nbsp;cash plus fund interests settle atomically on&nbsp;Canton.</p>
       </div>
       <div class="title-foot" data-reveal>
         <span>Encode Club</span>
-        <span class="canton-lock">Build on <img class="canton-logo" src="shots/canton-logo-white.svg" alt="Canton"></span>
+        <span class="canton-lock">Build on&nbsp;<img class="canton-logo" src="shots/canton-logo-white.svg" alt="Canton"></span>
       </div>
     </div>
   </section>
@@ -573,17 +585,17 @@
   <!-- 2 · THE TRANSACTION -->
   <section class="slide" aria-label="The transaction">
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">02</span> &nbsp;The transaction</p>
+      <p class="eyebrow"><span class="n">02</span> &nbsp;The&nbsp;transaction</p>
       <div class="rule"></div>
       <span class="tag">GP-led continuation deal</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
-      <h1 class="lead" data-reveal>What a continuation deal is</h1>
+      <h1 class="lead" data-reveal>What&nbsp;a&nbsp;continuation deal is</h1>
       <div class="facts" data-reveal>
-        <div class="f"><span class="fn">01</span><span class="ft">A fund is ending; one company is still worth holding.</span></div>
-        <div class="f"><span class="fn">02</span><span class="ft">The GP moves it into a new continuation vehicle.</span></div>
-        <div class="f"><span class="fn">03</span><span class="ft">Each LP elects: take cash now, or roll into the new fund.</span></div>
-        <div class="f"><span class="fn">04</span><span class="ft">A secondary buyer provides fresh capital.</span></div>
+        <div class="f"><span class="fn">01</span><span class="ft">A&nbsp;fund is&nbsp;ending; one&nbsp;company is&nbsp;still&nbsp;worth holding.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">The&nbsp;GP moves it&nbsp;into&nbsp;a&nbsp;new continuation vehicle.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">Each&nbsp;LP elects: take cash now, or&nbsp;roll into&nbsp;the&nbsp;new fund.</span></div>
+        <div class="f"><span class="fn">04</span><span class="ft">A&nbsp;secondary buyer provides fresh capital.</span></div>
       </div>
     </div>
   </section>
@@ -591,34 +603,35 @@
   <!-- 3 · THE CONFLICT -->
   <section class="slide" aria-label="The structural conflict">
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">03</span> &nbsp;The structure</p>
+      <p class="eyebrow"><span class="n">03</span> &nbsp;The&nbsp;structure</p>
       <div class="rule"></div>
       <span class="tag">independent checks</span>
     </div>
     <div class="cols c-5-7" style="align-items:center;">
       <div class="stack" style="gap:32px;">
-        <h1 class="lead" data-reveal>The GP is on both sides</h1>
+        <h1 class="lead" data-reveal>The&nbsp;GP is&nbsp;on&nbsp;both sides</h1>
         <div class="conflict" data-reveal>
           <div class="side"><span class="l">sells</span><span class="v">Old fund</span></div>
           <div class="mid">
             <span class="who">GP</span>
             <svg class="arrflow" viewBox="0 0 130 26" aria-hidden="true">
               <defs><marker id="ah" viewBox="0 0 8 8" refX="4.5" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M1 1 L7 4 L1 7 Z" fill="currentColor"/></marker></defs>
-              <line x1="60" y1="8" x2="10" y2="8" marker-end="url(#ah)"/>
-              <line x1="70" y1="18" x2="120" y2="18" marker-end="url(#ah)"/>
+              <!-- one axis, symmetric about GP: dashes flow OUTWARD into both heads -->
+              <line x1="56" y1="13" x2="12" y2="13" marker-end="url(#ah)"/>
+              <line x1="74" y1="13" x2="118" y2="13" marker-end="url(#ah)"/>
             </svg>
           </div>
           <div class="side r"><span class="l">manages</span><span class="v">New vehicle</span></div>
         </div>
-        <p class="body" data-reveal>The process relies on independent checks so the price and terms don't depend on the conflicted party.</p>
-        <p class="subcap" data-reveal>All four checks run through a process the GP coordinates.</p>
+        <p class="body" data-reveal>The&nbsp;process relies on&nbsp;independent checks so&nbsp;the&nbsp;price and&nbsp;terms don't depend on&nbsp;the&nbsp;conflicted party.</p>
+        <p class="subcap" data-reveal>All four checks run through a&nbsp;process the&nbsp;GP coordinates.</p>
       </div>
       <div class="stack center">
         <div class="checks" data-reveal>
-          <div class="c"><span class="ct">An independent valuer prices the asset</span></div>
-          <div class="c"><span class="ct">A sealed auction discovers the price</span></div>
-          <div class="c"><span class="ct">The LPAC reviews fairness and consents</span></div>
-          <div class="c"><span class="ct">Each LP elects privately</span></div>
+          <div class="c"><span class="ct">An&nbsp;independent valuer prices the&nbsp;asset</span></div>
+          <div class="c"><span class="ct">A&nbsp;sealed auction discovers the&nbsp;price</span></div>
+          <div class="c"><span class="ct">The&nbsp;LPAC reviews fairness and&nbsp;consents</span></div>
+          <div class="c"><span class="ct">Each&nbsp;LP elects privately</span></div>
         </div>
       </div>
     </div>
@@ -627,87 +640,89 @@
   <!-- 4 · THE PROBLEM -->
   <section class="slide" aria-label="The problem">
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">04</span> &nbsp;The problem</p>
+      <p class="eyebrow"><span class="n">04</span> &nbsp;The&nbsp;problem</p>
       <div class="rule"></div>
       <span class="tag">off-ledger today</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
-      <h1 class="lead" data-reveal>Today, integrity depends on the conflicted party</h1>
+      <h1 class="lead" data-reveal>Today, integrity depends on&nbsp;the&nbsp;conflicted party</h1>
       <div class="plist" data-reveal>
-        <div class="prow"><span class="pl">Leakage</span><span class="pd">Sealed bids and LP elections sit in a data room the GP controls.</span></div>
-        <div class="prow"><span class="pl">Partial close</span><span class="pd">The close is separate wires and signatures; one failed leg leaves the deal half-closed.</span></div>
-        <div class="prow"><span class="pl">Unverifiable record</span><span class="pd">The audit trail is reconstructed afterward from emails and PDFs.</span></div>
+        <div class="prow"><span class="pl">Leakage</span><span class="pd">Sealed bids and&nbsp;LP elections sit in&nbsp;a&nbsp;data room the&nbsp;GP controls.</span></div>
+        <div class="prow"><span class="pl">Partial close</span><span class="pd">The&nbsp;close is&nbsp;separate wires and&nbsp;signatures; one&nbsp;failed leg leaves the&nbsp;deal half-closed.</span></div>
+        <div class="prow"><span class="pl">Unverifiable record</span><span class="pd">The&nbsp;audit trail is&nbsp;reconstructed afterward from&nbsp;emails and&nbsp;PDFs.</span></div>
       </div>
-      <p class="subcap" data-reveal>Every check assumes the GP's coordination is neutral.</p>
+      <p class="subcap" data-reveal>Every&nbsp;check assumes the&nbsp;GP's coordination is&nbsp;neutral.</p>
     </div>
   </section>
 
   <!-- 5 · WHAT THE LEDGER CHANGES -->
-  <section class="slide" aria-label="What the ledger changes">
+  <section class="slide key" aria-label="What the ledger changes">
+    <div class="deco aurora soft" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">05</span> &nbsp;The solution</p>
+      <p class="eyebrow"><span class="n">05</span> &nbsp;The&nbsp;solution</p>
       <div class="rule"></div>
-      <span class="tag">the same checks, enforced by the ledger</span>
+      <span class="tag">the&nbsp;same checks, enforced by&nbsp;the&nbsp;ledger</span>
     </div>
-    <div class="stack center" style="flex:1; gap:40px;">
-      <h1 class="lead" data-reveal>The same checks, enforced by the ledger</h1>
+    <div class="stack center" style="flex:1; gap:34px; padding-bottom:44px;">
+      <h1 class="lead" data-reveal>The&nbsp;same checks, enforced by&nbsp;the&nbsp;ledger</h1>
       <div class="mirror2" data-reveal>
-        <div class="mhead"><div>Off-ledger today</div><div>On Canton</div></div>
-        <div class="mrow2"><span class="l">GP-controlled data room</span><span class="r"><b>Per-party privacy</b>&nbsp;— each participant is projected only its own slice, by the ledger, not the app.</span></div>
-        <div class="mrow2"><span class="l">Separate wires and signatures</span><span class="r"><b>One atomic transaction</b>&nbsp;— units, cash, rolled units, burn: all legs or none.</span></div>
-        <div class="mrow2"><span class="l">GP coordinates every step</span><span class="r"><b>Each party signs with its own key</b>&nbsp;— no shared database under the conflicted party.</span></div>
-        <div class="mrow2"><span class="l">Record reconstructed afterward</span><span class="r"><b>Four on-ledger proofs</b>&nbsp;— valuation, fairness, consent, auction certificate; anyone entitled can verify.</span></div>
+        <div class="mhead"><div>Off-ledger today</div><div>On&nbsp;Canton</div></div>
+        <div class="mrow2"><span class="l">GP-controlled data room</span><span class="r"><b>Per-party privacy</b>&nbsp;— each&nbsp;participant is&nbsp;projected only its&nbsp;own slice, by&nbsp;the&nbsp;ledger, not&nbsp;the&nbsp;app.</span></div>
+        <div class="mrow2"><span class="l">Separate wires and&nbsp;signatures</span><span class="r"><b>One&nbsp;atomic transaction</b>&nbsp;— units, cash, rolled units, burn: all legs or&nbsp;none.</span></div>
+        <div class="mrow2"><span class="l">GP coordinates every&nbsp;step</span><span class="r"><b>Each&nbsp;party signs with&nbsp;its&nbsp;own key</b>&nbsp;— no&nbsp;shared database under the&nbsp;conflicted party.</span></div>
+        <div class="mrow2"><span class="l">Record reconstructed afterward</span><span class="r"><b>Four on-ledger proofs</b>&nbsp;— valuation, fairness, consent, auction certificate; anyone entitled can&nbsp;verify.</span></div>
       </div>
-      <p class="subcap" data-reveal>Native to Canton: sub-transaction privacy · atomic settlement · selective disclosure · no central operator.</p>
+      <p class="subcap" data-reveal>Native to&nbsp;Canton: sub-transaction privacy · atomic settlement · selective disclosure · no&nbsp;central operator.</p>
     </div>
   </section>
 
   <!-- 6 · WHAT CONTINUUM DOES -->
   <section class="slide" aria-label="What Continuum does">
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">06</span> &nbsp;The system</p>
+      <p class="eyebrow"><span class="n">06</span> &nbsp;The&nbsp;system</p>
       <div class="rule"></div>
-      <span class="tag">one closing room, on-ledger</span>
+      <span class="tag">one&nbsp;closing room, on-ledger</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
-      <h1 class="lead" data-reveal>One deal, end to end</h1>
+      <h1 class="lead" data-reveal>One&nbsp;deal, end to&nbsp;end</h1>
       <div data-reveal>
         <div class="flow">
-          <div class="fstep"><span class="sn">1</span><p>Open the room&nbsp;— six parties, each with its own key.</p></div>
+          <div class="fstep"><span class="sn">1</span><p>Open the&nbsp;room&nbsp;— six parties, each&nbsp;with&nbsp;its&nbsp;own key.</p></div>
           <div class="fstep"><span class="sn">2</span><p>Valuation anchored on-chain.</p></div>
           <div class="fstep"><span class="sn">3</span><p>Sealed-bid auction, clearing price, certificate.</p></div>
-          <div class="fstep"><span class="sn">4</span><p>LPAC fairness review and consent.</p></div>
-          <div class="fstep"><span class="sn">5</span><p>LP elections&nbsp;— cash or roll.</p></div>
-          <div class="fstep settle"><span class="sn">6</span><p>Atomic close&nbsp;— units, cash, rolled interests settle together, or not at all.</p></div>
+          <div class="fstep"><span class="sn">4</span><p>LPAC fairness review and&nbsp;consent.</p></div>
+          <div class="fstep"><span class="sn">5</span><p>LP elections&nbsp;— cash or&nbsp;roll.</p></div>
+          <div class="fstep settle"><span class="sn">6</span><p>Atomic close&nbsp;— units, cash, rolled interests settle together, or&nbsp;not&nbsp;at&nbsp;all.</p></div>
         </div>
         <svg class="pipeflow" viewBox="0 0 1680 10" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="5" x2="1680" y2="5"/></svg>
       </div>
-      <p class="proofline" data-reveal>The close requires four on-ledger proofs: <b>valuation · fairness · consent · auction certificate</b>.</p>
+      <p class="proofline" data-reveal>The&nbsp;close requires four on-ledger proofs: <b>valuation · fairness · consent · auction certificate</b>.</p>
     </div>
   </section>
 
   <!-- 7 · DEMO -->
-  <section class="slide" aria-label="Demo">
+  <section class="slide key" aria-label="Demo">
+    <div class="deco aurora soft" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="head" data-reveal>
       <p class="eyebrow"><span class="n">07</span> &nbsp;Demo</p>
       <div class="rule"></div>
-      <span class="tag">live on Canton devnet</span>
+      <span class="tag">live on&nbsp;Canton devnet</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
-      <h1 class="lead" data-reveal>Six seats, one atomic close</h1>
+      <h1 class="lead" data-reveal>Six seats, one&nbsp;atomic close</h1>
       <div class="facts" data-reveal>
-        <div class="f"><span class="fn">01</span><span class="ft">The buyer bids sealed; each LP elects privately. The GP's room reads <b>“2 of 2 responded”</b> while its own ledger projection holds <b>zero</b> bids and <b>zero</b> elections&nbsp;— it counts what it cannot read.</span></div>
-        <div class="f"><span class="fn">02</span><span class="ft">Four proofs anchor on-ledger&nbsp;— Kroll's valuation, the fairness opinion, LPAC consent, the auction certificate. The issuance gate will not mint until all four exist.</span></div>
-        <div class="f"><span class="fn">03</span><span class="ft">One <b>Close</b> moves every leg and burns both old-fund interests. The settlement-receipt id is <b>identical in every seat's window</b>&nbsp;— the same on-ledger contract from the same transaction, not six animations.</span></div>
+        <div class="f"><span class="fn">01</span><span class="ft">The&nbsp;buyer bids sealed; each&nbsp;LP elects privately. The&nbsp;GP's room reads <b>“2 of&nbsp;2 responded”</b> while its&nbsp;own ledger projection holds <b>zero</b> bids and&nbsp;<b>zero</b> elections&nbsp;— it&nbsp;counts what&nbsp;it&nbsp;cannot read.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">Four proofs anchor on-ledger&nbsp;— Kroll's valuation, the&nbsp;fairness opinion, LPAC consent, the&nbsp;auction certificate. The&nbsp;issuance gate will&nbsp;not&nbsp;mint until all four exist.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">One&nbsp;<b>Close</b> moves every&nbsp;leg and&nbsp;burns both old-fund interests. The&nbsp;settlement-receipt id is&nbsp;<b>identical in&nbsp;every&nbsp;seat's window</b>&nbsp;— the&nbsp;same on-ledger contract from&nbsp;the&nbsp;same transaction, not&nbsp;six animations.</span></div>
       </div>
-      <p class="demo-note" data-reveal>Watch it yourself: <a class="demo-link" href="/" target="_blank" rel="noopener">continuum-custody.fly.dev&nbsp;↗</a>&nbsp;— sign in as any seat (<span class="m">gp</span>, <span class="m">buyer</span>, <span class="m">lpExiting</span>, <span class="m">lpRolling</span>, <span class="m">lpac</span>, <span class="m">valuer</span> · password <span class="m">&lt;seat&gt;-demo</span>), in as many tabs as you have sides to check.</p>
+      <p class="demo-note" data-reveal>Watch it&nbsp;yourself: <a class="demo-link" href="/" target="_blank" rel="noopener">continuum-custody.fly.dev&nbsp;↗</a>&nbsp;— sign in&nbsp;as&nbsp;any seat (<span class="m">gp</span>, <span class="m">buyer</span>, <span class="m">lpExiting</span>, <span class="m">lpRolling</span>, <span class="m">lpac</span>, <span class="m">valuer</span> · password <span class="m">&lt;seat&gt;-demo</span>), in&nbsp;as&nbsp;many tabs as&nbsp;you have&nbsp;sides to&nbsp;check.</p>
     </div>
   </section>
 
   <!-- 8 · THE PRODUCT (screenshots) -->
   <section class="slide" aria-label="The product">
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">08</span> &nbsp;The product</p>
+      <p class="eyebrow"><span class="n">08</span> &nbsp;The&nbsp;product</p>
       <div class="rule"></div>
       <span class="tag">continuum-custody.fly.dev</span>
     </div>
@@ -716,37 +731,38 @@
         <figure class="shot grow" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · GP</span></div>
           <img src="shots/workspace.webp" loading="lazy" decoding="async" alt="Continuum GP workspace&nbsp;— the closing room: stepper, KPIs, participants and per-party visibility">
-          <figcaption>The GP's closing room&nbsp;— lifecycle, live KPIs, and per-party visibility enforced by the ledger.</figcaption>
+          <figcaption>The&nbsp;GP's closing room&nbsp;— lifecycle, live KPIs, and&nbsp;per-party visibility enforced by&nbsp;the&nbsp;ledger.</figcaption>
         </figure>
       </div>
       <div class="col">
         <figure class="shot" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev</span></div>
           <img src="shots/signin.webp" loading="lazy" decoding="async" alt="Continuum seat picker&nbsp;— six seats, each signing through its own custodian">
-          <figcaption>Six seats&nbsp;— each signs through its own custodian.</figcaption>
+          <figcaption>Six seats&nbsp;— each&nbsp;signs through its&nbsp;own custodian.</figcaption>
         </figure>
         <figure class="shot grow" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · buyer</span></div>
           <img src="shots/buyer.webp" loading="lazy" decoding="async" alt="Buyer seat&nbsp;— sealed bid, blind to every other buyer">
-          <figcaption>The buyer files a sealed bid&nbsp;— blind to every other buyer.</figcaption>
+          <figcaption>The&nbsp;buyer files a&nbsp;sealed bid&nbsp;— blind to&nbsp;every&nbsp;other buyer.</figcaption>
         </figure>
       </div>
     </div>
   </section>
 
   <!-- 9 · HOW IT WORKS -->
-  <section class="slide" aria-label="How it works">
+  <section class="slide key" aria-label="How it works">
+    <div class="deco aurora soft" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="head" data-reveal>
-      <p class="eyebrow"><span class="n">09</span> &nbsp;How it works</p>
+      <p class="eyebrow"><span class="n">09</span> &nbsp;How&nbsp;it&nbsp;works</p>
       <div class="rule"></div>
-      <span class="tag">one transaction, six views</span>
+      <span class="tag">one&nbsp;transaction, six views</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
     <div class="proj">
       <div class="proj-col left" data-reveal>
         <div class="pnode"><span class="pr">GP</span><span class="pl"><span class="k">sees</span>deal state, proofs</span><span class="pl"><span class="k">not</span>sealed bids, elections before close</span></div>
-        <div class="pnode"><span class="pr">Valuer</span><span class="pl"><span class="k">sees</span>its valuation, anchor hash</span><span class="pl"><span class="k">not</span>bids, elections</span></div>
-        <div class="pnode"><span class="pr">LPAC</span><span class="pl"><span class="k">sees</span>scoped fairness view</span><span class="pl"><span class="k">not</span>the whole book</span></div>
+        <div class="pnode"><span class="pr">Valuer</span><span class="pl"><span class="k">sees</span>its&nbsp;valuation, anchor hash</span><span class="pl"><span class="k">not</span>bids, elections</span></div>
+        <div class="pnode"><span class="pr">LPAC</span><span class="pl"><span class="k">sees</span>scoped fairness view</span><span class="pl"><span class="k">not</span>the&nbsp;whole book</span></div>
       </div>
       <div class="pcenter" data-reveal>
         <svg class="orbits" viewBox="0 0 1200 1200" aria-hidden="true">
@@ -764,12 +780,12 @@
             <circle class="odot" cx="600" cy="1130" r="4" opacity="0.4"/>
           </g>
         </svg>
-        <div class="core"><span class="cl">one transaction</span><span class="cb">Atomic Close</span><span class="cs">all legs, or none</span></div>
+        <div class="core"><span class="cl">one&nbsp;transaction</span><span class="cb">Atomic Close</span><span class="cs">all legs, or&nbsp;none</span></div>
       </div>
       <div class="proj-col right" data-reveal>
-        <div class="pnode"><span class="pr">Buyer</span><span class="pl"><span class="k">sees</span>its own bid, clearing price</span><span class="pl"><span class="k">not</span>other bids, elections</span></div>
-        <div class="pnode"><span class="pr">Exiting LP</span><span class="pl"><span class="k">sees</span>its election, its cash leg</span><span class="pl"><span class="k">not</span>other LPs</span></div>
-        <div class="pnode"><span class="pr">Rolling LP</span><span class="pl"><span class="k">sees</span>its election, its units</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+        <div class="pnode"><span class="pr">Buyer</span><span class="pl"><span class="k">sees</span>its&nbsp;own bid, clearing price</span><span class="pl"><span class="k">not</span>other bids, elections</span></div>
+        <div class="pnode"><span class="pr">Exiting LP</span><span class="pl"><span class="k">sees</span>its&nbsp;election, its&nbsp;cash leg</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+        <div class="pnode"><span class="pr">Rolling LP</span><span class="pl"><span class="k">sees</span>its&nbsp;election, its&nbsp;units</span><span class="pl"><span class="k">not</span>other LPs</span></div>
       </div>
     </div>
     <div class="legsrow" data-reveal aria-label="The legs of the close">
@@ -779,7 +795,7 @@
       <div class="lr"><span class="lv">2×</span><span class="ll">old-fund interests burned</span></div>
       <div class="lr sum"><span class="lv">= $480M</span><span class="ll">units issued ≡ PSA price · asserted on-ledger</span></div>
     </div>
-    <p class="projcap" data-reveal>Visibility is enforced by the ledger, not by the application.</p>
+    <p class="projcap" data-reveal>Visibility is&nbsp;enforced by&nbsp;the&nbsp;ledger, not&nbsp;by&nbsp;the&nbsp;application.</p>
     </div>
   </section>
 
@@ -791,13 +807,13 @@
       <span class="tag">same closing room, different deal type</span>
     </div>
     <div class="stack center" style="flex:1; gap:44px;">
-      <h1 class="lead" data-reveal>A general engine for multi-party corporate actions</h1>
+      <h1 class="lead" data-reveal>A&nbsp;general engine for&nbsp;multi-party corporate actions</h1>
       <div class="plist" data-reveal>
-        <div class="prow"><span class="pl">Fund liquidation</span><span class="pd">A wind-down settles the same way&nbsp;— assets out, cash to LPs, all or none.</span></div>
-        <div class="prow"><span class="pl">NAV fund-finance closes</span><span class="pd">Multiple lenders commit tranches privately; the drawdown settles atomically.</span></div>
-        <div class="prow"><span class="pl">Tender offers, block crossings</span><span class="pd">Sealed offers and private elections, settled in one transaction.</span></div>
+        <div class="prow"><span class="pl">Fund liquidation</span><span class="pd">A&nbsp;wind-down settles the&nbsp;same way&nbsp;— assets out, cash to&nbsp;LPs, all or&nbsp;none.</span></div>
+        <div class="prow"><span class="pl">NAV fund-finance closes</span><span class="pd">Multiple lenders commit tranches privately; the&nbsp;drawdown settles atomically.</span></div>
+        <div class="prow"><span class="pl">Tender offers, block crossings</span><span class="pd">Sealed offers and&nbsp;private elections, settled in&nbsp;one&nbsp;transaction.</span></div>
       </div>
-      <p class="subcap" data-reveal>Continuation deals are the wedge; the pattern is the same each time.</p>
+      <p class="subcap" data-reveal>Continuation deals are&nbsp;the&nbsp;wedge; the&nbsp;pattern is&nbsp;the&nbsp;same each&nbsp;time.</p>
     </div>
   </section>
 
@@ -818,7 +834,7 @@
     <div class="head" data-reveal>
       <p class="eyebrow"><span class="n">11</span> &nbsp;Team</p>
       <div class="rule"></div>
-      <span class="tag">who built it</span>
+      <span class="tag">who&nbsp;built it</span>
     </div>
     <div class="team-wrap">
       <div class="team-group" data-reveal>
@@ -852,7 +868,7 @@
           </span>
           <div>
             <p class="a-role">Kenji Watanabe</p>
-            <p class="a-sub">Advisor · Partner at a venture fund</p>
+            <p class="a-sub">Advisor · Partner at&nbsp;a&nbsp;venture fund</p>
           </div>
         </div>
       </div>
@@ -886,7 +902,7 @@
       </div>
       <div class="title-mid">
         <h1 class="title-sub" data-reveal>Thank you</h1>
-        <p class="title-lead" data-reveal>A secure closing room for GP-led continuation deals&nbsp;— private commitments, four on-ledger proofs, one atomic close on Canton.</p>
+        <p class="title-lead" data-reveal>A&nbsp;secure closing room for&nbsp;GP-led continuation deals&nbsp;— private commitments, four on-ledger proofs, one&nbsp;atomic close on&nbsp;Canton.</p>
       </div>
       <div class="thanks-foot">
         <div class="contacts" data-reveal>
