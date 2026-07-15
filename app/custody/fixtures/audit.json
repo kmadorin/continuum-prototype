@@ -1,0 +1,93 @@
+[
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "valuer",
+    "custodianName": "Kroll Valuation Services",
+    "party": "continuum-valuer-mock::12209e995d09b72530f1a67c87bbe7024fedf5a479f082f2f16dbce4a3a1a312a59d",
+    "keyFingerprint": "12209e995d09b72530f1a67c87bbe7024fedf5a479f082f2f16dbce4a3a1a312a59d",
+    "updateId": "122026da67bbbfb221a287a909fe82330014561f3c7cd085e5e020d6826d9d3659e3",
+    "action": "create ValuationReport",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "lpac",
+    "custodianName": "State Street Digital — LPAC",
+    "party": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+    "keyFingerprint": "12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+    "updateId": "12209a3581c842b1b4efc41e5e0737ade7c85822cba260b0cf86b33baf6169ab8101",
+    "action": "create FairnessOpinion",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "lpac",
+    "custodianName": "State Street Digital — LPAC",
+    "party": "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+    "keyFingerprint": "12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
+    "updateId": "122067ff0781e7546a72a78760e61bb8e1bfa0e54c1b1059a88951222d12044e1877",
+    "action": "RecordConsent",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "gp",
+    "custodianName": "Fireblocks — GP Treasury",
+    "party": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "keyFingerprint": "1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "updateId": "122040793b99d60693f5ee9e0b0707f867ec8e823c12e61cf3c6f8f555d678da43d7",
+    "action": "SetClearing",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "buyer",
+    "custodianName": "Copper — Northbeam Secondaries",
+    "party": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+    "keyFingerprint": "1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+    "updateId": "1220f402250f95ff110dd582ae2aa0176248fb0eb2dd951542951609506e9e2b05a9",
+    "action": "create SealedBid",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "lpExiting",
+    "custodianName": "Northgate Trust — Calder Family Office",
+    "party": "continuum-lpExiting-mock::1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+    "keyFingerprint": "1220445ebb4499ef2f118cca6d83e36d02265ea27df8c217390dbfbc3ce76b4fd5dc",
+    "updateId": "12207b1a982146e50382e35a0c235bd82f286bcf7a7ff89c4f0f4690bb1a6869dcff",
+    "action": "create LPElection",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "gp",
+    "custodianName": "Fireblocks — GP Treasury",
+    "party": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "keyFingerprint": "1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "updateId": "1220a1c6ee6a4fa904d071502be284f7b63b50ef1973cea8f43c79e007015158694e",
+    "action": "AllocationFactory_Allocate (unit-buyer)",
+    "outcome": "signed"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "buyer",
+    "custodianName": "Copper — Northbeam Secondaries",
+    "party": "continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+    "keyFingerprint": "1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8",
+    "updateId": "1220ab1b1e250e91d99d0d81121d9080d1471536f5ff3f9d3b48266426c43de95799",
+    "action": "refused cross-party sign",
+    "outcome": "failed",
+    "error": "refused: session party continuum-buyer-mock::1220b982c704c853a6497721ad46bd15bbb68bb46123603e380b1ffe26ccd3d5abd8 cannot act as another party"
+  },
+  {
+    "ts": "2026-07-15T09:00:00Z",
+    "username": "gp",
+    "custodianName": "Fireblocks — GP Treasury",
+    "party": "continuum-gp-mock::1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "keyFingerprint": "1220ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b3a58eea33ecf134e",
+    "updateId": "1220f2f1c8114e1d354673bde9f0cddbff177794265cf59cea6b5222e02d67e825b9",
+    "action": "Close",
+    "outcome": "signed"
+  }
+]
