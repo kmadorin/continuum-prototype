@@ -65,8 +65,22 @@ const RUN = Date.now();
 const CV = `Meridian CV I ${RUN}`;
 const DEAL_ID = 'M1';
 // $500M institutional scale — matches the Kroll valuation report ($500M NAV, $480–520M range).
+//
+// THE CAP TABLE (kept identical to web/src/lib/useLedger.ts DEMO — this script is the
+// headless proof of the SAME close the UI performs, so the two must not drift again).
+// The LP base is two positions summing to refNav, the identity Clearing.daml states
+// (refNav = rollNav + sellNav): the exiting LP holds $300M and sells, the rolling LP holds
+// $200M and rolls. Every figure below derives from that, so no seat is paid a number its
+// screen did not promise.
 const clearingPct = '0.96', refNav = '500000000.0', reconciledNav = '500000000.0';
-const psaPrice = '480000000.0', unitAmt = '480000000.0', cashAmt = '460800000.0', interestNav = '100000000.0';
+const psaPrice = '480000000.0';
+const exitingNav = '300000000.0'; // the exiting LP's stake — sells
+const rollingNav = '200000000.0'; // the rolling LP's stake — rolls
+// The three legs. Deal.daml's Close asserts `unitTotal == basis.psaPrice` on-ledger, so the
+// two UNIT legs must sum to psaPrice: 288M + 192M = 480M.
+const buyerUnits = '288000000.0'; // 96% × 300M — the buyer funds the cash paid to the seller
+const rollerUnits = '192000000.0'; // 96% × 200M — the roller's stake, repriced into CV units
+const cashAmt = '288000000.0'; // 96% × 300M — proceeds to the exiting LP
 const fairnessHash = 'continuum-fairness-v1', contentHash = 'deadbeef';
 const NOW = new Date().toISOString(), CLOSE_DATE = '2026-06-30', ELECTION_DEADLINE = '2026-12-31T00:00:00Z';
 const USDC = 'USDC', UNIT = 'MERIDIAN-CV-I';
@@ -85,8 +99,11 @@ async function main() {
 
   // ── onboard 4 external wallets, each its own key ────────────────────────────
   const W: Record<string, Wallet> = {};
-  // 6 wallets now: the independent VALUER (Kroll) signs the ValuationReport (agent ≠ gp ≠ lpac).
-  for (const role of ['gp', 'buyer', 'lpExiting', 'lpac', 'valuer']) {
+  // 6 wallets: the independent VALUER (Kroll) signs the ValuationReport (agent ≠ gp ≠ lpac),
+  // and the ROLLING LP is a first-class counterparty — it accepts a delegation and an old-fund
+  // interest, and receives its own repriced unit leg. Rolling out of the old fund is still
+  // leaving the old fund, so its interest burns in the same atomic Close as the seller's.
+  for (const role of ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac', 'valuer']) {
     console.log(`onboarding ${role}...`);
     const mnemonic = generateMnemonic();
     const key = keyFromMnemonic(mnemonic);
@@ -94,12 +111,12 @@ async function main() {
     W[role] = { party: partyId, key, fp: fingerprint, mnemonic };
     console.log(`  ${role} = ${partyId}`);
   }
-  const gp = W.gp.party, buyer = W.buyer.party, lp = W.lpExiting.party, lpac = W.lpac.party, valuer = W.valuer.party;
+  const gp = W.gp.party, buyer = W.buyer.party, lp = W.lpExiting.party, roller = W.lpRolling.party, lpac = W.lpac.party, valuer = W.valuer.party;
 
   // ── SECURITY: party ids → public registry; keys → gitignored file (never commit) ──
   writeFileSync(new URL('../party-registry.json', import.meta.url),
     JSON.stringify({ namespace: NS, synchronizerId: sync, packageName: 'continuum-contracts',
-      parties: { gp, buyer, lpExiting: lp, lpac, valuer } }, null, 2));
+      parties: { gp, buyer, lpExiting: lp, lpRolling: roller, lpac, valuer } }, null, 2));
   const keysPath = new URL('../wallet-keys.json', import.meta.url);
   const ignored = execSync('git check-ignore app/wallet-keys.json || true', { cwd: `${process.cwd()}/..` }).toString().trim();
   if (!ignored.endsWith('wallet-keys.json')) throw new Error('REFUSING to write keys: app/wallet-keys.json is NOT gitignored');
@@ -131,7 +148,7 @@ async function main() {
 
   // ── deal Setup → Electing (gp signs SetClearing/OpenElections; LPAC signs RecordConsent) ──
   let dealCid = await act('gp', 'create deal', [{ CreateCommand: { templateId: T.deal, createArguments: {
-    gp, vehicle: gp, oldFund: gp, lpac, regulator: lpac, room: [buyer, lp],
+    gp, vehicle: gp, oldFund: gp, lpac, regulator: lpac, room: [buyer, lp, roller],
     fund: 'Meridian Growth Fund III', cv: CV, asset: 'Project Atlas', refNav,
     electionDeadline: ELECTION_DEADLINE, clearingPrice: null, gpCommitment: '0.0', carryCrystallized: '0.0', stage: 'Setup' } } }],
     T.deal, gp, (a: any) => a.args.cv === CV);
@@ -145,7 +162,9 @@ async function main() {
   // ── visible per-role economic decisions: buyer signs a real SealedBid, lp a real LPElection ──
   console.log('\n--- per-role signed economic decisions ---');
   await act('buyer', 'SealedBid', [{ CreateCommand: { templateId: T.sealedBid, createArguments: { gp, buyer, dealId: DEAL_ID, pctOfNav: clearingPct, capacity: '600000000.0' } } }], T.sealedBid, buyer, (a: any) => a.args.buyer === buyer);
-  await act('lpExiting', 'LPElection(sell)', [{ CreateCommand: { templateId: T.election, createArguments: { lp, dealId: DEAL_ID, positionNav: interestNav, rollNav: '0.0', sellNav: interestNav, disclosureHash: contentHash } } }], T.election, lp, (a: any) => a.args.lp === lp);
+  // Two elections that compose: sellNav + rollNav = refNav (Clearing.daml's identity).
+  await act('lpExiting', 'LPElection(sell)', [{ CreateCommand: { templateId: T.election, createArguments: { lp, dealId: DEAL_ID, positionNav: exitingNav, rollNav: '0.0', sellNav: exitingNav, disclosureHash: contentHash } } }], T.election, lp, (a: any) => a.args.lp === lp);
+  await act('lpRolling', 'LPElection(roll)', [{ CreateCommand: { templateId: T.election, createArguments: { lp: roller, dealId: DEAL_ID, positionNav: rollingNav, rollNav: rollingNav, sellNav: '0.0', disclosureHash: contentHash } } }], T.election, roller, (a: any) => a.args.lp === roller);
 
   // ── antecedent DAG (lpac signs valuation/fairness/consent; gp signs cert/psa/basis) ──
   console.log('\n--- antecedent DAG + IssuanceBasis ---');
@@ -169,7 +188,10 @@ async function main() {
   };
   // PROVENANCE: the CV-units mint carries the on-chain link Holding → valuation + issuance basis.
   const mintMeta = { 'continuum/valuation-sha256': VALUATION_SHA256, 'continuum/issuance-basis': basisCid };
-  const allocUnitCid = await allocateLeg(buyer, UNIT, unitAmt, 'unit-buyer', mintMeta);
+  // THREE legs. The two UNIT legs sum to psaPrice (288M + 192M = 480M), which Deal.daml's
+  // Close asserts on-ledger — conservation is checked against the deal price, not the NAV.
+  const allocUnitCid = await allocateLeg(buyer, UNIT, buyerUnits, 'unit-buyer', mintMeta);
+  const allocRollCid = await allocateLeg(roller, UNIT, rollerUnits, 'unit-roller', mintMeta);
   const allocCashCid = await allocateLeg(lp, USDC, cashAmt, 'cash-lp');
 
   // ── authority via PROPOSE-ACCEPT (each acceptor signs with its OWN key) ─────
@@ -180,21 +202,44 @@ async function main() {
   // ExecDelegation(lp): gp proposes, lp accepts
   const edpLp = await act('gp', 'ExecDelegProp(lp)', [{ CreateCommand: { templateId: T.execDelegProp, createArguments: { admin: gp, party: lp } } }], T.execDelegProp, lp, (a: any) => a.args.party === lp);
   const execLpCid = await act('lpExiting', 'EDP_Accept(lp)', [{ ExerciseCommand: { templateId: T.execDelegProp, contractId: edpLp, choice: 'EDP_Accept', choiceArgument: {} } }], T.execDeleg, lp, (a: any) => a.args.party === lp);
+  // ExecDelegation(roller): gp proposes, the rolling LP accepts — it executes a leg too.
+  const edpRoller = await act('gp', 'ExecDelegProp(roller)', [{ CreateCommand: { templateId: T.execDelegProp, createArguments: { admin: gp, party: roller } } }], T.execDelegProp, roller, (a: any) => a.args.party === roller);
+  const execRollerCid = await act('lpRolling', 'EDP_Accept(roller)', [{ ExerciseCommand: { templateId: T.execDelegProp, contractId: edpRoller, choice: 'EDP_Accept', choiceArgument: {} } }], T.execDeleg, roller, (a: any) => a.args.party === roller);
   // OldFundInterest(lp): gp offers, lp accepts
-  const oiOffer = await act('gp', 'OFI_Offer(lp)', [{ CreateCommand: { templateId: T.interestOffer, createArguments: { oldFund: gp, lp, nav: interestNav } } }], T.interestOffer, lp, (a: any) => a.args.lp === lp);
+  const oiOffer = await act('gp', 'OFI_Offer(lp)', [{ CreateCommand: { templateId: T.interestOffer, createArguments: { oldFund: gp, lp, nav: exitingNav } } }], T.interestOffer, lp, (a: any) => a.args.lp === lp);
   const interestLpCid = await act('lpExiting', 'OFI_Accept(lp)', [{ ExerciseCommand: { templateId: T.interestOffer, contractId: oiOffer, choice: 'OFI_Accept', choiceArgument: {} } }], T.interest, lp, (a: any) => a.args.lp === lp);
+  // OldFundInterest(roller): the roller holds an old-fund position too — rolling out of the
+  // old fund is still LEAVING the old fund, so this burns in the same atomic Close.
+  const oiOfferRoller = await act('gp', 'OFI_Offer(roller)', [{ CreateCommand: { templateId: T.interestOffer, createArguments: { oldFund: gp, lp: roller, nav: rollingNav } } }], T.interestOffer, roller, (a: any) => a.args.lp === roller);
+  const interestRollerCid = await act('lpRolling', 'OFI_Accept(roller)', [{ ExerciseCommand: { templateId: T.interestOffer, contractId: oiOfferRoller, choice: 'OFI_Accept', choiceArgument: {} } }], T.interest, roller, (a: any) => a.args.lp === roller);
   // AcceptedParticipation: lp proposes DealParticipation, gp accepts
   const dealPart = await act('lpExiting', 'DealParticipation', [{ CreateCommand: { templateId: T.dealPart, createArguments: { gp, lp } } }], T.dealPart, gp, (a: any) => a.args.lp === lp);
   const accLpCid = await act('gp', 'Accept participation', [{ ExerciseCommand: { templateId: T.dealPart, contractId: dealPart, choice: 'Accept', choiceArgument: {} } }], T.accPart, gp, (a: any) => a.args.lp === lp);
+  const dealPartRoller = await act('lpRolling', 'DealParticipation(roller)', [{ CreateCommand: { templateId: T.dealPart, createArguments: { gp, lp: roller } } }], T.dealPart, gp, (a: any) => a.args.lp === roller);
+  const accRollerCid = await act('gp', 'Accept participation(roller)', [{ ExerciseCommand: { templateId: T.dealPart, contractId: dealPartRoller, choice: 'Accept', choiceArgument: {} } }], T.accPart, gp, (a: any) => a.args.lp === roller);
 
   // ── balances before ─────────────────────────────────────────────────────────
   const bal = async (owner: string, instId: string) => (await reads.activeContracts(gp, { templateId: 'Registry:RegistryHolding' })).filter(a => a.args.owner === owner && a.args.instId === instId).reduce((s, a) => s + Number(a.args.amount), 0);
-  const buyerUnitsBefore = await bal(buyer, UNIT), lpCashBefore = await bal(lp, USDC);
+  const buyerUnitsBefore = await bal(buyer, UNIT), lpCashBefore = await bal(lp, USDC), rollerUnitsBefore = await bal(roller, UNIT);
   const receiptsBefore = new Set((await reads.activeContracts(gp, { templateId: 'Continuum.Deal:SettlementReceipt' })).map(a => a.contractId));
 
   // ── THE ATOMIC CLOSE — gp signs alone, consuming all pre-signed authority ────
+  // Three legs (buyer units, rolled units, seller cash) and TWO burns — both LPs leave the
+  // old fund. One transaction: either every seat settles or none does.
   console.log('\n--- Deal.Close (gp signs alone; one atomic tx) ---');
-  const closeArg = { basisCid, legExecs: [{ _1: execBuyerCid, _2: allocUnitCid }, { _1: execLpCid, _2: allocCashCid }], burns: [{ _1: accLpCid, _2: interestLpCid }], fairnessHash };
+  const closeArg = {
+    basisCid,
+    legExecs: [
+      { _1: execBuyerCid, _2: allocUnitCid },
+      { _1: execRollerCid, _2: allocRollCid },
+      { _1: execLpCid, _2: allocCashCid },
+    ],
+    burns: [
+      { _1: accLpCid, _2: interestLpCid },
+      { _1: accRollerCid, _2: interestRollerCid },
+    ],
+    fairnessHash,
+  };
   const closeRes = await wallet.submitSigned(W.gp.party, W.gp.key, W.gp.fp, [{ ExerciseCommand: { templateId: T.deal, contractId: dealCid, choice: 'Close', choiceArgument: closeArg } }]);
   console.log(`  >>> CLOSE updateId = ${closeRes.updateId ?? '(async — polling)'}`);
 
@@ -204,8 +249,10 @@ async function main() {
     const rs = (await reads.activeContracts(gp, { templateId: 'Continuum.Deal:SettlementReceipt' })).filter(a => !receiptsBefore.has(a.contractId) && a.args.dealId === CV);
     if (rs.length) receiptCid = rs[0].contractId; else await new Promise(r => setTimeout(r, 700));
   }
-  const buyerUnitsAfter = await bal(buyer, UNIT), lpCashAfter = await bal(lp, USDC);
-  const interestsLeft = (await reads.activeContracts(gp, { templateId: 'Participation:OldFundInterest' })).filter(a => a.contractId === interestLpCid).length;
+  const buyerUnitsAfter = await bal(buyer, UNIT), lpCashAfter = await bal(lp, USDC), rollerUnitsAfter = await bal(roller, UNIT);
+  // BOTH old-fund interests must be gone — the roller left the old fund too.
+  const liveInterests = (await reads.activeContracts(gp, { templateId: 'Participation:OldFundInterest' })).map(a => a.contractId);
+  const interestsLeft = liveInterests.filter(cid => cid === interestLpCid || cid === interestRollerCid).length;
 
   // PROVENANCE proof: the buyer's settled CV-units holding carries the valuation link in meta_.
   const buyerUnitHolding = (await reads.activeContracts(gp, { templateId: 'Registry:RegistryHolding' }))
@@ -215,14 +262,25 @@ async function main() {
   console.log('\n=== RESULT ===');
   console.log(`Close updateId    : ${closeRes.updateId}`);
   console.log(`SettlementReceipt : ${receiptCid || 'NOT FOUND'}`);
-  console.log(`buyer CV units    : ${buyerUnitsBefore} → ${buyerUnitsAfter} (Δ ${buyerUnitsAfter - buyerUnitsBefore})`);
-  console.log(`lp   USDC         : ${lpCashBefore} → ${lpCashAfter} (Δ ${lpCashAfter - lpCashBefore})`);
-  console.log(`lp   OldFundInt   : ${interestsLeft === 0 ? 'BURNED' : 'STILL PRESENT'}`);
+  console.log(`buyer CV units    : ${buyerUnitsBefore} → ${buyerUnitsAfter} (Δ ${buyerUnitsAfter - buyerUnitsBefore})  [expect +${buyerUnits}]`);
+  console.log(`roller CV units   : ${rollerUnitsBefore} → ${rollerUnitsAfter} (Δ ${rollerUnitsAfter - rollerUnitsBefore})  [expect +${rollerUnits}]`);
+  console.log(`lp   USDC         : ${lpCashBefore} → ${lpCashAfter} (Δ ${lpCashAfter - lpCashBefore})  [expect +${cashAmt}]`);
+  console.log(`OldFundInterests  : ${interestsLeft === 0 ? 'BOTH BURNED' : `${interestsLeft} STILL PRESENT`}`);
+  console.log(`units issued      : ${(buyerUnitsAfter - buyerUnitsBefore) + (rollerUnitsAfter - rollerUnitsBefore)} (must equal psaPrice ${psaPrice} — Close asserts this on-ledger)`);
   console.log(`ValuationReport   : signed by VALUER ${valuer.split('::')[0]} · contentHash ${VALUATION_SHA256.slice(0, 12)}…`);
   console.log(`mint meta_        : ${JSON.stringify(mintedMeta)}`);
   const metaOk = mintedMeta['continuum/valuation-sha256'] === VALUATION_SHA256 && !!mintedMeta['continuum/issuance-basis'];
-  const ok = receiptCid && (buyerUnitsAfter - buyerUnitsBefore === Number(unitAmt)) && (lpCashAfter - lpCashBefore === Number(cashAmt)) && interestsLeft === 0 && metaOk;
-  if (!ok) throw new Error(`atomic movement assertion FAILED (metaOk=${metaOk})`);
-  console.log('\n✅ FULL WALLET CLOSE PROVEN: every authority signed by its own party key; atomic close in ONE updateId.');
+  const unitsIssued = (buyerUnitsAfter - buyerUnitsBefore) + (rollerUnitsAfter - rollerUnitsBefore);
+  const ok = receiptCid
+    && (buyerUnitsAfter - buyerUnitsBefore === Number(buyerUnits))
+    && (rollerUnitsAfter - rollerUnitsBefore === Number(rollerUnits))
+    && (lpCashAfter - lpCashBefore === Number(cashAmt))
+    && unitsIssued === Number(psaPrice) // the conservation identity Close asserts on-ledger
+    && interestsLeft === 0
+    && metaOk;
+  if (!ok) throw new Error(`atomic movement assertion FAILED (metaOk=${metaOk}, unitsIssued=${unitsIssued})`);
+  console.log('\n✅ FULL WALLET CLOSE PROVEN: every authority signed by its own party key; three legs +');
+  console.log('   two burns in ONE atomic updateId; units issued == PSA price; every seat paid what');
+  console.log('   its screen promised (the cap table composes: 300M sells + 200M rolls = 500M NAV).');
 }
 main().catch(e => { console.error('\n❌ FAILED:', e?.message ?? e); process.exit(1); });
