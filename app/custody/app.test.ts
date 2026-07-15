@@ -390,4 +390,34 @@ describe('valuation auto-seed', () => {
     await app.request('/demo/reset', { method: 'POST' });
     expect(submitSigned).not.toHaveBeenCalled();
   });
+
+  // REGRESSION (prod grew three ValuationReports): seedDeps' fake Reader ignores
+  // opts.templateId, so it could never catch a bad filter. The REAL HttpLedgerClient
+  // matches with `templateId.endsWith(opts.templateId)` against package-HASH ids like
+  // 'b51d78dc…:Continuum.Valuation:ValuationReport' — which never end with the
+  // '#continuum-contracts:…' package-NAME form used to submit. Filtering by that form
+  // matched nothing, so every boot re-seeded a duplicate. This Reader filters for real.
+  it('is idempotent against a ledger returning package-HASH templateIds (not the #package-name form)', async () => {
+    const LEDGER_TEMPLATE_ID =
+      'b51d78dca1a3fd6233117b8c397fc14e5811e28de1478bd6a56a634bfec98a1a:Continuum.Valuation:ValuationReport';
+    const rows = [{ contractId: 'v1', templateId: LEDGER_TEMPLATE_ID, args: { dealId: 'M2' } }];
+    const submitSigned = vi.fn(async () => ({ updateId: 'seed-tx' }));
+    const activeContracts = vi.fn(async (_party: string, opts?: { templateId?: string }) =>
+      rows
+        .filter((r) => !opts?.templateId || r.templateId.endsWith(opts.templateId))
+        .map(({ templateId: _t, ...rest }) => rest),
+    );
+    const app = createApp({
+      tenants: tenantsFromRecords(SEED_RECORDS),
+      signer: { submitSigned },
+      reads: { activeContracts },
+      sessionSecret: SECRET,
+      ledgerBase: 'https://ledger.example',
+      token: async () => 'M2M-TOKEN',
+      docsRoot: DOCS_ROOT,
+    });
+
+    await app.request('/demo/reset', { method: 'POST' });
+    expect(submitSigned).not.toHaveBeenCalled();
+  });
 });
