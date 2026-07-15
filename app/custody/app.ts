@@ -153,6 +153,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.map': 'application/json; charset=utf-8',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
 };
 
 export function createApp(deps: AppDeps) {
@@ -549,7 +551,12 @@ export function createApp(deps: AppDeps) {
     };
     app.get('/*', (c) => {
       const pathname = decodeURIComponent(new URL(c.req.url).pathname);
-      const candidate = normalize(join(root, pathname === '/' ? '/index.html' : pathname));
+      let candidate = normalize(join(root, pathname === '/' ? '/index.html' : pathname));
+      // Directory URLs resolve to their index.html — this is how the pitch deck is
+      // served at the clean /deck/ path (dist/deck/index.html, no .html in the URL).
+      if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isDirectory()) {
+        candidate = join(candidate, 'index.html');
+      }
       if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isFile()) {
         return serveFile(c, candidate);
       }

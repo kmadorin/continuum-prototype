@@ -20,9 +20,23 @@ const backend = { target: CUSTODY, changeOrigin: true }
 // on-ledger sha256 check (Valuation + Documents tabs).
 const ROUTES = ['/api', '/auth', '/action', '/registry', '/me', '/audit', '/ledger', '/docs', '/verify']
 
+// The pitch deck lives in public/deck/ and is reachable at the clean /deck/ URL.
+// Vite's SPA fallback would otherwise swallow the directory path — rewrite it to
+// the real file before the html middleware runs (prod: custody spine does this).
+const deckCleanUrl = () => ({
+  name: 'deck-clean-url',
+  configureServer(server: { middlewares: { use: (fn: (req: any, res: any, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, _res, next) => {
+      const path = (req.url ?? '').split('?')[0]
+      if (path === '/deck' || path === '/deck/') req.url = '/deck/index.html'
+      next()
+    })
+  },
+})
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), ...(SANDBOX ? [sandbox()] : [])],
+  plugins: [react(), deckCleanUrl(), ...(SANDBOX ? [sandbox()] : [])],
   server: {
     // In sandbox mode the spine is middleware in this process — proxying would send the
     // requests back out to the network, so there is nothing to proxy.

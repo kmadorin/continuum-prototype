@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuum — a secure closing room for GP-led continuation deals</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── App design system (mirrors app/web/src/styles.css :root) ───────────── */
+  :root {
+    --bg:#07090D; --bg-2:#0C0F14; --surface:#10141A; --panel:#151A21; --active:#1C222C;
+    --border:#232B36; --border-soft:#1B212A; --border-hi:#2F3947;
+    --text:#F7F8FA; --text-2:#C7CDD6; --dim:#C7CDD6; --mute:#949DAA; --disabled:#697382;
+    --primary:#4F67E8; --primary-strong:#6076F2; --pale:#B7C2F8; --tint:#D8DDF5;
+    --primary-soft:color-mix(in srgb, #4F67E8 16%, transparent);
+    --ok:#4BC49A; --warn:#D6A85F; --err:#E26F7E;
+    --serif:"Newsreader", Georgia, "Times New Roman", serif;
+    --sans:"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --r-1:4px; --r-2:6px; --r-3:10px; --r-4:16px;
+    --ease-out:cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-glide:cubic-bezier(0.16, 1, 0.3, 1);
+    --shadow-layer:0 24px 70px rgba(0,0,0,0.55);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; }
+  body {
+    font-family: var(--sans); color: var(--text);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+
+  /* ---------- deck scaling / letterbox / vertical strip ---------- */
+  #stage {
+    position: absolute; top: 50%; left: 50%;
+    width: 1920px; height: 1080px;
+    transform-origin: center center; background: var(--bg);
+    overflow: hidden;
+  }
+  #strip { position: absolute; inset: 0; will-change: transform; }
+  .slide {
+    position: absolute; left: 0; width: 1920px; height: 1080px;
+    padding: 84px 110px 96px;
+    display: flex; flex-direction: column;
+    overflow: hidden; /* strip layout: a slide must never bleed into its neighbour */
+    background:
+      radial-gradient(1200px 600px at 82% -8%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 60%),
+      var(--bg);
+  }
+  .slide:nth-child(1){top:0} .slide:nth-child(2){top:1080px} .slide:nth-child(3){top:2160px}
+  .slide:nth-child(4){top:3240px} .slide:nth-child(5){top:4320px} .slide:nth-child(6){top:5400px}
+  .slide:nth-child(7){top:6480px} .slide:nth-child(8){top:7560px} .slide:nth-child(9){top:8640px}
+  .slide:nth-child(10){top:9720px} .slide:nth-child(11){top:10800px} .slide:nth-child(12){top:11880px}
+
+  /* decorative layers sit under content */
+  .deco { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  .slide > :not(.deco) { position: relative; z-index: 1; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* per-slide staggered reveals — JS sets --i per element on activation */
+    .slide.live [data-reveal] {
+      animation: reveal .5s var(--ease-out) both;
+      animation-delay: calc(var(--i, 0) * 60ms + 60ms);
+    }
+    @keyframes reveal { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+  }
+
+  /* ---------- shared type ---------- */
+  .eyebrow {
+    font-family: var(--sans); font-size: 17px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--mute); font-weight: 600; margin: 0;
+  }
+  .eyebrow .n { color: var(--pale); }
+  h1.lead { font-family: var(--serif); font-size: 82px; line-height: 1.05; letter-spacing: -0.015em; font-weight: 500; margin: 0; max-width: 22ch; text-wrap: balance; }
+  p.body { font-size: 28px; line-height: 1.5; color: var(--dim); margin: 0; max-width: 58ch; text-wrap: pretty; }
+  .num { font-variant-numeric: tabular-nums lining-nums; }
+  .dot { color: var(--primary-strong); }
+
+  .head { display: flex; align-items: baseline; gap: 24px; margin-bottom: 52px; }
+  .head .eyebrow { white-space: nowrap; }
+  .head .rule { flex: 1; height: 1px; background: var(--border); }
+  .head .tag { font-family: var(--sans); font-size: 17px; color: var(--mute); letter-spacing: 0.02em; font-weight: 500; }
+
+  /* ---------- brand lockup (logo svg) ---------- */
+  .brandmark { display: block; }
+  .brandmark svg { display: block; height: 170px; width: auto; }
+  .brandmark.sm svg { height: 110px; }
+
+  /* ---------- slide 1 / 12 title ---------- */
+  /* Everything anchors to an edge: logo top-left, headline spanning the left
+     column, the lead bottom-aligned in the right column, foot pinned to the
+     bottom corners — no dead zones. */
+  .title-grid { flex: 1; display: grid; grid-template-rows: 1fr auto 1fr; }
+  .title-mid { align-self: center; display: grid; grid-template-columns: 7fr 5fr; gap: 90px; align-items: end; width: 100%; }
+  .title-sub { font-family: var(--serif); font-size: 92px; color: var(--text); margin: 0; line-height: 1.08; font-weight: 400; letter-spacing: -0.012em; text-wrap: balance; }
+  .title-lead { font-size: 27px; color: var(--dim); margin: 0 0 12px; max-width: 44ch; line-height: 1.55; text-wrap: pretty; }
+  .title-foot { align-self: end; display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--sans); font-size: 18px; color: var(--mute); letter-spacing: 0.02em; font-weight: 500; }
+
+  /* ---------- layout primitives ---------- */
+  .cols { display: grid; gap: 60px; flex: 1; }
+  .c-5-7 { grid-template-columns: 5fr 7fr; }
+  .stack { display: flex; flex-direction: column; }
+  .center { justify-content: center; }
+
+  /* plain list of facts (slides 2 / 7) */
+  .facts { display: flex; flex-direction: column; }
+  .facts .f { display: grid; grid-template-columns: 48px 1fr; gap: 24px; padding: 30px 2px; border-top: 1px solid var(--border); align-items: baseline; }
+  .facts .f:last-child { border-bottom: 1px solid var(--border); }
+  .facts .f .fn { font-family: var(--sans); font-size: 17px; color: var(--pale); font-weight: 600; }
+  .facts .f .ft { font-size: 31px; color: var(--text); line-height: 1.38; }
+  .facts .f .ft b { color: var(--pale); font-weight: 600; }
+
+  /* conflict + checks (slide 3) */
+  .conflict { border: 1px solid var(--border); border-radius: var(--r-3); background: var(--panel); padding: 34px 38px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 26px; margin-bottom: 8px; }
+  .conflict .side { display: flex; flex-direction: column; gap: 7px; }
+  .conflict .side.r { text-align: right; }
+  .conflict .side .l { font-family: var(--sans); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+  .conflict .side .v { font-size: 27px; font-weight: 500; color: var(--text); }
+  .conflict .mid { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .conflict .mid .who { font-size: 24px; font-weight: 600; }
+  .arrflow { width: 130px; height: 26px; color: var(--mute); display: block; }
+  .arrflow line { stroke: currentColor; stroke-width: 1.6; stroke-dasharray: 4 6; animation: dashflow 1.6s linear infinite; }
+  .checks { display: flex; flex-direction: column; }
+  .checks .c { padding: 24px 0; border-top: 1px solid var(--border); }
+  .checks .c:last-child { border-bottom: 1px solid var(--border); }
+  .checks .c .ct { font-size: 27px; color: var(--text); }
+
+  /* numbered flow (slide 6) */
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+  .fstep { padding: 34px 26px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; background: var(--bg-2); }
+  .fstep:last-child { border-right: 0; }
+  .fstep.settle { background: var(--primary-soft); }
+  .fstep .sn { font-family: var(--sans); font-size: 36px; font-weight: 600; color: var(--border-hi); line-height: 1; font-variant-numeric: tabular-nums; }
+  .fstep.settle .sn { color: var(--pale); }
+  .fstep p { font-size: 21px; line-height: 1.42; color: var(--text); margin: 0; text-wrap: pretty; }
+  .pipeflow { display: block; width: 100%; height: 10px; color: var(--pale); opacity: .5; margin: -8px 0; }
+  .pipeflow line { stroke: currentColor; stroke-width: 2; stroke-dasharray: 3 11; animation: dashflow 1.3s linear infinite; }
+  .proofline { font-family: var(--sans); font-size: 21px; color: var(--dim); letter-spacing: 0.01em; margin-top: 2px; }
+  .proofline b { color: var(--text); font-weight: 600; }
+
+  /* problem rows (slide 4) / labeled rows (slide 10) */
+  .plist { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+  .prow { display: grid; grid-template-columns: 380px 1fr; gap: 44px; padding: 36px 40px; border-bottom: 1px solid var(--border); align-items: baseline; background: var(--bg-2); }
+  .prow:last-child { border-bottom: 0; }
+  .prow .pl { font-size: 30px; font-weight: 600; color: var(--text); }
+  .prow .pd { font-size: 25px; color: var(--dim); line-height: 1.42; }
+  .subcap { font-family: var(--sans); font-size: 18px; color: var(--mute); letter-spacing: 0.01em; }
+
+  /* mirror table (slide 5) */
+  .mirror2 { border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+  .mhead { display: grid; grid-template-columns: 1fr 1fr; }
+  .mhead div { font-family: var(--sans); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; padding: 20px 34px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .mhead div:first-child { border-right: 1px solid var(--border); }
+  .mrow2 { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+  .mrow2:last-child { border-bottom: 0; }
+  .mrow2 .l { padding: 30px 34px; border-right: 1px solid var(--border); font-size: 24px; color: var(--dim); line-height: 1.4; }
+  .mrow2 .r { padding: 30px 34px; font-size: 24px; color: var(--text); line-height: 1.4; }
+  .mrow2 .r b { color: var(--pale); font-weight: 600; }
+
+  /* projection diagram (slide 9) */
+  .proj { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 56px; }
+  .proj-col { display: flex; flex-direction: column; gap: 22px; }
+  .pnode { border: 1px solid var(--border); border-radius: var(--r-2); background: var(--bg-2); padding: 24px 28px; display: flex; flex-direction: column; gap: 9px; position: relative; }
+  .pnode .pr { font-size: 24px; font-weight: 600; color: var(--text); }
+  .pnode .pl { font-size: 17px; color: var(--dim); line-height: 1.4; }
+  .pnode .pl .k { color: var(--mute); font-family: var(--sans); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 7px; font-weight: 600; }
+  .proj-col .pnode::after {
+    content: ""; position: absolute; top: 50%; width: 56px; height: 1px;
+    background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--pale) 60%, transparent) 0 5px, transparent 5px 13px);
+    background-size: 13px 1px;
+  }
+  .proj-col.left .pnode::after { left: 100%; animation: connR 1.4s linear infinite; }
+  .proj-col.right .pnode::after { right: 100%; animation: connL 1.4s linear infinite; }
+  @keyframes connR { to { background-position: 13px 0; } }
+  @keyframes connL { to { background-position: -13px 0; } }
+  .pcenter { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .pcenter .core { width: 290px; height: 180px; border: 1px solid var(--pale); border-radius: var(--r-3); background: var(--primary-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+  .pcenter .core .cl { font-family: var(--sans); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pale); font-weight: 600; }
+  .pcenter .core .cb { font-size: 32px; font-weight: 600; }
+  .pcenter .core .cs { font-family: var(--sans); font-size: 14px; color: var(--dim); }
+  .legsrow { display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+  .legsrow .lr { flex: 1; padding: 20px 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; background: var(--bg-2); }
+  .legsrow .lr:last-child { border-right: 0; }
+  .legsrow .lv { font-family: var(--sans); font-size: 26px; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .legsrow .ll { font-family: var(--sans); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+  .legsrow .lr.sum { background: var(--primary-soft); }
+  .legsrow .lr.sum .lv { color: var(--pale); }
+  .projcap { font-family: var(--sans); font-size: 19px; color: var(--dim); letter-spacing: 0.01em; margin: 0; text-align: center; }
+  /* orbit rings with travelling dots — anchored to .pcenter so their centre IS
+     the Atomic Close core, wherever the layout puts it. z:-1 tucks them behind
+     every card inside the section's stacking context. */
+  .pcenter { position: relative; }
+  .orbits {
+    position: absolute; left: 50%; top: 50%; width: 1200px; height: 1200px;
+    transform: translate(-50%, -50%); pointer-events: none; z-index: -1;
+  }
+  .orbits .ring { fill: none; stroke: var(--pale); stroke-width: 1; stroke-dasharray: 0.5 9; stroke-linecap: round; }
+  .orbits .odot { fill: var(--pale); }
+
+  .demo-note { font-family: var(--sans); font-size: 21px; color: var(--dim); letter-spacing: 0.01em; margin: 0; max-width: 84ch; line-height: 1.6; }
+  .demo-note b { color: var(--pale); font-weight: 600; }
+  .demo-note .m { color: var(--text); font-weight: 500; }
+
+  /* ---------- product screenshots (slide 8) ---------- */
+  .shots { flex: 1; min-height: 0; display: grid; grid-template-columns: 7fr 5fr; gap: 34px; align-items: stretch; }
+  .shots .col { display: flex; flex-direction: column; gap: 30px; min-height: 0; }
+  .shot { margin: 0; border: 1px solid var(--border-hi); border-radius: var(--r-4); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-layer); display: flex; flex-direction: column; transition: border-color 180ms ease; min-height: 0; }
+  .shot:hover { border-color: var(--disabled); }
+  .shot.grow { flex: 1 1 0; }
+  .shot-bar { display: flex; align-items: center; gap: 16px; padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+  .shot-bar .wdots { display: flex; gap: 8px; }
+  .shot-bar .wdots i { width: 12px; height: 12px; border-radius: 50%; background: var(--border-hi); display: block; }
+  .shot-bar .url { font-family: var(--sans); font-size: 15px; color: var(--mute); letter-spacing: 0.01em; }
+  .shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left; min-height: 0; flex: 1; }
+  .shot figcaption { font-family: var(--sans); font-size: 16px; color: var(--dim); padding: 14px 20px; border-top: 1px solid var(--border); background: var(--bg-2); letter-spacing: 0.01em; }
+
+  /* ---------- team (slide 11) ---------- */
+  .team-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 48px; }
+  .team-group .glabel { font-family: var(--sans); font-size: 15px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mute); margin: 0 0 24px; }
+  .team-row { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  .member { display: grid; grid-template-columns: 160px 1fr; gap: 30px; align-items: center; border: 1px solid var(--border); border-radius: var(--r-3); background: var(--bg-2); padding: 30px 34px; transition: background 180ms ease, border-color 180ms ease; }
+  .member:hover { background: var(--surface); border-color: var(--border-hi); }
+  .avatar { position: relative; width: 160px; height: 160px; border-radius: var(--r-3); border: 1px solid var(--border-hi); background: var(--panel); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .avatar .monogram { font-size: 46px; font-weight: 600; color: var(--pale); letter-spacing: -0.01em; }
+  .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .member .m-name { font-family: var(--serif); font-size: 48px; font-weight: 500; color: var(--text); line-height: 1.05; letter-spacing: -0.01em; margin: 0; }
+  .member .m-role { font-size: 22px; color: var(--dim); margin: 14px 0 0; line-height: 1.4; }
+  .member .m-handle { font-family: var(--sans); font-size: 19px; color: var(--pale); margin: 9px 0 0; font-weight: 500; }
+  .advisor-row { display: grid; grid-template-columns: 160px 1fr; gap: 30px; align-items: center; border: 1px dashed var(--border-hi); border-radius: var(--r-3); background: transparent; padding: 28px 34px; max-width: 820px; transition: border-color 180ms ease; }
+  .advisor-row:hover { border-color: var(--disabled); }
+  .advisor-row .avatar { border-style: dashed; background: transparent; }
+  .advisor-row .avatar .anon { width: 52px; height: 52px; color: var(--disabled); }
+  .advisor-row .a-role { font-family: var(--serif); font-size: 36px; font-weight: 500; color: var(--text-2); margin: 0; letter-spacing: -0.01em; }
+  .advisor-row .a-sub { font-size: 21px; color: var(--mute); margin: 10px 0 0; }
+
+  /* ---------- thanks: contacts + links ---------- */
+  .thanks-foot { align-self: end; display: flex; flex-direction: column; gap: 36px; width: 100%; }
+  .contacts { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  .cperson { border: 1px solid var(--border); border-radius: var(--r-3); background: var(--bg-2); padding: 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+  .cperson .cname { font-size: 22px; font-weight: 600; color: var(--text); }
+  .clinks { display: flex; flex-wrap: wrap; gap: 10px 26px; }
+  .clink {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--sans); font-size: 19px; font-weight: 500; color: var(--dim);
+    text-decoration: none; border-radius: var(--r-1);
+    transition: color 150ms ease;
+  }
+  .clink svg { width: 19px; height: 19px; flex: none; color: var(--mute); transition: color 150ms ease; }
+  .clink:hover { color: var(--text); }
+  .clink:hover svg { color: var(--pale); }
+  .clink:focus-visible { outline: 2px solid var(--primary-strong); outline-offset: 3px; }
+  .tlinks { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; }
+  .tlink { padding: 30px 32px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); text-decoration: none; transition: background 180ms ease; }
+  .tlink:last-child { border-right: 0; }
+  a.tlink:hover { background: var(--surface); }
+  a.tlink:hover .tv { color: var(--tint); }
+  .tlink:focus-visible { outline: 2px solid var(--primary-strong); outline-offset: -2px; }
+  .tlink .tl { font-family: var(--sans); font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+  .tlink .tv { font-family: var(--sans); font-size: 22px; color: var(--pale); word-break: break-all; font-weight: 500; transition: color 150ms ease; }
+  .canton-lock { display: inline-flex; align-items: center; gap: 12px; }
+  .canton-logo { height: 24px; width: auto; display: inline-block; }
+
+  /* ---------- flow-field deco (the demo's left-panel background) ---------- */
+  .flowfx path, .flowbg path { fill: none; stroke-width: 1.2; }
+  .ff-slow path { stroke: var(--pale); opacity: .11; stroke-dasharray: 340 520; animation: ffdrift-a 26s linear infinite; }
+  .ff-fast path { stroke: var(--primary-strong); opacity: .09; stroke-dasharray: 260 440; animation: ffdrift-b 17s linear infinite; }
+  .ff-slow path:nth-child(2) { animation-delay: -6s; } .ff-slow path:nth-child(3) { animation-delay: -12s; }
+  .ff-slow path:nth-child(4) { animation-delay: -18s; } .ff-slow path:nth-child(5) { animation-delay: -23s; }
+  .ff-fast path:nth-child(2) { animation-delay: -5s; } .ff-fast path:nth-child(3) { animation-delay: -11s; }
+  @keyframes ffdrift-a { to { stroke-dashoffset: -860; } }
+  @keyframes ffdrift-b { to { stroke-dashoffset: -700; } }
+  /* cursor spotlight: a brighter copy of the streams under a radial mask */
+  .flowfx .ff-hi { opacity: 1; transition: opacity 300ms ease; }
+  .flowfx.idle .ff-hi { opacity: 0; transition: opacity 1200ms ease; }
+  .flowfx .ff-hi .ff-slow path { stroke: var(--tint); opacity: .5; }
+  .flowfx .ff-hi .ff-fast path { stroke: var(--pale); opacity: .38; }
+  .flowbg.dim path { opacity: .05; }
+  .flowbg.dim .ff-fast path { opacity: .04; }
+  @keyframes dashflow { to { stroke-dashoffset: -20; } }
+
+  /* ---------- chrome ---------- */
+  #progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--primary-strong); width: 0; transition: width .3s ease; z-index: 60; }
+
+  /* Edge arrows live inside hover zones along the slide's sides: invisible at
+     rest, they fade in only when the pointer nears that edge. */
+  .edgezone {
+    position: fixed; top: 0; bottom: 0; width: 110px; z-index: 62;
+    display: flex; align-items: center;
+  }
+  .edgezone.zprev { left: 0; justify-content: flex-start; padding-left: 26px; }
+  .edgezone.znext { right: 0; justify-content: flex-end; padding-right: 26px; }
+  @media (hover: none) { .edgezone { display: none; } } /* touch: swipe + HUD navigate */
+  .edge {
+    width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 50%;
+    background: color-mix(in srgb, var(--bg-2) 74%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: var(--text-2); cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s ease, background .18s ease, border-color .18s ease, color .18s ease;
+  }
+  .edgezone:hover .edge, .edge:focus-visible { opacity: 1; pointer-events: auto; }
+  .edge svg { width: 26px; height: 26px; }
+  .edge:hover { background: var(--panel); border-color: var(--border-hi); color: var(--text); }
+  .edge:active { transform: translateY(1px); }
+  .edge:focus-visible { outline: 2px solid var(--primary-strong); outline-offset: 2px; }
+  .edge[disabled] { opacity: 0 !important; pointer-events: none !important; }
+
+  #hud {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 18px;
+    font-family: var(--sans); font-size: 13px; color: var(--mute); font-weight: 500;
+    letter-spacing: 0.04em; pointer-events: auto; z-index: 60;
+    background: color-mix(in srgb, var(--bg-2) 80%, transparent);
+    border: 1px solid var(--border); border-radius: var(--r-3); padding: 8px 16px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  #hud .counter { font-variant-numeric: tabular-nums; }
+  #hud .counter .cur { color: var(--text); }
+  #hud .dots { display: flex; gap: 7px; }
+  #hud .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-hi); cursor: pointer; transition: background .18s ease, transform .18s ease; border: 0; padding: 0; }
+  #hud .dot:hover { background: var(--pale); }
+  #hud .dot.on { background: var(--primary-strong); transform: scale(1.15); }
+  #hud .dot:focus-visible { outline: 2px solid var(--primary-strong); outline-offset: 2px; }
+  #hud .nav { background: none; border: 0; color: var(--mute); cursor: pointer; font-family: var(--sans); font-size: 15px; padding: 2px 6px; border-radius: var(--r-1); text-decoration: none; font-weight: 500; transition: color .15s ease; }
+  #hud .nav:hover { color: var(--text); }
+  #hud .nav:focus-visible { outline: 2px solid var(--primary-strong); outline-offset: 2px; }
+  #hud .pdfbtn { font-size: 13px; letter-spacing: 0.08em; border: 1px solid var(--border-hi); padding: 4px 10px; border-radius: var(--r-1); transition: color .15s ease, border-color .15s ease, background .15s ease; }
+  #hud .pdfbtn:hover { color: var(--text); border-color: var(--disabled); background: var(--active); }
+  #hint { position: fixed; bottom: 24px; right: 26px; font-family: var(--sans); font-size: 12px; color: var(--mute); letter-spacing: 0.04em; z-index: 60; opacity: .6; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #progress { transition: none; }
+    .slide.live [data-reveal] { animation: none !important; }
+    .edge:active { transform: translateY(-50%); }
+    .ff-slow path, .ff-fast path, .arrflow line, .pipeflow line { animation: none !important; }
+    .proj-col .pnode::after { animation: none !important; }
+    .orbits { display: none; } /* SMIL can't be paused from CSS — hide the moving rings */
+  }
+
+  /* ---------- mobile: the deck becomes a naturally-scrolling document ---------- */
+  @media (max-width: 760px) {
+    html, body { overflow: auto; height: auto; overscroll-behavior: auto; }
+    #stage { position: static; width: 100%; height: auto; transform: none !important; overflow: visible; background: var(--bg); }
+    #strip { position: static; transform: none !important; }
+    .slide {
+      position: relative !important; top: auto !important;
+      width: 100%; height: auto; min-height: 0;
+      padding: 48px 22px 56px;
+    }
+    .slide.live [data-reveal] { animation: none !important; }
+    #progress, #hud, #hint, .edgezone { display: none !important; }
+
+    /* the wordmark is 267:29 — cap by WIDTH on phones or it clips off-screen */
+    .brandmark svg { height: auto; width: 100%; max-width: 300px; }
+    .brandmark.sm svg { height: auto; width: 100%; max-width: 230px; }
+    .slide:first-child, .slide:last-child { min-height: 100svh; }
+    .title-grid { gap: 40px; }
+    .title-mid { grid-template-columns: 1fr; gap: 0; }
+    .title-sub { font-size: 42px; line-height: 1.14; }
+    .title-lead { font-size: 17px; margin: 18px 0 0; }
+    .title-foot { font-size: 13px; }
+    .canton-logo { height: 15px; }
+    .canton-lock { gap: 8px; }
+
+    .head { margin-bottom: 26px; gap: 12px; }
+    .eyebrow { font-size: 12px; }
+    .head .tag { display: none; }
+    h1.lead { font-size: 34px; }
+    p.body { font-size: 17px; }
+    .subcap { font-size: 13px; }
+
+    .cols, .cols.c-5-7 { grid-template-columns: 1fr; gap: 28px; }
+    .facts .f { grid-template-columns: 30px 1fr; gap: 12px; padding: 16px 0; }
+    .facts .f .fn { font-size: 12px; }
+    .facts .f .ft { font-size: 17px; }
+
+    .conflict { padding: 18px 20px; gap: 14px; }
+    .conflict .side .l { font-size: 10px; }
+    .conflict .side .v { font-size: 16px; }
+    .conflict .mid .who { font-size: 15px; }
+    .arrflow { width: 70px; height: 20px; }
+    .checks .c { padding: 13px 0; }
+    .checks .ct { font-size: 17px; }
+
+    .flow { grid-template-columns: 1fr; }
+    .fstep { border-right: 0; border-bottom: 1px solid var(--border); padding: 18px 20px; gap: 8px; }
+    .fstep:last-child { border-bottom: 0; }
+    .fstep .sn { font-size: 20px; }
+    .fstep p { font-size: 15px; }
+    .pipeflow { display: none; }
+    .proofline { font-size: 15px; }
+
+    .prow { grid-template-columns: 1fr; gap: 6px; padding: 16px 20px; }
+    .prow .pl { font-size: 18px; }
+    .prow .pd { font-size: 15px; }
+
+    .mhead div { font-size: 11px; padding: 10px 14px; }
+    .mrow2 .l, .mrow2 .r { font-size: 14px; padding: 12px 14px; }
+
+    .proj { grid-template-columns: 1fr; gap: 16px; }
+    .proj-col { gap: 14px; }
+    .proj-col .pnode::after { display: none; }
+    .pnode { padding: 16px 18px; gap: 6px; }
+    .pnode .pr { font-size: 17px; }
+    .pnode .pl { font-size: 13px; }
+    .orbits { display: none; }
+    .pcenter .core { width: 100%; height: auto; padding: 20px; gap: 6px; }
+    .pcenter .core .cb { font-size: 20px; }
+    .legsrow { flex-direction: column; }
+    .legsrow .lr { border-right: 0; border-bottom: 1px solid var(--border); padding: 12px 16px; }
+    .legsrow .lr:last-child { border-bottom: 0; }
+    .legsrow .lv { font-size: 18px; }
+    .projcap { font-size: 13px; margin-top: 4px; }
+    .demo-note { font-size: 15px; }
+
+    .shots { grid-template-columns: 1fr; gap: 20px; }
+    .shots .col { gap: 20px; }
+    .shot.grow { flex: none; }
+    .shot img { height: auto; flex: none; }
+    .shot-bar { padding: 10px 14px; }
+    .shot-bar .wdots i { width: 8px; height: 8px; }
+    .shot-bar .url { font-size: 12px; }
+    .shot figcaption { font-size: 13px; padding: 10px 14px; }
+
+    .team-wrap { gap: 28px; }
+    .team-group .glabel { font-size: 12px; margin-bottom: 12px; }
+    .team-row { grid-template-columns: 1fr; gap: 14px; }
+    .member, .advisor-row { grid-template-columns: 88px 1fr; gap: 16px; padding: 16px 18px; max-width: none; }
+    .avatar { width: 88px; height: 88px; }
+    .avatar .monogram { font-size: 26px; }
+    .advisor-row .avatar .anon { width: 30px; height: 30px; }
+    .member .m-name { font-size: 24px; }
+    .member .m-role { font-size: 14px; margin-top: 6px; }
+    .member .m-handle { font-size: 13px; margin-top: 4px; }
+    .advisor-row .a-role { font-size: 20px; }
+    .advisor-row .a-sub { font-size: 13px; margin-top: 5px; }
+
+    .thanks-foot { gap: 20px; }
+    .contacts { grid-template-columns: 1fr; gap: 14px; }
+    .cperson { padding: 16px 18px; gap: 10px; }
+    .cperson .cname { font-size: 16px; }
+    .clink { font-size: 14px; gap: 7px; }
+    .clink svg { width: 15px; height: 15px; }
+    .tlinks { grid-template-columns: 1fr; }
+    .tlink { border-right: 0; border-bottom: 1px solid var(--border); padding: 14px 18px; gap: 5px; }
+    .tlink:last-child { border-bottom: 0; }
+    .tlink .tl { font-size: 11px; }
+    .tlink .tv { font-size: 15px; }
+  }
+
+  /* ---------- print / PDF: one slide per 1920×1080 page ---------- */
+  @media print {
+    @page { size: 1920px 1080px; margin: 0; }
+    html, body { overflow: visible; height: auto; background: var(--bg); }
+    #progress, #hud, #hint, .edge { display: none !important; }
+    #stage { position: static !important; transform: none !important; width: 1920px; height: auto; overflow: visible; }
+    #strip { position: static; transform: none !important; }
+    .slide { position: relative !important; top: auto !important; page-break-after: always; break-after: page; }
+    .slide:last-child { page-break-after: auto; }
+    .slide [data-reveal] { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .flowfx .ff-hi { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div id="stage" role="region" aria-label="Continuum pitch deck">
+<div id="strip">
+
+  <!-- 1 · TITLE -->
+  <section class="slide" aria-label="Title">
+    <svg id="ff" class="deco flowfx idle" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <radialGradient id="ffspot" gradientUnits="userSpaceOnUse" cx="-800" cy="-800" r="340">
+          <stop offset="0" stop-color="#fff" stop-opacity="0.9"/>
+          <stop offset="0.55" stop-color="#fff" stop-opacity="0.35"/>
+          <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+        </radialGradient>
+        <mask id="ffmask"><rect x="-200" y="-200" width="2400" height="1500" fill="url(#ffspot)"/></mask>
+      </defs>
+      <g class="ff-slow">
+        <path d="M-100,180 C420,110 820,300 1240,210 S1840,120 2020,190"/>
+        <path d="M-100,420 C400,340 860,540 1280,440 S1860,340 2020,410"/>
+        <path d="M-100,660 C420,580 840,780 1260,680 S1850,580 2020,650"/>
+        <path d="M-100,900 C400,830 860,1020 1280,930 S1860,830 2020,900"/>
+        <path d="M-100,60 C520,10 940,130 1360,70 S1880,10 2020,60"/>
+      </g>
+      <g class="ff-fast">
+        <path d="M-100,300 C460,240 880,420 1300,330 S1870,240 2020,300"/>
+        <path d="M-100,540 C440,470 900,660 1320,560 S1870,470 2020,540"/>
+        <path d="M-100,780 C460,710 880,900 1300,800 S1870,710 2020,780"/>
+      </g>
+      <g class="ff-hi" mask="url(#ffmask)">
+        <g class="ff-slow">
+          <path d="M-100,180 C420,110 820,300 1240,210 S1840,120 2020,190"/>
+          <path d="M-100,420 C400,340 860,540 1280,440 S1860,340 2020,410"/>
+          <path d="M-100,660 C420,580 840,780 1260,680 S1850,580 2020,650"/>
+          <path d="M-100,900 C400,830 860,1020 1280,930 S1860,830 2020,900"/>
+          <path d="M-100,60 C520,10 940,130 1360,70 S1880,10 2020,60"/>
+        </g>
+        <g class="ff-fast">
+          <path d="M-100,300 C460,240 880,420 1300,330 S1870,240 2020,300"/>
+          <path d="M-100,540 C440,470 900,660 1320,560 S1870,470 2020,540"/>
+          <path d="M-100,780 C460,710 880,900 1300,800 S1870,710 2020,780"/>
+        </g>
+      </g>
+    </svg>
+    <div class="title-grid">
+      <div data-reveal>
+        <span class="brandmark" aria-label="Continuum">
+          <svg viewBox="0 0 267 29" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M29.2562 19.4495L24.3265 24.3616C21.5491 27.1288 17.9031 28.512 14.2581 28.512C10.6042 28.5119 6.95007 27.1223 4.17123 24.343C-1.39044 18.7812 -1.39038 9.73198 4.17123 4.17016C9.72354 -1.38165 18.7656 -1.39066 24.3275 4.15063L26.3333 6.01293L21.0003 11.3147L19.0199 9.4768C17.7061 8.16762 15.9819 7.51391 14.2581 7.51391C12.5299 7.51399 10.8018 8.1714 9.48764 9.48559C6.85791 12.1155 6.858 16.3956 9.48764 19.0256C12.1137 21.6512 16.3893 21.6554 19.0199 19.0344L33.9574 4.15063C39.5181 -1.39048 48.5598 -1.38278 54.1117 4.16918C56.8059 6.86339 58.2904 10.4456 58.2904 14.2561C58.2903 18.066 56.8063 21.6488 54.1117 24.343C48.5604 29.8948 39.5196 29.903 33.9574 24.3616L29.2562 19.4495ZM48.7962 9.48657C46.1707 6.86103 41.8945 6.85726 39.264 9.47778L32.0326 16.6829L34.5775 14.1477L39.264 19.0354C41.894 21.6559 46.1707 21.6521 48.7962 19.0266C50.0702 17.7525 50.7718 16.0579 50.7718 14.2561C50.7717 12.4545 50.0701 10.7606 48.7962 9.48657Z" fill="url(#mk_a)"/>
+            <path d="M78.4798 1.41625C84.3038 1.41625 88.3995 5.19201 89.1996 10.4719H83.8236C83.2156 7.30423 80.8802 5.92813 78.2884 5.92797C75.0244 5.92797 72.4964 8.64803 72.4964 13.384C72.4964 18.28 75.0239 20.9035 78.3519 20.9036C80.7199 20.9036 83.3437 19.8796 83.9837 16.3596H89.3597C88.5277 21.7356 84.1757 25.4163 78.3197 25.4163C71.0879 25.4161 66.7044 20.8079 66.7044 13.384C66.7044 6.05608 71.2479 1.41632 78.4798 1.41625ZM102.151 1.41625C109.255 1.41625 114.183 6.18425 114.183 13.4163C114.183 20.6481 109.255 25.4163 102.151 25.4163C95.0149 25.4161 90.1196 20.648 90.1195 13.4163C90.1195 6.18434 95.0149 1.41637 102.151 1.41625ZM200.534 15.6565C200.534 19.0482 201.334 20.9358 205.142 20.9358C208.982 20.9357 209.654 18.76 209.654 15.3362V1.80004H215.125V14.8879C215.125 22.0239 212.374 25.4162 205.142 25.4163C198.198 25.4163 195.062 22.7281 195.062 15.0803V1.80004H200.534V15.6565ZM223.105 15.6565C223.105 19.0482 223.905 20.9358 227.713 20.9358C231.553 20.9357 232.225 18.76 232.225 15.3362V1.80004H237.697V14.8879C237.697 22.0239 234.945 25.4162 227.713 25.4163C220.769 25.4163 217.633 22.7281 217.633 15.0803V1.80004H223.105V15.6565ZM132.003 17.8V1.80004H137.284V25.0002H130.627L121.316 9.00024V25.0002H116.035V1.80004H122.692L132.003 17.8ZM159.946 6.59985H152.49V25.0002H146.986V6.59985H139.561V1.80004H159.946V6.59985ZM167.744 25.0002H162.272V1.80004H167.744V25.0002ZM186.936 17.8V1.80004H192.216V25.0002H185.56L176.248 9.00024V25.0002H170.968V1.80004H177.624L186.936 17.8ZM253.676 18.4397L258.22 1.80004H266.764V25.0002H261.452V6.40844L256.268 25.0002H251.117L245.901 6.43969V25.0002H240.588V1.80004H249.228L253.676 18.4397ZM102.151 5.92797C98.7588 5.92811 95.9115 8.48838 95.9115 13.4163C95.9115 18.344 98.7589 20.9034 102.151 20.9036C105.543 20.9036 108.391 18.3441 108.391 13.4163C108.391 8.48825 105.543 5.92797 102.151 5.92797Z" fill="#FFFFFF"/>
+            <defs><linearGradient id="mk_a" x1="0" y1="34" x2="101" y2="-24" gradientUnits="userSpaceOnUse" spreadMethod="repeat"><stop stop-color="#4F67E8"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#4F67E8"/><animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="101 -58" dur="7s" repeatCount="indefinite"/></linearGradient></defs>
+          </svg>
+        </span>
+      </div>
+      <div class="title-mid">
+        <h1 class="title-sub" data-reveal>A secure closing room for GP-led continuation deals.</h1>
+        <p class="title-lead" data-reveal>LPs and buyers commit privately, the system computes the close, and cash plus fund interests settle atomically on Canton.</p>
+      </div>
+      <div class="title-foot" data-reveal>
+        <span>Encode Club</span>
+        <span class="canton-lock">Build on <img class="canton-logo" src="shots/canton-logo-white.svg" alt="Canton"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · THE TRANSACTION -->
+  <section class="slide" aria-label="The transaction">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">02</span> &nbsp;The transaction</p>
+      <div class="rule"></div>
+      <span class="tag">GP-led continuation deal</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+      <h1 class="lead" data-reveal>What a continuation deal is.</h1>
+      <div class="facts" data-reveal>
+        <div class="f"><span class="fn">01</span><span class="ft">A fund is ending; one company is still worth holding.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">The GP moves it into a new continuation vehicle.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">Each LP elects: take cash now, or roll into the new fund.</span></div>
+        <div class="f"><span class="fn">04</span><span class="ft">A secondary buyer provides fresh capital.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · THE CONFLICT -->
+  <section class="slide" aria-label="The structural conflict">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">03</span> &nbsp;The structure</p>
+      <div class="rule"></div>
+      <span class="tag">independent checks</span>
+    </div>
+    <div class="cols c-5-7" style="align-items:center;">
+      <div class="stack" style="gap:32px;">
+        <h1 class="lead" data-reveal>The GP is on both sides.</h1>
+        <div class="conflict" data-reveal>
+          <div class="side"><span class="l">sells</span><span class="v">Old fund</span></div>
+          <div class="mid">
+            <span class="who">GP</span>
+            <svg class="arrflow" viewBox="0 0 130 26" aria-hidden="true">
+              <defs><marker id="ah" viewBox="0 0 8 8" refX="4.5" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M1 1 L7 4 L1 7 Z" fill="currentColor"/></marker></defs>
+              <line x1="60" y1="8" x2="10" y2="8" marker-end="url(#ah)"/>
+              <line x1="70" y1="18" x2="120" y2="18" marker-end="url(#ah)"/>
+            </svg>
+          </div>
+          <div class="side r"><span class="l">manages</span><span class="v">New vehicle</span></div>
+        </div>
+        <p class="body" data-reveal>The process relies on independent checks so the price and terms don't depend on the conflicted party.</p>
+        <p class="subcap" data-reveal>All four checks run through a process the GP coordinates.</p>
+      </div>
+      <div class="stack center">
+        <div class="checks" data-reveal>
+          <div class="c"><span class="ct">An independent valuer prices the asset.</span></div>
+          <div class="c"><span class="ct">A sealed auction discovers the price.</span></div>
+          <div class="c"><span class="ct">The LPAC reviews fairness and consents.</span></div>
+          <div class="c"><span class="ct">Each LP elects privately.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE PROBLEM -->
+  <section class="slide" aria-label="The problem">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">04</span> &nbsp;The problem</p>
+      <div class="rule"></div>
+      <span class="tag">off-ledger today</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+      <h1 class="lead" data-reveal>Today, integrity depends on the conflicted party.</h1>
+      <div class="plist" data-reveal>
+        <div class="prow"><span class="pl">Leakage</span><span class="pd">Sealed bids and LP elections sit in a data room the GP controls.</span></div>
+        <div class="prow"><span class="pl">Partial close</span><span class="pd">The close is separate wires and signatures; one failed leg leaves the deal half-closed.</span></div>
+        <div class="prow"><span class="pl">Unverifiable record</span><span class="pd">The audit trail is reconstructed afterward from emails and PDFs.</span></div>
+      </div>
+      <p class="subcap" data-reveal>Every check assumes the GP's coordination is neutral.</p>
+    </div>
+  </section>
+
+  <!-- 5 · WHAT THE LEDGER CHANGES -->
+  <section class="slide" aria-label="What the ledger changes">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">05</span> &nbsp;The solution</p>
+      <div class="rule"></div>
+      <span class="tag">the same checks, enforced by the ledger</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:40px;">
+      <h1 class="lead" data-reveal>The same checks, enforced by the ledger.</h1>
+      <div class="mirror2" data-reveal>
+        <div class="mhead"><div>Off-ledger today</div><div>On Canton</div></div>
+        <div class="mrow2"><span class="l">GP-controlled data room</span><span class="r"><b>Per-party privacy</b> — each participant is projected only its own slice, by the ledger, not the app.</span></div>
+        <div class="mrow2"><span class="l">Separate wires and signatures</span><span class="r"><b>One atomic transaction</b> — units, cash, rolled units, burn: all legs or none.</span></div>
+        <div class="mrow2"><span class="l">GP coordinates every step</span><span class="r"><b>Each party signs with its own key</b> — no shared database under the conflicted party.</span></div>
+        <div class="mrow2"><span class="l">Record reconstructed afterward</span><span class="r"><b>Four on-ledger proofs</b> — valuation, fairness, consent, auction certificate; anyone entitled can verify.</span></div>
+      </div>
+      <p class="subcap" data-reveal>Native to Canton: sub-transaction privacy · atomic settlement · selective disclosure · no central operator.</p>
+    </div>
+  </section>
+
+  <!-- 6 · WHAT CONTINUUM DOES -->
+  <section class="slide" aria-label="What Continuum does">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">06</span> &nbsp;The system</p>
+      <div class="rule"></div>
+      <span class="tag">one closing room, on-ledger</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+      <h1 class="lead" data-reveal>One deal, end to end.</h1>
+      <div data-reveal>
+        <div class="flow">
+          <div class="fstep"><span class="sn">1</span><p>Open the room — six parties, each with its own key.</p></div>
+          <div class="fstep"><span class="sn">2</span><p>Valuation anchored on-chain.</p></div>
+          <div class="fstep"><span class="sn">3</span><p>Sealed-bid auction, clearing price, certificate.</p></div>
+          <div class="fstep"><span class="sn">4</span><p>LPAC fairness review and consent.</p></div>
+          <div class="fstep"><span class="sn">5</span><p>LP elections — cash or roll.</p></div>
+          <div class="fstep settle"><span class="sn">6</span><p>Atomic close — units, cash, rolled interests settle together, or not at all.</p></div>
+        </div>
+        <svg class="pipeflow" viewBox="0 0 1680 10" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="5" x2="1680" y2="5"/></svg>
+      </div>
+      <p class="proofline" data-reveal>The close requires four on-ledger proofs: <b>valuation · fairness · consent · auction certificate</b>.</p>
+    </div>
+  </section>
+
+  <!-- 7 · DEMO -->
+  <section class="slide" aria-label="Demo">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">07</span> &nbsp;Demo</p>
+      <div class="rule"></div>
+      <span class="tag">live on Canton devnet</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+      <h1 class="lead" data-reveal>Six seats, one atomic close<span class="dot">.</span></h1>
+      <div class="facts" data-reveal>
+        <div class="f"><span class="fn">01</span><span class="ft">The buyer bids sealed; each LP elects privately. The GP's room reads <b>“2 of 2 responded”</b> while its own ledger projection holds <b>zero</b> bids and <b>zero</b> elections — it counts what it cannot read.</span></div>
+        <div class="f"><span class="fn">02</span><span class="ft">Four proofs anchor on-ledger — Kroll's valuation, the fairness opinion, LPAC consent, the auction certificate. The issuance gate will not mint until all four exist.</span></div>
+        <div class="f"><span class="fn">03</span><span class="ft">One <b>Close</b> moves every leg and burns both old-fund interests. The settlement-receipt id is <b>identical in every seat's window</b> — the same on-ledger contract from the same transaction, not six animations.</span></div>
+      </div>
+      <p class="demo-note" data-reveal>Watch it yourself: <b>continuum-custody.fly.dev</b> — sign in as any seat (<span class="m">gp</span>, <span class="m">buyer</span>, <span class="m">lpExiting</span>, <span class="m">lpRolling</span>, <span class="m">lpac</span>, <span class="m">valuer</span> · password <span class="m">&lt;seat&gt;-demo</span>), in as many tabs as you have sides to check.</p>
+    </div>
+  </section>
+
+  <!-- 8 · THE PRODUCT (screenshots) -->
+  <section class="slide" aria-label="The product">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">08</span> &nbsp;The product</p>
+      <div class="rule"></div>
+      <span class="tag">continuum-custody.fly.dev</span>
+    </div>
+    <div class="shots">
+      <div class="col">
+        <figure class="shot grow" data-reveal>
+          <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · GP</span></div>
+          <img src="shots/workspace.webp" alt="Continuum GP workspace — the closing room: stepper, KPIs, participants and per-party visibility">
+          <figcaption>The GP's closing room — lifecycle, live KPIs, and per-party visibility enforced by the ledger.</figcaption>
+        </figure>
+      </div>
+      <div class="col">
+        <figure class="shot" data-reveal>
+          <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev</span></div>
+          <img src="shots/signin.webp" alt="Continuum seat picker — six seats, each signing through its own custodian">
+          <figcaption>Six seats — each signs through its own custodian.</figcaption>
+        </figure>
+        <figure class="shot grow" data-reveal>
+          <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · buyer</span></div>
+          <img src="shots/buyer.webp" alt="Buyer seat — sealed bid, blind to every other buyer">
+          <figcaption>The buyer files a sealed bid — blind to every other buyer.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · HOW IT WORKS -->
+  <section class="slide" aria-label="How it works">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">09</span> &nbsp;How it works</p>
+      <div class="rule"></div>
+      <span class="tag">one transaction, six views</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+    <div class="proj">
+      <div class="proj-col left" data-reveal>
+        <div class="pnode"><span class="pr">GP</span><span class="pl"><span class="k">sees</span>deal state, proofs</span><span class="pl"><span class="k">not</span>sealed bids, elections before close</span></div>
+        <div class="pnode"><span class="pr">Valuer</span><span class="pl"><span class="k">sees</span>its valuation, anchor hash</span><span class="pl"><span class="k">not</span>bids, elections</span></div>
+        <div class="pnode"><span class="pr">LPAC</span><span class="pl"><span class="k">sees</span>scoped fairness view</span><span class="pl"><span class="k">not</span>the whole book</span></div>
+      </div>
+      <div class="pcenter" data-reveal>
+        <svg class="orbits" viewBox="0 0 1200 1200" aria-hidden="true">
+          <circle class="ring" cx="600" cy="600" r="250" opacity="0.30"/>
+          <circle class="ring" cx="600" cy="600" r="390" opacity="0.20"/>
+          <circle class="ring" cx="600" cy="600" r="530" opacity="0.12"/>
+          <g><animateTransform attributeName="transform" type="rotate" from="0 600 600" to="360 600 600" dur="26s" repeatCount="indefinite"/>
+            <circle class="odot" cx="600" cy="350" r="5" opacity="0.7"/>
+          </g>
+          <g><animateTransform attributeName="transform" type="rotate" from="360 600 600" to="0 600 600" dur="38s" repeatCount="indefinite"/>
+            <circle class="odot" cx="600" cy="210" r="4.5" opacity="0.55"/>
+          </g>
+          <g><animateTransform attributeName="transform" type="rotate" from="0 600 600" to="360 600 600" dur="54s" repeatCount="indefinite"/>
+            <circle class="odot" cx="600" cy="70" r="4" opacity="0.4"/>
+            <circle class="odot" cx="600" cy="1130" r="4" opacity="0.4"/>
+          </g>
+        </svg>
+        <div class="core"><span class="cl">one transaction</span><span class="cb">Atomic Close</span><span class="cs">all legs, or none</span></div>
+      </div>
+      <div class="proj-col right" data-reveal>
+        <div class="pnode"><span class="pr">Buyer</span><span class="pl"><span class="k">sees</span>its own bid, clearing price</span><span class="pl"><span class="k">not</span>other bids, elections</span></div>
+        <div class="pnode"><span class="pr">Exiting LP</span><span class="pl"><span class="k">sees</span>its election, its cash leg</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+        <div class="pnode"><span class="pr">Rolling LP</span><span class="pl"><span class="k">sees</span>its election, its units</span><span class="pl"><span class="k">not</span>other LPs</span></div>
+      </div>
+    </div>
+    <div class="legsrow" data-reveal aria-label="The legs of the close">
+      <div class="lr"><span class="lv">288,000,000</span><span class="ll">CV units → buyer</span></div>
+      <div class="lr"><span class="lv">192,000,000</span><span class="ll">CV units → rolling LP</span></div>
+      <div class="lr"><span class="lv">$288.0M</span><span class="ll">USDC → exiting LP</span></div>
+      <div class="lr"><span class="lv">2×</span><span class="ll">old-fund interests burned</span></div>
+      <div class="lr sum"><span class="lv">= $480M</span><span class="ll">units issued ≡ PSA price · asserted on-ledger</span></div>
+    </div>
+    <p class="projcap" data-reveal>Visibility is enforced by the ledger, not by the application.</p>
+    </div>
+  </section>
+
+  <!-- 10 · NEXT STEPS -->
+  <section class="slide" aria-label="Next steps">
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">10</span> &nbsp;Next steps</p>
+      <div class="rule"></div>
+      <span class="tag">same closing room, different deal type</span>
+    </div>
+    <div class="stack center" style="flex:1; gap:44px;">
+      <h1 class="lead" data-reveal>A general engine for multi-party corporate actions.</h1>
+      <div class="plist" data-reveal>
+        <div class="prow"><span class="pl">Fund liquidation</span><span class="pd">A wind-down settles the same way — assets out, cash to LPs, all or none.</span></div>
+        <div class="prow"><span class="pl">NAV fund-finance closes</span><span class="pd">Multiple lenders commit tranches privately; the drawdown settles atomically.</span></div>
+        <div class="prow"><span class="pl">Tender offers, block crossings</span><span class="pd">Sealed offers and private elections, settled in one transaction.</span></div>
+      </div>
+      <p class="subcap" data-reveal>Continuation deals are the wedge; the pattern is the same each time.</p>
+    </div>
+  </section>
+
+  <!-- 11 · TEAM -->
+  <section class="slide" aria-label="Team">
+    <svg class="deco flowbg dim" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true">
+      <g class="ff-slow">
+        <path d="M-100,180 C420,110 820,300 1240,210 S1840,120 2020,190"/>
+        <path d="M-100,420 C400,340 860,540 1280,440 S1860,340 2020,410"/>
+        <path d="M-100,660 C420,580 840,780 1260,680 S1850,580 2020,650"/>
+        <path d="M-100,900 C400,830 860,1020 1280,930 S1860,830 2020,900"/>
+      </g>
+      <g class="ff-fast">
+        <path d="M-100,300 C460,240 880,420 1300,330 S1870,240 2020,300"/>
+        <path d="M-100,780 C460,710 880,900 1300,800 S1870,710 2020,780"/>
+      </g>
+    </svg>
+    <div class="head" data-reveal>
+      <p class="eyebrow"><span class="n">11</span> &nbsp;Team</p>
+      <div class="rule"></div>
+      <span class="tag">who built it</span>
+    </div>
+    <div class="team-wrap">
+      <div class="team-group" data-reveal>
+        <p class="glabel">Team</p>
+        <div class="team-row">
+          <div class="member">
+            <span class="avatar"><span class="monogram">KM</span><img src="shots/team/kirill.webp" alt="Kirill Madorin" onerror="this.remove()"></span>
+            <div>
+              <p class="m-name">Kirill Madorin</p>
+              <p class="m-role">Full-stack · JavaScript · Rust</p>
+              <p class="m-handle">@kmadorin</p>
+            </div>
+          </div>
+          <div class="member">
+            <span class="avatar"><span class="monogram">AB</span><img src="shots/team/artem.webp" alt="Artem Bryzgalov" onerror="this.remove()"></span>
+            <div>
+              <p class="m-name">Artem Bryzgalov</p>
+              <p class="m-role">Product design · UI/UX</p>
+              <p class="m-handle">@abrizgalov</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="team-group" data-reveal>
+        <p class="glabel">Advisor</p>
+        <div class="advisor-row">
+          <span class="avatar">
+            <svg class="anon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 12.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>
+            </svg>
+          </span>
+          <div>
+            <p class="a-role">Kenji Watanabe</p>
+            <p class="a-sub">Advisor · Partner at a Japanese venture fund</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · THANKS -->
+  <section class="slide" aria-label="Thanks">
+    <svg class="deco flowbg" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true">
+      <g class="ff-slow">
+        <path d="M-100,180 C420,110 820,300 1240,210 S1840,120 2020,190"/>
+        <path d="M-100,420 C400,340 860,540 1280,440 S1860,340 2020,410"/>
+        <path d="M-100,660 C420,580 840,780 1260,680 S1850,580 2020,650"/>
+        <path d="M-100,900 C400,830 860,1020 1280,930 S1860,830 2020,900"/>
+      </g>
+      <g class="ff-fast">
+        <path d="M-100,300 C460,240 880,420 1300,330 S1870,240 2020,300"/>
+        <path d="M-100,540 C440,470 900,660 1320,560 S1870,470 2020,540"/>
+      </g>
+    </svg>
+    <div class="title-grid">
+      <div data-reveal>
+        <span class="brandmark sm" aria-label="Continuum">
+          <svg viewBox="0 0 267 29" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M29.2562 19.4495L24.3265 24.3616C21.5491 27.1288 17.9031 28.512 14.2581 28.512C10.6042 28.5119 6.95007 27.1223 4.17123 24.343C-1.39044 18.7812 -1.39038 9.73198 4.17123 4.17016C9.72354 -1.38165 18.7656 -1.39066 24.3275 4.15063L26.3333 6.01293L21.0003 11.3147L19.0199 9.4768C17.7061 8.16762 15.9819 7.51391 14.2581 7.51391C12.5299 7.51399 10.8018 8.1714 9.48764 9.48559C6.85791 12.1155 6.858 16.3956 9.48764 19.0256C12.1137 21.6512 16.3893 21.6554 19.0199 19.0344L33.9574 4.15063C39.5181 -1.39048 48.5598 -1.38278 54.1117 4.16918C56.8059 6.86339 58.2904 10.4456 58.2904 14.2561C58.2903 18.066 56.8063 21.6488 54.1117 24.343C48.5604 29.8948 39.5196 29.903 33.9574 24.3616L29.2562 19.4495ZM48.7962 9.48657C46.1707 6.86103 41.8945 6.85726 39.264 9.47778L32.0326 16.6829L34.5775 14.1477L39.264 19.0354C41.894 21.6559 46.1707 21.6521 48.7962 19.0266C50.0702 17.7525 50.7718 16.0579 50.7718 14.2561C50.7717 12.4545 50.0701 10.7606 48.7962 9.48657Z" fill="url(#mk_b)"/>
+            <path d="M78.4798 1.41625C84.3038 1.41625 88.3995 5.19201 89.1996 10.4719H83.8236C83.2156 7.30423 80.8802 5.92813 78.2884 5.92797C75.0244 5.92797 72.4964 8.64803 72.4964 13.384C72.4964 18.28 75.0239 20.9035 78.3519 20.9036C80.7199 20.9036 83.3437 19.8796 83.9837 16.3596H89.3597C88.5277 21.7356 84.1757 25.4163 78.3197 25.4163C71.0879 25.4161 66.7044 20.8079 66.7044 13.384C66.7044 6.05608 71.2479 1.41632 78.4798 1.41625ZM102.151 1.41625C109.255 1.41625 114.183 6.18425 114.183 13.4163C114.183 20.6481 109.255 25.4163 102.151 25.4163C95.0149 25.4161 90.1196 20.648 90.1195 13.4163C90.1195 6.18434 95.0149 1.41637 102.151 1.41625ZM200.534 15.6565C200.534 19.0482 201.334 20.9358 205.142 20.9358C208.982 20.9357 209.654 18.76 209.654 15.3362V1.80004H215.125V14.8879C215.125 22.0239 212.374 25.4162 205.142 25.4163C198.198 25.4163 195.062 22.7281 195.062 15.0803V1.80004H200.534V15.6565ZM223.105 15.6565C223.105 19.0482 223.905 20.9358 227.713 20.9358C231.553 20.9357 232.225 18.76 232.225 15.3362V1.80004H237.697V14.8879C237.697 22.0239 234.945 25.4162 227.713 25.4163C220.769 25.4163 217.633 22.7281 217.633 15.0803V1.80004H223.105V15.6565ZM132.003 17.8V1.80004H137.284V25.0002H130.627L121.316 9.00024V25.0002H116.035V1.80004H122.692L132.003 17.8ZM159.946 6.59985H152.49V25.0002H146.986V6.59985H139.561V1.80004H159.946V6.59985ZM167.744 25.0002H162.272V1.80004H167.744V25.0002ZM186.936 17.8V1.80004H192.216V25.0002H185.56L176.248 9.00024V25.0002H170.968V1.80004H177.624L186.936 17.8ZM253.676 18.4397L258.22 1.80004H266.764V25.0002H261.452V6.40844L256.268 25.0002H251.117L245.901 6.43969V25.0002H240.588V1.80004H249.228L253.676 18.4397ZM102.151 5.92797C98.7588 5.92811 95.9115 8.48838 95.9115 13.4163C95.9115 18.344 98.7589 20.9034 102.151 20.9036C105.543 20.9036 108.391 18.3441 108.391 13.4163C108.391 8.48825 105.543 5.92797 102.151 5.92797Z" fill="#FFFFFF"/>
+            <defs><linearGradient id="mk_b" x1="0" y1="34" x2="101" y2="-24" gradientUnits="userSpaceOnUse" spreadMethod="repeat"><stop stop-color="#4F67E8"/><stop offset="0.5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#4F67E8"/><animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="101 -58" dur="7s" repeatCount="indefinite"/></linearGradient></defs>
+          </svg>
+        </span>
+      </div>
+      <div class="title-mid">
+        <h1 class="title-sub" data-reveal>Thank you.</h1>
+        <p class="title-lead" data-reveal>A secure closing room for GP-led continuation deals — private commitments, four on-ledger proofs, one atomic close on Canton.</p>
+      </div>
+      <div class="thanks-foot">
+        <div class="contacts" data-reveal>
+          <div class="cperson">
+            <span class="cname">Artem Bryzgalov</span>
+            <span class="clinks">
+              <a class="clink" href="https://t.me/abrizgalov" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+                t.me/abrizgalov</a>
+              <a class="clink" href="https://github.com/artbreez" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+                artbreez</a>
+              <a class="clink" href="https://www.linkedin.com/in/abrizgalov/" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4V9h4v1"/><rect width="4" height="12" x="2" y="9" rx="1"/><circle cx="4" cy="4" r="2"/></svg>
+                in/abrizgalov</a>
+              <a class="clink" href="https://x.com/abrizgalov" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.3 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1 2h6.4l4.4 5.8L18.9 2Zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20Z"/></svg>
+                @abrizgalov</a>
+              <a class="clink" href="https://abrizgalov.framer.website/" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                abrizgalov.framer.website</a>
+            </span>
+          </div>
+          <div class="cperson">
+            <span class="cname">Kirill Madorin</span>
+            <span class="clinks">
+              <a class="clink" href="https://t.me/kmadorin" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+                t.me/kmadorin</a>
+              <a class="clink" href="https://github.com/kmadorin" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+                kmadorin</a>
+              <a class="clink" href="https://www.linkedin.com/in/kirill-madorin/" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4V9h4v1"/><rect width="4" height="12" x="2" y="9" rx="1"/><circle cx="4" cy="4" r="2"/></svg>
+                in/kirill-madorin</a>
+              <a class="clink" href="https://x.com/kirillmadorin" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.3 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1 2h6.4l4.4 5.8L18.9 2Zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20Z"/></svg>
+                @kirillmadorin</a>
+            </span>
+          </div>
+        </div>
+        <div class="tlinks" data-reveal>
+          <a class="tlink" href="https://continuum-custody.fly.dev" target="_blank" rel="noopener noreferrer"><span class="tl">Live app</span><span class="tv">continuum-custody.fly.dev</span></a>
+          <a class="tlink" href="https://github.com/kmadorin/continuum-prototype" target="_blank" rel="noopener noreferrer"><span class="tl">Code</span><span class="tv">github.com/kmadorin/continuum-prototype</span></a>
+          <div class="tlink"><span class="tl">Network</span><span class="tv canton-lock"><img class="canton-logo" src="shots/canton-logo-white.svg" alt="Canton"> 5N devnet</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<div class="edgezone zprev">
+  <button class="edge" id="edgePrev" aria-label="Previous slide">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+  </button>
+</div>
+<div class="edgezone znext">
+  <button class="edge" id="edgeNext" aria-label="Next slide">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+  </button>
+</div>
+
+<div id="hud" role="navigation" aria-label="Slide navigation">
+  <button class="nav" id="prev" aria-label="Previous slide">←</button>
+  <span class="counter"><span class="cur" id="cur">01</span> / <span id="tot">12</span></span>
+  <div class="dots" id="dots" aria-hidden="true"></div>
+  <button class="nav" id="next" aria-label="Next slide">→</button>
+  <a class="nav pdfbtn" href="deck.pdf" download="continuum-deck.pdf" aria-label="Download the deck as PDF">PDF</a>
+</div>
+<div id="hint">← → · swipe · F</div>
+
+<script>
+(function () {
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Mobile mode: the deck is a naturally-scrolling document — no strip
+  // transforms, no wheel/touch hijacking, no stage scaling (all CSS-gated too).
+  var mobileQ = window.matchMedia('(max-width: 760px)');
+  var mobile = mobileQ.matches;
+  mobileQ.addEventListener('change', function () { location.reload(); });
+  var stage = document.getElementById('stage');
+  var strip = document.getElementById('strip');
+  var slides = Array.prototype.slice.call(strip.querySelectorAll('.slide'));
+  var N = slides.length;
+  var KEY = 'continuum-deck-slide';
+  var i = parseInt(localStorage.getItem(KEY), 10);
+  if (isNaN(i) || i < 0 || i >= N) i = 0;
+
+  var dots = document.getElementById('dots');
+  slides.forEach(function (s, k) {
+    var b = document.createElement('button');
+    b.className = 'dot'; b.type = 'button';
+    b.setAttribute('aria-label', 'Go to slide ' + (k + 1));
+    b.addEventListener('click', function () { go(k); });
+    dots.appendChild(b);
+  });
+  var dotEls = Array.prototype.slice.call(dots.children);
+  document.getElementById('tot').textContent = String(N).padStart(2, '0');
+  var edgePrev = document.getElementById('edgePrev');
+  var edgeNext = document.getElementById('edgeNext');
+
+  function pos() { return -i * 1080; }
+  function setStrip(y, ms) {
+    if (mobile) return;
+    strip.style.transition = (ms && !reduced) ? 'transform ' + ms + 'ms var(--ease-glide)' : 'none';
+    strip.style.transform = 'translateY(' + y + 'px)';
+  }
+
+  function render(dur) {
+    slides.forEach(function (s, k) { s.classList.toggle('live', k === i); });
+    dotEls.forEach(function (d, k) { d.classList.toggle('on', k === i); });
+    var rev = slides[i].querySelectorAll('[data-reveal]');
+    Array.prototype.forEach.call(rev, function (el, k) { el.style.setProperty('--i', k); });
+    document.getElementById('cur').textContent = String(i + 1).padStart(2, '0');
+    document.getElementById('progress').style.width = ((i + 1) / N * 100) + '%';
+    edgePrev.disabled = i === 0;
+    edgeNext.disabled = i === N - 1;
+    localStorage.setItem(KEY, i);
+    setStrip(pos(), dur || 0);
+  }
+  function go(n) {
+    var from = i;
+    i = Math.max(0, Math.min(N - 1, n));
+    var dist = Math.abs(i - from) || 1;
+    render(Math.min(950, 480 + 170 * dist));
+  }
+  function next() { go(i + 1); }
+  function prev() { go(i - 1); }
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+  edgeNext.addEventListener('click', next);
+  edgePrev.addEventListener('click', prev);
+
+  document.addEventListener('keydown', function (e) {
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End': e.preventDefault(); go(N - 1); break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+        break;
+    }
+  });
+
+  /* Trackpad swipe with momentum: the strip follows the gesture (rubber-band),
+     and the accumulated force of ONE gesture decides how far it carries —
+     a normal swipe turns one slide, a hard flick carries two or three. The
+     thresholds are deliberately stiff so it never runs away, and the wheel
+     going quiet ends the gesture. A weak nudge springs back. */
+  var THRESH = [150, 950, 2200, 3800]; // cumulative |delta| per gesture → 1..4 slides
+  var QUIET = 170, MAXPEEK = 130;
+  var acc = 0, firedCount = 0, quietT = null;
+  if (!mobile) window.addEventListener('wheel', function (e) {
+    if (e.ctrlKey) return; // pinch-zoom
+    acc += e.deltaY;
+    var a = Math.abs(acc), s = acc < 0 ? -1 : 1;
+    var edge = (acc > 0 && i === N - 1) || (acc < 0 && i === 0);
+    if (!edge && firedCount < THRESH.length && a > THRESH[firedCount]) {
+      firedCount++;
+      acc > 0 ? next() : prev();
+    } else if (firedCount === 0) {
+      var peek = (edge ? MAXPEEK * 0.35 : MAXPEEK) * a / (a + 260);
+      setStrip(pos() - s * peek, 0);
+    }
+    clearTimeout(quietT);
+    quietT = setTimeout(function () {
+      if (firedCount === 0 && acc !== 0) setStrip(pos(), 450);
+      acc = 0; firedCount = 0;
+    }, QUIET);
+  }, { passive: true });
+
+  var ty = 0, tx = 0;
+  if (!mobile) window.addEventListener('touchstart', function (e) { ty = e.touches[0].clientY; tx = e.touches[0].clientX; }, { passive: true });
+  if (!mobile) window.addEventListener('touchend', function (e) {
+    var dy = e.changedTouches[0].clientY - ty, dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dy) > 60 || Math.abs(dx) > 60) {
+      if (Math.abs(dy) > Math.abs(dx)) { dy < 0 ? next() : prev(); }
+      else { dx < 0 ? next() : prev(); }
+    }
+  }, { passive: true });
+
+  /* Cursor spotlight over the title flow-field — ported from the demo's sign-in
+     panel: mousemove sets a target in SVG user space, a rAF loop eases the
+     gradient centre toward it; going idle fades the highlight out slowly. */
+  var ff = document.getElementById('ff');
+  var ffSpot = document.getElementById('ffspot');
+  if (ff && ffSpot && !reduced) {
+    var sp = { x: -800, y: -800 }, tg = { x: -800, y: -800 }, raf = 0, idle = true;
+    var step = function () {
+      sp.x += (tg.x - sp.x) * 0.16;
+      sp.y += (tg.y - sp.y) * 0.16;
+      ffSpot.setAttribute('cx', sp.x.toFixed(1));
+      ffSpot.setAttribute('cy', sp.y.toFixed(1));
+      if (Math.hypot(tg.x - sp.x, tg.y - sp.y) > 0.6) raf = requestAnimationFrame(step);
+      else raf = 0;
+    };
+    window.addEventListener('pointermove', function (e) {
+      var m = ff.getScreenCTM();
+      if (!m) return;
+      var p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+      tg.x = p.x; tg.y = p.y;
+      if (idle) { sp.x = p.x; sp.y = p.y; idle = false; ff.classList.remove('idle'); }
+      if (!raf) raf = requestAnimationFrame(step);
+    });
+    document.documentElement.addEventListener('mouseleave', function () { idle = true; ff.classList.add('idle'); });
+  }
+
+  function scale() {
+    if (mobile) return;
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', scale);
+  scale();
+  render(0);
+})();
+</script>
+</body>
+</html>

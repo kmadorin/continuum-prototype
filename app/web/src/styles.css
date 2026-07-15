@@ -118,15 +118,31 @@ a:hover { color: var(--tint); }
 }
 .skip-link:focus-visible { top: 8px; }
 
+/* Preview disclaimer — full-width strip above the whole app, in normal flow.
+   Its height is subtracted from every 100vh surface below so nothing overflows.
+   Default 0: production carries no banner; App adds .has-banner on preview/dev. */
+:root { --preview-h: 0px; }
+.app-frame.has-banner { --preview-h: 32px; }
+.preview-banner {
+  position: sticky; top: 0; z-index: 45;
+  height: var(--preview-h);
+  display: flex; align-items: center; justify-content: center;
+  background: #172239; color: #c9d3e6;
+  font-family: var(--sans); font-size: 12px; font-weight: 500; letter-spacing: 0.01em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center; padding: 0 16px;
+}
+.preview-banner b { font-weight: 700; letter-spacing: 0.04em; color: #e6ecf9; }
+
 /* ============================================================================
    APP SHELL — persistent sidebar · page header · full-width content
    ============================================================================ */
-.appshell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
+.appshell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: calc(100vh - var(--preview-h)); }
 /* sign-out: the whole frame dissolves, then the session drops (see Shell.onSignOut) */
 .appshell.leaving { animation: fade-out 260ms ease both; pointer-events: none; }
 
 .sidebar {
-  position: sticky; top: 0; align-self: start; height: 100vh;
+  position: sticky; top: var(--preview-h); align-self: start; height: calc(100vh - var(--preview-h));
   background: var(--bg-2); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; overflow-y: auto;
 }
@@ -198,7 +214,7 @@ a:hover { color: var(--tint); }
 /* main column */
 .appmain { min-width: 0; display: flex; flex-direction: column; }
 .page-head {
-  position: sticky; top: 0; z-index: 30;
+  position: sticky; top: var(--preview-h); z-index: 30;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
   padding: 18px 32px 16px;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
@@ -241,7 +257,7 @@ a:hover { color: var(--tint); }
   .sidebar { display: contents; }
   .side-top {
     display: flex; align-items: stretch; gap: 4px;
-    position: sticky; top: 0; z-index: 50;
+    position: sticky; top: var(--preview-h); z-index: 50;
     background: color-mix(in srgb, var(--bg-2) 86%, transparent);
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
@@ -536,6 +552,10 @@ main { width: 100%; margin: 0 auto; padding: var(--sp-5) 32px 152px; }
   border: 1px solid var(--border-hi); font-size: 11px; color: var(--mute);
   font-variant-numeric: tabular-nums;
 }
+/* Optical centering: flex centers the line-box, not the glyph — the digit's figure
+   height rides high of true center, so nudge it down a hair (the check SVG is already
+   geometrically centered and is left untouched). */
+.lc-num .lc-digit { display: block; line-height: 1; transform: translateY(0.5px); }
 .lc-label { font-size: 13px; color: var(--mute); line-height: 1.2; white-space: nowrap; }
 /* done = confirmed on-ledger → green check */
 .lc-step.done { background: transparent; }
@@ -736,11 +756,11 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .section-label { font-size: 12px; font-weight: 600; color: var(--mute); margin: 0 0 12px; }
 
 /* ---------- sign-in ---------- */
-.signin-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, 44%) 1fr; }
+.signin-shell { min-height: calc(100vh - var(--preview-h)); display: grid; grid-template-columns: minmax(360px, 44%) 1fr; }
 .signin-brand {
   background: var(--bg-2); border-right: 1px solid var(--border);
   padding: 48px 56px 40px; display: flex; flex-direction: column; gap: 0;
-  position: sticky; top: 0; height: 100vh; overflow: hidden;
+  position: sticky; top: var(--preview-h); height: calc(100vh - var(--preview-h)); overflow: hidden;
 }
 .signin-brand > * { position: relative; z-index: 1; }
 /* Aurora: two oversized layers of pre-softened radial glows in the brand palette,
@@ -821,6 +841,27 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .pd-hero { display: flex; flex-direction: column; gap: 18px; }
 .pd-sub { font-size: 17px; line-height: 1.6; color: var(--text-2); margin: 0; max-width: 62ch; text-wrap: pretty; }
 .pd-hero .actions .btn, .pd-foot .actions .btn { text-decoration: none; }
+/* sticky morph header — the bar slides down and the wordmark scales up into place
+   once the hero logo scrolls past the top edge (toggled by an IntersectionObserver). */
+.pd-topbar {
+  position: fixed; top: var(--preview-h); right: 0; left: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: saturate(150%) blur(14px);
+  backdrop-filter: saturate(150%) blur(14px);
+  border-bottom: 1px solid transparent;
+  transform: translateY(-100%); opacity: 0; pointer-events: none;
+  transition: transform 440ms var(--ease-out), opacity 260ms var(--ease-out), border-color 440ms var(--ease-out);
+}
+.pd-topbar.is-stuck { transform: none; opacity: 1; pointer-events: auto; border-bottom-color: var(--border); }
+.tb-inner { max-width: 880px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; gap: 16px; }
+.tb-logo {
+  display: inline-flex; align-items: center; padding: 0; border: 0; background: none; cursor: pointer;
+  transform: scale(0.82) translateY(5px); transform-origin: left center; opacity: 0;
+  transition: transform 440ms var(--ease-out), opacity 320ms var(--ease-out);
+}
+.pd-topbar.is-stuck .tb-logo { transform: none; opacity: 1; }
+.tb-logo .logo { height: 22px; display: block; }
+.tb-cta { margin-left: auto; text-decoration: none; }
 .pd-section { display: flex; flex-direction: column; gap: 16px; }
 .pd-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 .pd-n { font-size: 12px; font-weight: 600; color: var(--pale); font-variant-numeric: tabular-nums; }
@@ -874,12 +915,14 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   .pd-leg { border-right: 0; border-bottom: 1px solid var(--border); }
   .pd-leg:last-child { border-bottom: 0; }
 }
-.signin-accounts { padding: 56px 48px 40px; display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
+.signin-accounts { padding: 56px 48px 40px; display: flex; flex-direction: column; gap: 0; min-height: calc(100vh - var(--preview-h)); }
 .signin-accounts .portal-foot { margin-top: auto; }
 .signin-accounts .section-label { margin-bottom: 4px; }
 @media (max-width: 1020px) {
   .signin-shell { grid-template-columns: 1fr; }
-  .signin-brand { position: static; height: auto; padding: 36px 24px 28px; }
+  /* relative (not static) so the absolutely-positioned flow-field SVG stays clipped
+     by this panel's overflow:hidden — static would let it escape and widen the page. */
+  .signin-brand { position: relative; height: auto; padding: 36px 24px 28px; }
   .signin-brand .logo-lockup { margin-bottom: 28px; }
   .signin-brand h1 { font-size: clamp(30px, 8.4vw, 40px); margin-top: 28px; }
   .sb-eyebrow { margin: 24px 0 -22px; }
@@ -955,6 +998,13 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/><path d='m12 5 7 7-7 7'/></svg>") center / contain no-repeat;
 }
 .accounts .account.wide { grid-column: auto; }
+/* Phones: the CTA is a hover affordance that never fires on touch, yet its
+   nowrap width still reserved the third column and crushed the name into
+   one-word-per-line. Drop it so the name gets the full row. */
+@media (max-width: 640px) {
+  .accounts .account { grid-template-columns: 48px 1fr; padding-right: 20px; }
+  .accounts .account .acc-enter { display: none; }
+}
 
 /* note wraps to two quiet lines on the left; Reset holds the bottom-right corner,
    bottoms aligned with the brand panel's small print across the divide */
@@ -1110,7 +1160,7 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
 .settled-dismiss-hint { margin: 0; }
 .settled-eyebrow { font-size: 12px; font-weight: 600; color: var(--ok); }
 .settled-title {
-  font-family: var(--serif); font-size: clamp(44px, 8vw, 72px); font-weight: 400; letter-spacing: 0.01em;
+  font-family: var(--sans); font-size: clamp(44px, 8vw, 72px); font-weight: 700; letter-spacing: -0.02em;
   margin: -6px 0 0; color: var(--text); line-height: 1;
 }
 .settled-idblock, .settled-outcome {
@@ -1382,6 +1432,7 @@ table.calc .c-out { color: var(--pale); font-size: 13.5px; white-space: nowrap; 
   .account-login-wrap { transition: none; }
   .appbody > *, .signin-accounts > *, .signin-brand > *, .pd-section, .pd-hero { animation: none; }
   .kpi-tile.pending .kpi-value { animation: none; }
+  .pd-topbar, .pd-topbar .tb-logo { transition: none; }
 }
 
 @media (max-width: 560px) {

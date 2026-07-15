@@ -50,12 +50,29 @@ function Gate() {
   );
 }
 
+// The PREVIEW disclaimer belongs to the preview deployment and local dev only —
+// production (continuum-custody.fly.dev) must never brand itself as a preview.
+// Host-gated so one build serves both: `has-banner` also flips --preview-h, which
+// every sticky-header offset reads (0 when the banner is absent).
+const IS_PREVIEW = /localhost|^127\.|preview/.test(window.location.hostname);
+
 export default function App() {
   return (
     <InspectorProvider>
       <ToastProvider>
         <SessionProvider>
-          <Gate />
+          {/* Preview disclaimer sits ABOVE the whole layout in normal flow — it pushes
+              the shell/sign-in/pitch down rather than overlaying them. */}
+          <div className={`app-frame${IS_PREVIEW ? ' has-banner' : ''}`}>
+            {IS_PREVIEW && (
+              <div className="preview-banner" role="status">
+                <span>
+                  <b>PREVIEW</b> — simulated ledger. Not on-chain.
+                </span>
+              </div>
+            )}
+            <Gate />
+          </div>
         </SessionProvider>
       </ToastProvider>
     </InspectorProvider>
