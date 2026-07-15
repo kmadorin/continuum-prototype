@@ -8,7 +8,11 @@ set -euo pipefail
 
 BASE="$1"; HEAD="$2"; LABELS="${3:-[]}"
 
-CHANGED="$(git diff --name-only "$BASE" "$HEAD")"
+# THREE dots (merge-base), not two. Two-dot diffs the tips directly, so once main gets a
+# backend commit that ui-ux hasn't merged, a ui-ux PR would diff as REVERTING app/custody/**
+# → hard fail, no override, on a PR that touched nothing but CSS. That teaches the designer
+# the gate is noise. Requires fetch-depth: 0 in the workflow (it's set).
+CHANGED="$(git diff --name-only "$BASE...$HEAD")"
 [ -z "$CHANGED" ] && { echo "no changes"; exit 0; }
 
 hard="$(echo "$CHANGED" | grep -E '^app/(custody|ledger-client)/' || true)"
