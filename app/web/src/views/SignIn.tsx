@@ -290,11 +290,9 @@ export default function SignIn() {
           >
             Enter demo workspace
           </button>
-          <a className="btn" href="/pitch-deck">
-            See how it works
-          </a>
-          {/* The presentation deck — served at the clean /deck/ path by both the
-              dev server (web/public) and the custody spine (web/dist). */}
+          {/* ONE link to the pitch: the deck IS the "how it works" story, and the demo
+              itself is entered by picking a seat. Served at the clean /deck/ path by
+              both the dev server (web/public) and the custody spine (web/dist). */}
           <a className="btn" href="/deck/" target="_blank" rel="noopener noreferrer">
             Pitch deck
           </a>

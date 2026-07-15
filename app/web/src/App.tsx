@@ -18,7 +18,7 @@ function Gate() {
   const { isSignedIn, role, ready } = useSession();
 
   // Temporary internal route: the pitch, as a public read-only page (linked from the
-  // sign-in's "See how it works"). Resolved on pathname so it works in dev and behind
+  // presentation deck at /deck/). Resolved on pathname so it works in dev and behind
   // the custody spine's SPA fallback alike — no router needed for one page.
   if (window.location.pathname === '/pitch-deck') return <PitchDeck />;
 

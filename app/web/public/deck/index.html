@@ -995,20 +995,28 @@
     }
   });
 
-  /* Trackpad swipe with momentum: the strip follows the gesture (rubber-band),
-     and the accumulated force of ONE gesture decides how far it carries —
-     a normal swipe turns one slide, a hard flick carries two or three. The
-     thresholds are deliberately stiff so it never runs away, and the wheel
-     going quiet ends the gesture. A weak nudge springs back. */
-  var THRESH = [150, 950, 2200, 3800]; // cumulative |delta| per gesture → 1..4 slides
+  /* Trackpad swipe with momentum, velocity-gated: the strip follows the gesture
+     (rubber-band) and one swipe turns one slide. Extra slides in the SAME gesture
+     require both more travel AND a genuinely fast flick — a slow deliberate
+     scroll never chains, however far it drags, and the decaying inertia tail
+     stops chaining the moment it slows. A weak nudge springs back. */
   var QUIET = 170, MAXPEEK = 130;
-  var acc = 0, firedCount = 0, quietT = null;
+  var BASE = 140;      // |delta| for the first slide — responsive
+  var STEP = 650;      // extra |delta| for each additional slide in one gesture
+  var VEL_GATE = 1.6;  // px/ms — chaining needs a real flick, rising per slide
+  var acc = 0, firedCount = 0, quietT = null, vel = 0, lastT = 0;
   if (!mobile) window.addEventListener('wheel', function (e) {
     if (e.ctrlKey) return; // pinch-zoom
+    var now = performance.now();
+    var dt = Math.max(1, now - (lastT || now));
+    lastT = now;
+    vel = 0.75 * vel + 0.25 * (Math.abs(e.deltaY) / dt); // smoothed gesture speed
     acc += e.deltaY;
     var a = Math.abs(acc), s = acc < 0 ? -1 : 1;
     var edge = (acc > 0 && i === N - 1) || (acc < 0 && i === 0);
-    if (!edge && firedCount < THRESH.length && a > THRESH[firedCount]) {
+    var need = BASE + firedCount * STEP;
+    var fastEnough = firedCount === 0 || vel > VEL_GATE + 0.4 * (firedCount - 1);
+    if (!edge && a > need && fastEnough) {
       firedCount++;
       acc > 0 ? next() : prev();
     } else if (firedCount === 0) {
@@ -1018,7 +1026,7 @@
     clearTimeout(quietT);
     quietT = setTimeout(function () {
       if (firedCount === 0 && acc !== 0) setStrip(pos(), 450);
-      acc = 0; firedCount = 0;
+      acc = 0; firedCount = 0; vel = 0; lastT = 0;
     }, QUIET);
   }, { passive: true });
 
