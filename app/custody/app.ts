@@ -12,6 +12,7 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, resolve } from 'node:path';
@@ -541,13 +542,28 @@ export function createApp(deps: AppDeps) {
   // ── static SPA (single deployable) ── registered LAST so API routes win ────────
   if (deps.staticRoot) {
     const root = deps.staticRoot;
-    const serveFile = (_c: any, filePath: string) => {
+    // Text types are gzipped on the fly (the SPA bundle is ~330KB -> ~97KB) and
+    // everything gets a cache policy: hashed bundles are immutable, media caches
+    // for an hour, html always revalidates — repeat opens hit the browser cache.
+    const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.map']);
+    const serveFile = (c: any, filePath: string) => {
       const ext = filePath.slice(filePath.lastIndexOf('.'));
-      const data = new Uint8Array(readFileSync(filePath));
-      return new Response(data as any, {
-        status: 200,
-        headers: { 'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream' },
-      });
+      let data = new Uint8Array(readFileSync(filePath));
+      const headers: Record<string, string> = {
+        'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+        'Cache-Control':
+          ext === '.html'
+            ? 'no-cache'
+            : filePath.includes('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'public, max-age=3600',
+      };
+      if (COMPRESSIBLE.has(ext) && (c.req.header('accept-encoding') ?? '').includes('gzip')) {
+        data = new Uint8Array(gzipSync(data));
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+      }
+      return new Response(data as any, { status: 200, headers });
     };
     app.get('/*', (c) => {
       const pathname = decodeURIComponent(new URL(c.req.url).pathname);

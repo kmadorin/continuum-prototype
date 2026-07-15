@@ -295,22 +295,22 @@
   }
   .aurora i:nth-child(1) {
     width: 980px; height: 560px; left: -180px; bottom: -220px;
-    background: radial-gradient(closest-side, rgba(79, 103, 232, 0.5), transparent 72%);
-    animation: aur-a 14s ease-in-out infinite alternate;
+    background: radial-gradient(closest-side, rgba(79, 103, 232, 0.55), transparent 72%);
+    animation: aur-a 9s ease-in-out infinite alternate;
   }
   .aurora i:nth-child(2) {
     width: 1200px; height: 640px; right: -260px; top: -240px;
-    background: radial-gradient(closest-side, rgba(130, 114, 230, 0.38), transparent 72%);
-    animation: aur-b 18s ease-in-out infinite alternate;
+    background: radial-gradient(closest-side, rgba(130, 114, 230, 0.45), transparent 72%);
+    animation: aur-b 12s ease-in-out infinite alternate;
   }
   .aurora i:nth-child(3) {
     width: 860px; height: 460px; left: 32%; top: 26%;
-    background: radial-gradient(closest-side, rgba(183, 194, 248, 0.2), transparent 72%);
-    animation: aur-c 11s ease-in-out infinite alternate;
+    background: radial-gradient(closest-side, rgba(183, 194, 248, 0.26), transparent 72%);
+    animation: aur-c 7.5s ease-in-out infinite alternate;
   }
-  @keyframes aur-a { to { transform: translate(220px, -160px) scale(1.18); } }
-  @keyframes aur-b { to { transform: translate(-200px, 150px) rotate(10deg) scale(1.1); } }
-  @keyframes aur-c { to { transform: translate(-150px, 110px) scale(1.25); } }
+  @keyframes aur-a { to { transform: translate(340px, -230px) scale(1.32); } }
+  @keyframes aur-b { to { transform: translate(-320px, 230px) rotate(14deg) scale(1.22); } }
+  @keyframes aur-c { to { transform: translate(-270px, 180px) scale(1.42); } }
 
   /* ---------- chrome ---------- */
   #progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--primary-strong); width: 0; transition: width .3s ease; z-index: 60; }
@@ -512,6 +512,7 @@
 
   <!-- 1 · TITLE -->
   <section class="slide" aria-label="Title">
+    <div class="deco aurora" aria-hidden="true"><i></i><i></i><i></i></div>
     <svg id="ff" class="deco flowfx idle" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <radialGradient id="ffspot" gradientUnits="userSpaceOnUse" cx="-800" cy="-800" r="340">
@@ -614,10 +615,10 @@
       </div>
       <div class="stack center">
         <div class="checks" data-reveal>
-          <div class="c"><span class="ct">An independent valuer prices the asset.</span></div>
-          <div class="c"><span class="ct">A sealed auction discovers the price.</span></div>
-          <div class="c"><span class="ct">The LPAC reviews fairness and consents.</span></div>
-          <div class="c"><span class="ct">Each LP elects privately.</span></div>
+          <div class="c"><span class="ct">An independent valuer prices the asset</span></div>
+          <div class="c"><span class="ct">A sealed auction discovers the price</span></div>
+          <div class="c"><span class="ct">The LPAC reviews fairness and consents</span></div>
+          <div class="c"><span class="ct">Each LP elects privately</span></div>
         </div>
       </div>
     </div>
@@ -714,19 +715,19 @@
       <div class="col">
         <figure class="shot grow" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · GP</span></div>
-          <img src="shots/workspace.webp" alt="Continuum GP workspace&nbsp;— the closing room: stepper, KPIs, participants and per-party visibility">
+          <img src="shots/workspace.webp" loading="lazy" decoding="async" alt="Continuum GP workspace&nbsp;— the closing room: stepper, KPIs, participants and per-party visibility">
           <figcaption>The GP's closing room&nbsp;— lifecycle, live KPIs, and per-party visibility enforced by the ledger.</figcaption>
         </figure>
       </div>
       <div class="col">
         <figure class="shot" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev</span></div>
-          <img src="shots/signin.webp" alt="Continuum seat picker&nbsp;— six seats, each signing through its own custodian">
+          <img src="shots/signin.webp" loading="lazy" decoding="async" alt="Continuum seat picker&nbsp;— six seats, each signing through its own custodian">
           <figcaption>Six seats&nbsp;— each signs through its own custodian.</figcaption>
         </figure>
         <figure class="shot grow" data-reveal>
           <div class="shot-bar"><span class="wdots"><i></i><i></i><i></i></span><span class="url">continuum-custody.fly.dev · buyer</span></div>
-          <img src="shots/buyer.webp" alt="Buyer seat&nbsp;— sealed bid, blind to every other buyer">
+          <img src="shots/buyer.webp" loading="lazy" decoding="async" alt="Buyer seat&nbsp;— sealed bid, blind to every other buyer">
           <figcaption>The buyer files a sealed bid&nbsp;— blind to every other buyer.</figcaption>
         </figure>
       </div>
@@ -824,7 +825,7 @@
         <p class="glabel">Team</p>
         <div class="team-row">
           <div class="member">
-            <span class="avatar"><span class="monogram">KM</span><img src="shots/team/kirill.webp" alt="Kirill Madorin" onerror="this.remove()"></span>
+            <span class="avatar"><span class="monogram">KM</span><img src="shots/team/kirill.webp" loading="lazy" decoding="async" alt="Kirill Madorin" onerror="this.remove()"></span>
             <div>
               <p class="m-name">Kirill Madorin</p>
               <p class="m-role">Full-stack · JavaScript · Rust</p>
@@ -832,7 +833,7 @@
             </div>
           </div>
           <div class="member">
-            <span class="avatar"><span class="monogram">AB</span><img src="shots/team/artem.webp" alt="Artem Bryzgalov" onerror="this.remove()"></span>
+            <span class="avatar"><span class="monogram">AB</span><img src="shots/team/artem.webp" loading="lazy" decoding="async" alt="Artem Bryzgalov" onerror="this.remove()"></span>
             <div>
               <p class="m-name">Artem Bryzgalov</p>
               <p class="m-role">Product design · UI/UX</p>
@@ -851,7 +852,7 @@
           </span>
           <div>
             <p class="a-role">Kenji Watanabe</p>
-            <p class="a-sub">Advisor · Partner at a Japanese venture fund</p>
+            <p class="a-sub">Advisor · Partner at a venture fund</p>
           </div>
         </div>
       </div>
@@ -930,7 +931,7 @@
         <div class="tlinks" data-reveal>
           <a class="tlink" href="https://continuum-custody.fly.dev" target="_blank" rel="noopener noreferrer"><span class="tl">Live app</span><span class="tv">continuum-custody.fly.dev</span></a>
           <a class="tlink" href="https://github.com/kmadorin/continuum-prototype" target="_blank" rel="noopener noreferrer"><span class="tl">Code</span><span class="tv">github.com/kmadorin/continuum-prototype</span></a>
-          <div class="tlink"><span class="tl">Network</span><span class="tv canton-lock"><img class="canton-logo" src="shots/canton-logo-white.svg" alt="Canton"> 5N devnet</span></div>
+          <div class="tlink"><span class="tl">Network</span><span class="tv canton-lock"><img class="canton-logo" loading="lazy" decoding="async" src="shots/canton-logo-white.svg" alt="Canton"> 5N devnet</span></div>
         </div>
       </div>
     </div>
