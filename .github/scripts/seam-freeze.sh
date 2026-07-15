@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 # Two-tier seam freeze for ui-ux PRs.
-#   HARD: backend/ledger paths. A UI redesign touching these is always wrong. No override.
-#   SOFT: frontend seam paths. Overridable with the `seam-change` PR label — which exists
-#         to make the owner READ the hunk, not to wave it through.
+#   HARD: the ledger client, the preview's own mock, and the custody spine's identity/
+#         session/provisioning. A redesign has no business here and there is no override.
+#   SOFT: everything else a redesign legitimately reaches — route logic, the anchored
+#         DOCUMENTS (which are the designer's to restyle), their generated hashes/manifest,
+#         regenerated fixtures, and the frontend seam. Fails by default; the `seam-change`
+#         PR label releases it. The label is not an escape hatch — it is the signal to the
+#         owner to actually READ that hunk.
+#
+# WHY docs/ IS NOT HARD: restyling app/custody/docs/*.html changes their bytes, which
+# REGENERATES hashes.ts + manifest.json (they are marked "GENERATED — do not edit by hand").
+# That coupling is mandatory and legitimate, so hard-freezing it would block real work with
+# no recourse — and a gate that fires on correct work is one people learn to route around.
 # Usage: seam-freeze.sh <base-sha> <head-sha> <labels-json>
 set -euo pipefail
 
@@ -15,8 +24,14 @@ BASE="$1"; HEAD="$2"; LABELS="${3:-[]}"
 CHANGED="$(git diff --name-only "$BASE...$HEAD")"
 [ -z "$CHANGED" ] && { echo "no changes"; exit 0; }
 
-hard="$(echo "$CHANGED" | grep -E '^app/(custody|ledger-client)/' || true)"
-soft="$(echo "$CHANGED" | grep -E '^app/web/src/(lib|ledger)/' || true)"
+# HARD: real backend logic — the ledger client, the custody spine (app/session/tenants/
+# provisioning), and the preview's own mock infra. `app.ts` STAYS here: it is the route
+# logic, not a generated artifact, and a redesign editing it is a decision the owner must
+# make deliberately, not something a label waves through.
+hard="$(echo "$CHANGED" | grep -E '^app/ledger-client/|^app/custody/(mock/|app\.ts|server.*\.ts|tenants\.ts|session\.ts|provision\.ts)' || true)"
+# SOFT: NOT backend logic — the anchored DOCUMENTS (the designer's to restyle), their
+# GENERATED hashes/manifest, regenerated fixtures, and the frontend seam.
+soft="$(echo "$CHANGED" | grep -E '^app/custody/(docs/|fixtures/)|^app/web/src/(lib|ledger)/' || true)"
 
 fail=0
 if [ -n "$hard" ]; then
