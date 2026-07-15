@@ -70,7 +70,7 @@
       "navLow": "480000000.0",
       "navHigh": "520000000.0",
       "asOfDate": "2026-06-30",
-      "contentHash": "ab5a539d8b780626370a095f2eb5f1c245abe242a772462e644706b73607de09"
+      "contentHash": "fb79d03a6e7b739acd70f090b10aabdf39771c63292e92bb3fc59162096b0440"
     },
     "stakeholders": [
       "continuum-valuer-mock::12209e995d09b72530f1a67c87bbe7024fedf5a479f082f2f16dbce4a3a1a312a59d",
@@ -89,7 +89,7 @@
       "fairLow": "0.9",
       "fairHigh": "1.0",
       "opinionDate": "2026-06-30",
-      "contentHash": "9a3ca06cd71f318717500357625d414f2d052611244b2826f0c1ce506dd42f8c"
+      "contentHash": "1a667a08add149437a5ab6eafce36b685b84c2761224c850b4ef07d34c469ed3"
     },
     "stakeholders": [
       "continuum-lpac-mock::12207264af1f23c82a6edd0f8ff3c3663f4b4fead990465bfa1920fa3fc77fe445ea",
@@ -171,7 +171,7 @@
       "amount": "480000000.0",
       "locked": false,
       "meta_": {
-        "continuum/valuation-sha256": "ab5a539d8b780626370a095f2eb5f1c245abe242a772462e644706b73607de09",
+        "continuum/valuation-sha256": "fb79d03a6e7b739acd70f090b10aabdf39771c63292e92bb3fc59162096b0440",
         "continuum/issuance-basis": "12204b7244e70b6ec8f88671ba6fd83646348d4c0548ff312f46f31f412425b909c6"
       }
     },
