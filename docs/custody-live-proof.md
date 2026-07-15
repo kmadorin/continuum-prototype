@@ -18,7 +18,7 @@ SPA) against the shared 5N devnet validator and drove the full custody path with
 
 ## Why this proves the product
 Each role logs in, reads its OWN on-chain state, and **its custodian signs its OWN transactions with that
-party's key** — the full 26-tx close (proven headless in `close-wallets.ts`) is exactly this pattern repeated,
+party's key** — the full 34-tx close (proven headless in `close-wallets.ts`) is exactly this pattern repeated,
 now through the custody HTTP stack. Every party's authorization is a distinct Ed25519 signature verified by the
 Canton synchronizer; the operator (proxy/M2M) cannot forge a party's approval. The demo colocates 5 custodians
 in one backend; the protocol is already multi-custodian (keys move to Fireblocks/Copper/a bank custodian

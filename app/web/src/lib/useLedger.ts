@@ -120,7 +120,10 @@ export async function loadRegistry(): Promise<void> {
   registryLoaded = true;
 }
 
-// Demo economics — identical to close-wallets.ts so a cross-tab live run ties out.
+// Demo economics — the SAME cap table scripts/close-wallets.ts proves headless on devnet,
+// so a cross-tab live run ties out. Change one and you must change the other: they diverged
+// once (this comment claimed identity while the script still ran the old two-leg close), and
+// nothing caught it because no code imports the script — only the docs cite it.
 // dealId ('M1') is the join key across SealedBid/LPElection/certs/basis; it is
 // deliberately distinct from the deal's human-readable `cv`.
 // dealId + cv + unit + usdc are epoch-scoped: loadRegistry() overwrites them from
