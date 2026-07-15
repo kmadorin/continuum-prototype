@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, ui-ux]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: custody tests
+        working-directory: app
+        run: |
+          npm ci
+          npx vitest run
+      - name: web lint, typecheck (tsc -b via build), tests
+        working-directory: app/web
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+          npx vitest run
+
+  seam-freeze:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: check frozen seams
+        run: |
+          chmod +x .github/scripts/seam-freeze.sh
+          .github/scripts/seam-freeze.sh \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            '${{ toJson(github.event.pull_request.labels.*.name) }}'
+
+  deploy-prod:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-continuum-custody
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy prod
+        working-directory: app
+        run: flyctl deploy --config fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD }}
+
+  deploy-preview:
+    needs: test
+    if: github.ref == 'refs/heads/ui-ux' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-continuum-custody-preview
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy preview
+        working-directory: app
+        run: flyctl deploy --config fly.preview.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PREVIEW }}

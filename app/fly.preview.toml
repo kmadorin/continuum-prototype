@@ -1,0 +1,37 @@
+# Designer preview — runs custody/server.mock.ts (simulated ledger).
+# NEVER set FN_SECRET or CUSTODY_KEYS_JSON on this app: server.mock.ts refuses to boot
+# with key material present, by design.
+app = "continuum-custody-preview"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+
+[processes]
+  app = "npx tsx custody/server.mock.ts"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # suspend, not stop: the store is in-memory, so a stopped machine loses the
+  # designer's in-session clicks and looks like a bug. Fixtures reseed on boot anyway.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/registry"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["app"]
