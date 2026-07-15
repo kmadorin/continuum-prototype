@@ -21,7 +21,7 @@
 **Key facts, already verified — do not re-litigate:**
 
 - `createApp(deps: AppDeps)` (`custody/app.ts:158`) is fully DI'd. `custody/server.ts` is the only place devnet deps are constructed. Read both before starting.
-- `tenantsFromRecords` (`custody/tenants.ts:38`) copies `r.party` **verbatim** and derives `key` from `r.mnemonic` **separately**. They are independent; nothing validates they correspond. This is why mock tenants can **adopt** real captured party IDs with dummy mnemonics.
+- `tenantsFromRecords` (`custody/tenants.ts:38`) copies `r.party` **verbatim** and derives `key` from `r.mnemonic` **separately**. They are independent; nothing validates they correspond. This is why the mock can use a canonical `MOCK_PARTIES` map (party strings derived deterministically) with dummy mnemonics — the party string is authoritative, the key only synthesizes a real-shaped fingerprint.
 - `demoEpoch` is a closure-local `let` at `custody/app.ts:309`. **It cannot be injected, read, or reset from outside.** Hence the outer wrapper intercepts `/demo/reset`.
 - `custody/app.ts:543` registers `app.get('/*')` which reads `index.html` off disk. No hook. Hence the outer wrapper serves `/` and `/index.html` first.
 - `deps.fetchImpl` is used by **two** routes: the `/api/*` reads proxy (`app.ts:271`) and `/ledger/update/:updateId` (`app.ts:406`). Both target `${deps.ledgerBase}...`. That is the single interception point for the fake ledger.
@@ -40,17 +40,17 @@
 **Create:**
 - `app/custody/mock/store.ts` — in-memory ledger store. Forked from `web/src/ledger/mock.ts`. Owns contracts, per-party projection, update trees. Single responsibility: *be the ledger*.
 - `app/custody/mock/store.test.ts`
-- `app/custody/mock/fixtures.ts` — fixture types + loader + tenant construction from a captured registry.
+- `app/custody/mock/fixtures.ts` — canonical `MOCK_PARTIES` map + `mockTenantRecords()` + fixture-file types. The single source of truth for party identity.
 - `app/custody/mock/fixtures.test.ts`
 - `app/custody/mock/ledger-fetch.ts` — `makeMockFetch(store)`: emulates the 3 ledger endpoints. Single responsibility: *speak the ledger's HTTP wire shape*.
 - `app/custody/mock/ledger-fetch.test.ts`
-- `app/custody/fixtures/registry.json` — captured `/registry` (party IDs + custodian names + deal keys).
-- `app/custody/fixtures/acs.json` — captured contracts, blobs dropped, deal keys normalized to epoch 1.
+- `app/custody/fixtures/acs.json` — authored contracts (close-wallets shapes, epoch-1, explicit stakeholders).
 - `app/custody/fixtures/audit.json` — seed rows for `/audit`.
 - `app/custody/fixtures/updates.json` — updateId → tree map.
 - `app/custody/server.mock.ts` — composition root + outer wrapper. Mirrors `server.ts`'s shape.
 - `app/custody/server.mock.test.ts`
-- `app/scripts/capture-fixtures.ts` — one-shot capture from prod.
+- `app/scripts/generate-fixtures.ts` — authors the fixtures offline (no prod, no network).
+- `app/scripts/generate-fixtures.test.ts`
 - `app/fly.preview.toml`
 - `.github/workflows/ci.yml`
 - `.github/scripts/seam-freeze.sh`
@@ -164,6 +164,20 @@ describe('MockLedgerStore', () => {
     s.reset();
     expect(s.activeContracts(GP)).toHaveLength(1);
   });
+
+  it('seed() honours EXPLICIT stakeholders over inference', () => {
+    const s = new MockLedgerStore();
+    // A ValuationReport: observersFor cannot infer gp, but the fixture says gp sees it.
+    s.seed([{
+      contractId: 'vr1',
+      templateId: '#continuum:Continuum.Valuation:ValuationReport',
+      args: { agent: 'valuer::1220', gp: GP, dealId: 'M1' },
+      stakeholders: ['valuer::1220', GP],
+    }]);
+    expect(s.activeContracts(GP)).toHaveLength(1);          // gp sees it because it was declared
+    expect(s.activeContracts('valuer::1220')).toHaveLength(1);
+    expect(s.activeContracts(BUYER)).toHaveLength(0);       // buyer was not a stakeholder
+  });
 });
 ```
 
@@ -194,8 +208,14 @@ import type { ActiveContract, JsCommand } from '../../ledger-client/src/types';
 /** A contract plus the parties allowed to see it (mock's privacy projection). */
 type Stored = ActiveContract & { stakeholders: string[] };
 
-/** A fixture row: the store computes stakeholders itself. */
-export type SeedContract = { contractId: string; templateId: string; args: Record<string, unknown> };
+/**
+ * A fixture row. `stakeholders` is OPTIONAL and AUTHORITATIVE when present: the real
+ * Continuum contracts are multi-stakeholder (e.g. a ValuationReport is seen by valuer +
+ * gp + lpac), which the naive observersFor cannot infer. The fixture generator (Task 4)
+ * writes the correct set explicitly; seed() falls back to stakeholdersFor only when it is
+ * absent (e.g. a unit test author who does not care about projection).
+ */
+export type SeedContract = { contractId: string; templateId: string; args: Record<string, unknown>; stakeholders?: string[] };
 
 /** Canton-shaped id: '1220' + sha256 hex. Deterministic, so tests can assert on it. */
 const cantonId = (s: string): string => `1220${bytesToHex(sha256(new TextEncoder().encode(s)))}`;
@@ -262,7 +282,12 @@ export class MockLedgerStore {
 
   /** Replace the store with fixture rows and remember them as the reset baseline. */
   seed(rows: SeedContract[]): void {
-    this.seeded = rows.map((r) => ({ ...r, stakeholders: stakeholdersFor(r.templateId, r.args) }));
+    // Explicit stakeholders win (the real contracts are multi-stakeholder); infer only
+    // when a row omits them.
+    this.seeded = rows.map(({ stakeholders, ...r }) => ({
+      ...r,
+      stakeholders: stakeholders ?? stakeholdersFor(r.templateId, r.args),
+    }));
     this.store = this.seeded.map((c) => ({ ...c }));
   }
 
@@ -306,7 +331,7 @@ function stakeholdersFor(tpl: string, a: Record<string, unknown>): string[] {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd app && npx vitest run custody/mock/store.test.ts`
-Expected: PASS, 9 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -318,13 +343,24 @@ git commit -m "feat(mock): in-memory ledger store for the designer preview"
 
 ---
 
-### Task 2: Fixture types, tenant adoption, fingerprint synthesis
+### Task 2: Canonical mock parties, tenant records, fingerprint synthesis
 
 **Files:**
 - Create: `app/custody/mock/fixtures.ts`
 - Test: `app/custody/mock/fixtures.test.ts`
 
-**Why adoption:** `tenantsFromRecords` copies `party` verbatim and derives `key` from `mnemonic` separately — they are independent and nothing validates they correspond, and the mock signer never verifies a signature. So the mock adopts prod's real party IDs and the fixtures match **by construction**. No rewrite, no mapping, no unmapped-party failure mode.
+**Design change from the spec (deliberate — the owner chose to seed fixtures by replaying
+`close-wallets.ts` rather than capturing prod).** There is no captured registry, so there is
+nothing to "adopt" party IDs *from*. Instead, one canonical `MOCK_PARTIES` map is derived
+**deterministically** from the six dummy keys — `party = continuum-<role>-mock::<fingerprint>`,
+Canton's real shape. Both the tenant records **and** the fixture generator (Task 4) import this
+one constant, so a fixture contract and the tenant that should see it reference the identical
+party string **by construction** — no capture, no rewrite, no mapping, zero drift possible.
+
+This is sound for the same reason adoption was: `tenantsFromRecords` (`tenants.ts:38`) copies
+`party` verbatim and derives `key` from `mnemonic` *separately* — nothing validates they
+correspond, and the mock signer never verifies a signature. The party string is authoritative;
+the key is decorative (it exists only to synthesize a real-shaped fingerprint for the audit UI).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -332,43 +368,58 @@ Create `app/custody/mock/fixtures.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { tenantRecordsFromRegistry, mockFingerprint, DEMO_PASSWORD } from './fixtures';
+import { MOCK_PARTIES, ROLES, mockTenantRecords, mockFingerprint, DEMO_PASSWORD } from './fixtures';
 
-const REGISTRY = {
-  parties: { gp: 'continuum-gp-123::1220aaaa', buyer: 'continuum-buyer-123::1220bbbb' },
-  custodians: { gp: 'Fireblocks — GP Treasury', buyer: 'Copper — Northbeam Secondaries' },
-  deal: { epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' },
-};
-
-describe('tenantRecordsFromRegistry', () => {
-  it('adopts the captured party ids verbatim', () => {
-    const recs = tenantRecordsFromRegistry(REGISTRY);
-    expect(recs.find((r) => r.role === 'gp')!.party).toBe('continuum-gp-123::1220aaaa');
+describe('MOCK_PARTIES', () => {
+  it('covers all six roles', () => {
+    expect(Object.keys(MOCK_PARTIES).sort()).toEqual([...ROLES].sort());
   });
 
-  it('carries the captured custodian names', () => {
-    const recs = tenantRecordsFromRegistry(REGISTRY);
-    expect(recs.find((r) => r.role === 'gp')!.custodianName).toBe('Fireblocks — GP Treasury');
+  it('every party id is Canton-shaped (hint::1220+64hex) and deterministic', () => {
+    for (const role of ROLES) {
+      expect(MOCK_PARTIES[role]).toMatch(new RegExp(`^continuum-${role}-mock::1220[0-9a-f]{64}$`));
+    }
+  });
+
+  it('party ids are distinct across roles', () => {
+    expect(new Set(Object.values(MOCK_PARTIES)).size).toBe(ROLES.length);
+  });
+});
+
+describe('mockTenantRecords', () => {
+  it('produces one record per role with the canonical party id', () => {
+    const recs = mockTenantRecords();
+    expect(recs).toHaveLength(ROLES.length);
+    expect(recs.find((r) => r.role === 'gp')!.party).toBe(MOCK_PARTIES.gp);
+  });
+
+  it('carries a human custodian name per role', () => {
+    const gp = mockTenantRecords().find((r) => r.role === 'gp')!;
+    expect(gp.custodianName).toMatch(/Fireblocks/);
   });
 
   it('uses the documented demo credentials', () => {
-    const recs = tenantRecordsFromRegistry(REGISTRY);
-    const gp = recs.find((r) => r.role === 'gp')!;
+    const gp = mockTenantRecords().find((r) => r.role === 'gp')!;
     expect(gp.username).toBe('gp');
     expect(gp.password).toBe(DEMO_PASSWORD('gp'));
   });
 
-  it('gives every tenant a distinct mnemonic', () => {
-    const recs = tenantRecordsFromRegistry(REGISTRY);
+  it('gives every tenant a distinct mnemonic and a Canton-shaped fingerprint', () => {
+    const recs = mockTenantRecords();
     expect(new Set(recs.map((r) => r.mnemonic)).size).toBe(recs.length);
-  });
-
-  it('synthesizes a Canton-shaped fingerprint (1220 + 64 hex)', () => {
-    const recs = tenantRecordsFromRegistry(REGISTRY);
     for (const r of recs) expect(r.fingerprint).toMatch(/^1220[0-9a-f]{64}$/);
   });
 
-  it('fingerprint is deterministic and key-derived', () => {
+  it('tenant party matches the fingerprint embedded in its own party id (self-consistent)', () => {
+    // party = continuum-<role>-mock::<fingerprint>, so the suffix must equal fingerprint.
+    for (const r of mockTenantRecords()) {
+      expect(r.party.endsWith(`::${r.fingerprint}`)).toBe(true);
+    }
+  });
+});
+
+describe('mockFingerprint', () => {
+  it('is deterministic and key-derived', () => {
     expect(mockFingerprint(new Uint8Array([1, 2, 3]))).toBe(mockFingerprint(new Uint8Array([1, 2, 3])));
     expect(mockFingerprint(new Uint8Array([1, 2, 3]))).not.toBe(mockFingerprint(new Uint8Array([4, 5, 6])));
   });
@@ -386,12 +437,18 @@ Create `app/custody/mock/fixtures.ts`:
 
 ```ts
 // app/custody/mock/fixtures.ts
-// Fixture shapes + the tenant-ADOPTION rule for the preview.
+// The canonical MOCK PARTIES + tenant records for the designer preview, plus the
+// fixture-file types.
 //
-// Mock tenants adopt prod's REAL party ids with throwaway mnemonics. This is sound
-// because tenants.ts:38 copies `party` verbatim and derives `key` from `mnemonic`
-// SEPARATELY — the two are independent, nothing validates they correspond, and the
-// mock signer never verifies a signature. Fixtures therefore match by construction.
+// There is NO captured registry: fixtures are generated by replaying close-wallets.ts's
+// command shapes (Task 4). So party ids are derived deterministically here and imported
+// by BOTH the tenant records and the fixture generator — a fixture contract and the
+// tenant that should see it reference the identical string by construction.
+//
+// Sound because tenants.ts:38 copies `party` verbatim and derives `key` from `mnemonic`
+// SEPARATELY — nothing validates they correspond and the mock signer never verifies a
+// signature. The party string is authoritative; the key only exists to synthesize a
+// real-shaped fingerprint for the audit UI.
 // The `.js` suffix is REQUIRED — see the note in mock/store.ts.
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -400,16 +457,36 @@ import type { TenantRecord } from '../tenants';
 import type { AuditEntry } from '../app';
 import type { SeedContract } from './store';
 
-/** Captured `GET /registry` from prod. Party ids + custodian names are public. */
-export type RegistryFixture = {
-  parties: Record<string, string>;
-  custodians: Record<string, string>;
-  deal: { epoch: number; dealId: string; cv: string; unit: string; usdc: string };
-};
-
 export type AcsFixture = SeedContract[];
 export type AuditFixture = AuditEntry[];
 export type UpdatesFixture = Record<string, unknown>;
+
+/** The six custody roles, in the prod order. */
+export const ROLES = ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac', 'valuer'] as const;
+export type Role = (typeof ROLES)[number];
+
+/** Custodian display names — must match prod's story (provision.ts ROLES). */
+const CUSTODIAN: Record<Role, string> = {
+  gp: 'Fireblocks — GP Treasury',
+  buyer: 'Copper — Northbeam Secondaries',
+  lpExiting: 'Northgate Trust — Calder Family Office',
+  lpRolling: 'BNY Digital — Hawthorn Pension',
+  lpac: 'State Street Digital — LPAC',
+  valuer: 'Kroll Valuation Services',
+};
+
+/**
+ * BIP-39 test vectors — VALID mnemonics, PUBLIC, worthless. One per role, so each tenant
+ * gets a distinct key (hence a distinct fingerprint and party id). These control nothing.
+ */
+const MNEMONICS: Record<Role, string> = {
+  gp: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+  buyer: 'legal winner thank year wave sausage worth useful legal winner thank yellow',
+  lpExiting: 'letter advice cage absurd amount doctor acoustic avoid letter advice cage above',
+  lpRolling: 'all hour make first leader extend hole alien behind guard gospel lava',
+  lpac: 'vessel ladder alter error federal sibling chat ability sun glass valve picture',
+  valuer: 'gravity machine north sort system female filter attitude volume fold club stay feature office ecology',
+};
 
 /** Documented preview credentials — the designer cannot guess these. */
 export const DEMO_PASSWORD = (role: string): string => `${role}-demo`;
@@ -417,54 +494,53 @@ export const DEMO_PASSWORD = (role: string): string => `${role}-demo`;
 /**
  * Canton computes fingerprints server-side (wallet.ts:115 reads
  * topo.publicKeyFingerprint), so there is no offline "real" path. Synthesize one in
- * Canton's shape — '1220' + sha256 hex — so it is real-SHAPED but wrong-valued. The
- * audit trail displays it; a designer will size a column to it.
+ * Canton's shape — '1220' + sha256 hex — real-SHAPED, wrong-valued. Shown in the audit
+ * trail; a designer will size a column to it.
  */
 export const mockFingerprint = (rawPub: Uint8Array): string => `1220${bytesToHex(sha256(rawPub))}`;
 
-/**
- * BIP-39 test vectors — VALID mnemonics, PUBLIC, and worthless. One per role so each
- * tenant gets a distinct key. These never control a real party: the party id comes
- * from the captured registry, not from the key.
- */
-const MNEMONICS: string[] = [
-  'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
-  'legal winner thank year wave sausage worth useful legal winner thank yellow',
-  'letter advice cage absurd amount doctor acoustic avoid letter advice cage above',
-  'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong',
-  'all hour make first leader extend hole alien behind guard gospel lava',
-  'vessel ladder alter error federal sibling chat ability sun glass valve picture',
-];
+const roleFingerprint = (role: Role): string => mockFingerprint(keyFromMnemonic(MNEMONICS[role]).rawPub);
 
-/** Build the mock tenant records from a captured registry. */
-export function tenantRecordsFromRegistry(reg: RegistryFixture): TenantRecord[] {
-  return Object.entries(reg.parties).map(([role, party], i) => {
-    const mnemonic = MNEMONICS[i % MNEMONICS.length]!;
-    return {
-      tenant: role,
-      custodianName: reg.custodians[role] ?? role,
-      role,
-      party,
-      mnemonic,
-      fingerprint: mockFingerprint(keyFromMnemonic(mnemonic).rawPub),
-      username: role,
-      password: DEMO_PASSWORD(role),
-    };
-  });
+/**
+ * The canonical role → party id map. party = continuum-<role>-mock::<fingerprint>,
+ * mirroring how a real onboarded party id embeds its key fingerprint after the `::`.
+ * THE single source of truth for party identity across tenants and fixtures.
+ */
+export const MOCK_PARTIES: Record<Role, string> = Object.fromEntries(
+  ROLES.map((role) => [role, `continuum-${role}-mock::${roleFingerprint(role)}`]),
+) as Record<Role, string>;
+
+/** Build the six mock tenant records from the canonical constants. */
+export function mockTenantRecords(): TenantRecord[] {
+  return ROLES.map((role) => ({
+    tenant: role,
+    custodianName: CUSTODIAN[role],
+    role,
+    party: MOCK_PARTIES[role],
+    mnemonic: MNEMONICS[role],
+    fingerprint: roleFingerprint(role),
+    username: role,
+    password: DEMO_PASSWORD(role),
+  }));
 }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd app && npx vitest run custody/mock/fixtures.test.ts`
-Expected: PASS, 6 tests.
+Expected: PASS, 9 tests.
+
+If the `valuer` mnemonic throws "invalid mnemonic" from `keyFromMnemonic`, it failed BIP-39
+checksum validation — replace it with any valid 12/24-word test vector (e.g. run
+`node -e "import('./ledger-client/src/ed25519.ts').then(m=>console.log(m.generateMnemonic()))"`
+via `npx tsx` and paste the result). Do not weaken the validation.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 cd /Users/kirillmadorin/Projects/hackathons/canton/continuum-prototype
 git add app/custody/mock/fixtures.ts app/custody/mock/fixtures.test.ts
-git commit -m "feat(mock): fixture types + tenant adoption of captured party ids"
+git commit -m "feat(mock): canonical mock parties + tenant records (single source of truth)"
 ```
 
 ---
@@ -635,144 +711,260 @@ git commit -m "feat(mock): fake ledger fetch emulating the 3 JSON API endpoints"
 
 ---
 
-### Task 4: Capture script + committed fixtures
+### Task 4: Fixture generator (replay close-wallets shapes) + committed fixtures
 
 **Files:**
-- Create: `app/scripts/capture-fixtures.ts`
-- Create (generated, committed): `app/custody/fixtures/{registry,acs,audit,updates}.json`
+- Create: `app/scripts/generate-fixtures.ts`
+- Create (generated, committed): `app/custody/fixtures/{acs,audit,updates}.json`
+- Test: `app/scripts/generate-fixtures.test.ts`
 - Modify: `app/.dockerignore`
 
-**Why normalization:** fixtures carry whatever `demoEpoch` prod was in when captured, but the mock always starts at epoch 1. If prod had been Reset, fixtures say `dealId: "M3"` while `/registry` says `M1` → the SPA filters on `M1` → **every view renders empty**. Normalizing at capture makes this epoch-independent instead of silently timing-dependent.
+**Design change from the spec (the owner chose replay over prod capture).** Prod's live demo
+state was verified thin (5 contracts, no bids/elections/holdings, empty in-memory audit), so
+capturing it would hand the designer half-empty views. Instead the generator **authors** the
+rich post-close end-state using `scripts/close-wallets.ts`'s **exact `createArguments` shapes**
+— which are proven against the deployed 1.1.0 contracts — pinned to the **epoch-1 deal keys**
+so they match `dealKeys(1)` (`app.ts:311`) with no normalization pass. There is no prod
+dependency and no `registry.json` fixture (the inner app computes `/registry` from tenants +
+epoch).
 
-- [ ] **Step 1: Write the capture script**
+**Stakeholders are authored explicitly** per contract (the `SeedContract.stakeholders` field
+from Task 1), because the real contracts are multi-stakeholder in ways `observersFor` cannot
+infer — a ValuationReport must be visible to gp (NAV tile) and lpac (fairness), not only its
+`agent`. The deal `room` includes `lpRolling` so its Sell-vs-Roll view is non-empty.
 
-Create `app/scripts/capture-fixtures.ts`:
+**Honest scope:** this is the post-close SETTLED snapshot — buyer holds CV units, lpExiting
+holds USDC proceeds, a SettlementReceipt exists. The mock never runs the atomic Close (its
+exercise semantics are `SetClearing`/`OpenElections` only), so we author the outcome directly.
+That is a fixture, not a simulation, and it is labelled as one by the PREVIEW banner.
+
+- [ ] **Step 1: Write the generator**
+
+Create `app/scripts/generate-fixtures.ts`:
 
 ```ts
-// app/scripts/capture-fixtures.ts
-// One-shot capture of prod's public demo state into the preview's fixtures.
+// app/scripts/generate-fixtures.ts
+// Generate the preview's committed fixtures by AUTHORING the rich post-close state with
+// close-wallets.ts's proven createArguments shapes, pinned to the epoch-1 deal keys.
 //
-// Run: cd app && CAPTURE_BASE=https://continuum-custody.fly.dev npx tsx scripts/capture-fixtures.ts
+// Run: cd app && npx tsx scripts/generate-fixtures.ts
 //
-// SAFETY: writes ONLY public data — party ids, synthetic Meridian CV I demo contracts,
-// and audit rows (which carry key FINGERPRINTS, never key material). Fixtures are
-// committed and public forever: read the diff before committing.
+// No network, no prod, no keys. Deterministic. Writes public demo data only.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { MOCK_PARTIES } from '../custody/mock/fixtures';
+import { VALUATION_SHA256, FAIRNESS_SHA256 } from '../custody/docs/hashes';
+import type { AuditEntry } from '../custody/app';
+import { mockTenantRecords } from '../custody/mock/fixtures';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(__dirname, '../custody/fixtures');
-const BASE = process.env.CAPTURE_BASE ?? 'https://continuum-custody.fly.dev';
-const ROLES = ['gp', 'buyer', 'lpExiting', 'lpRolling', 'lpac', 'valuer'];
 
-/** Epoch-1 keys — must match dealKeys(1) in custody/app.ts:311. */
-const EPOCH1 = { dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' };
+// Parties (canonical mock ids — the SAME strings the tenants use).
+const { gp, buyer, lpExiting: lp, lpRolling: roller, lpac, valuer } = MOCK_PARTIES;
 
-async function login(role: string): Promise<string> {
-  const r = await fetch(`${BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: role, password: `${role}-demo` }),
+// Epoch-1 deal keys — MUST equal dealKeys(1) in custody/app.ts:311, or the SPA (which
+// filters on /registry's deal block) renders empty.
+const DEAL_ID = 'M1', CV = 'Meridian CV I', UNIT = 'MERIDIAN-CV-I', USDC = 'USDC';
+// $500M institutional scale — matches the Kroll report + close-wallets constants.
+const clearingPct = '0.96', refNav = '500000000.0', reconciledNav = '500000000.0';
+const psaPrice = '480000000.0', unitAmt = '480000000.0', cashAmt = '460800000.0', interestNav = '100000000.0';
+const contentHash = 'deadbeef', CLOSE_DATE = '2026-06-30', ELECTION_DEADLINE = '2026-12-31T00:00:00Z';
+
+// Template ids — verbatim from close-wallets.ts's T map. The web filters by module:entity
+// suffix (HttpLedgerClient.activeContracts uses endsWith), so these match by suffix.
+const T = {
+  deal: '#continuum-contracts:Continuum.Deal:ContinuationDeal',
+  holding: '#continuum-contracts:Continuum.Registry:RegistryHolding',
+  valuation: '#continuum-contracts:Continuum.Valuation:ValuationReport',
+  opinion: '#continuum-contracts:Continuum.Valuation:FairnessOpinion',
+  cert: '#continuum-contracts:Continuum.Auction:AuctionCertificate',
+  sealedBid: '#continuum-contracts:Continuum.Auction:SealedBid',
+  election: '#continuum-contracts:Continuum.Election:LPElection',
+  consent: '#continuum-contracts:Continuum.Consent:LPACConsent',
+  psa: '#continuum-contracts:Continuum.Issuance:PurchaseAgreement',
+  basis: '#continuum-contracts:Continuum.Issuance:IssuanceBasis',
+  dealPart: '#continuum-contracts:Continuum.Participation:AcceptedParticipation',
+  receipt: '#continuum-contracts:Continuum.Deal:SettlementReceipt',
+};
+
+type Row = { contractId: string; templateId: string; args: Record<string, unknown>; stakeholders: string[] };
+let seq = 0;
+const id = (label: string) => `1220${bytesToHex(sha256(new TextEncoder().encode(`${label}-${++seq}`)))}`;
+const acs: Row[] = [];
+/** Author one contract with its explicit stakeholder set. */
+const c = (templateId: string, args: Record<string, unknown>, stakeholders: string[]): Row => {
+  const row = { contractId: id(templateId), templateId, args, stakeholders };
+  acs.push(row);
+  return row;
+};
+
+// ── the SETTLED post-close snapshot (rich state for every seat) ────────────────
+// Deal: Electing stage, clearing set. Room includes lpRolling so its Sell-vs-Roll renders.
+// IDENTITY MODEL (verified against the views): the ContinuationDeal is matched by
+// `args.cv === DEMO.cv` (DealPage.tsx:178, FocusedPage.tsx:150), so cv MUST be the epoch-1
+// 'Meridian CV I' — it carries NO dealId field (close-wallets' deal has none either). The
+// antecedents below are matched by `args.dealId === 'M1'`; the SettlementReceipt by
+// `args.dealId === <cv>` (Settlement.tsx:82) — hence receipt.dealId = CV, not 'M1'.
+c(T.deal, {
+  gp, vehicle: gp, oldFund: gp, lpac, regulator: lpac, room: [buyer, lp, roller],
+  fund: 'Meridian Growth Fund III', cv: CV, asset: 'Project Atlas', refNav,
+  electionDeadline: ELECTION_DEADLINE, clearingPrice: clearingPct, gpCommitment: '0.0',
+  carryCrystallized: '0.0', stage: 'Electing',
+}, [gp, buyer, lp, roller, lpac]);
+
+// Peer-blind economic decisions.
+c(T.sealedBid, { gp, buyer, dealId: DEAL_ID, pctOfNav: clearingPct, capacity: '600000000.0' }, [buyer]);
+c(T.election, { lp, dealId: DEAL_ID, positionNav: interestNav, rollNav: '0.0', sellNav: interestNav, disclosureHash: contentHash }, [lp]);
+
+// Antecedent DAG — the ValuationReport MUST reach gp (NAV tile) and lpac (fairness).
+c(T.valuation, { agent: valuer, gp, dealId: DEAL_ID, navLow: '480000000.0', navHigh: '520000000.0', asOfDate: CLOSE_DATE, contentHash: VALUATION_SHA256 }, [valuer, gp, lpac]);
+c(T.opinion, { provider: lpac, gp, lpac, dealId: DEAL_ID, fairLow: '0.9', fairHigh: '1.0', opinionDate: CLOSE_DATE, contentHash: FAIRNESS_SHA256 }, [lpac, gp]);
+c(T.cert, { gp, lpac, dealId: DEAL_ID, clearingPct, leadBuyer: buyer, bidTabulationHash: contentHash }, [gp, lpac]);
+c(T.consent, { gp, lpac, dealId: DEAL_ID, recusals: [], granted: true }, [gp, lpac]);
+c(T.psa, { oldFund: gp, vehicle: gp, dealId: DEAL_ID, price: psaPrice, refNav, clearingPct, asOfDate: CLOSE_DATE }, [gp, lpac]);
+const basis = c(T.basis, { gp, dealId: DEAL_ID, reconciledNav, clearingPct, psaPrice, reconciliation: 'InRangeOfAll', closeDate: CLOSE_DATE, maxAsOfDays: '120' }, [gp]);
+
+// Settled holdings — the money shot. Buyer's CV units carry the provenance meta_.
+c(T.holding, {
+  admin: gp, owner: buyer, instId: UNIT, amount: unitAmt, locked: false,
+  meta_: { 'continuum/valuation-sha256': VALUATION_SHA256, 'continuum/issuance-basis': basis.contractId },
+}, [buyer, gp]);
+c(T.holding, { admin: gp, owner: lp, instId: USDC, amount: cashAmt, locked: false, meta_: {} }, [lp, gp]);
+
+// Participation + receipt.
+c(T.dealPart, { gp, lp }, [gp, lp]);
+c(T.receipt, { gp, dealId: CV, buyer, lp, unitAmount: unitAmt, cashAmount: cashAmt, closeDate: CLOSE_DATE }, [gp, buyer, lp]);
+
+// ── audit trail + matching update trees (so AuditTrail/HoldingReceipt/Inspector render) ──
+const tenantByRole = Object.fromEntries(mockTenantRecords().map((t) => [t.role, t]));
+const RECORD_TIME = '2026-07-15T09:00:00Z';
+const audit: AuditEntry[] = [];
+const updates: Record<string, unknown> = {};
+/** One audit row + one inspectable update tree. `outcome` defaults to signed. */
+const logged = (role: string, action: string, outcome: 'signed' | 'failed' = 'signed') => {
+  const t = tenantByRole[role]!;
+  const updateId = id(`audit-${role}-${action}`);
+  audit.push({
+    ts: RECORD_TIME, username: t.username, custodianName: t.custodianName, party: t.party,
+    keyFingerprint: t.fingerprint, updateId, action, outcome,
+    ...(outcome === 'failed' ? { error: `refused: session party ${t.party} cannot act as another party` } : {}),
   });
-  if (!r.ok) throw new Error(`login ${role} → ${r.status}`);
-  return (r.headers.get('set-cookie') ?? '').split(';')[0]!;
-}
+  updates[updateId] = {
+    updateId, commandId: `mock-${updateId.slice(4, 12)}`, offset: audit.length,
+    recordTime: RECORD_TIME, effectiveAt: RECORD_TIME, synchronizerId: 'global-domain::1220mock',
+    events: [{ CreatedTreeEvent: { value: { contractId: id('tree'), templateId: T.deal, createArgument: { dealId: DEAL_ID }, signatories: [t.party], observers: [] } } }],
+  };
+};
+logged('valuer', 'create ValuationReport');
+logged('lpac', 'create FairnessOpinion');
+logged('lpac', 'RecordConsent');
+logged('gp', 'SetClearing');
+logged('buyer', 'create SealedBid');
+logged('lpExiting', 'create LPElection');
+logged('gp', 'AllocationFactory_Allocate (unit-buyer)');
+logged('buyer', 'refused cross-party sign', 'failed'); // a specimen for the error styling
+logged('gp', 'Close');
 
-/** Recursively replace this epoch's deal-key STRINGS with the epoch-1 constants. */
-function normalize(value: unknown, subs: Array<[string, string]>): unknown {
-  if (typeof value === 'string') {
-    const hit = subs.find(([from]) => from === value);
-    return hit ? hit[1] : value;
-  }
-  if (Array.isArray(value)) return value.map((v) => normalize(v, subs));
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, subs)]));
-  }
-  return value;
-}
-
-async function main() {
-  const registry = await (await fetch(`${BASE}/registry`)).json();
-  const subs: Array<[string, string]> = [
-    [registry.deal.dealId, EPOCH1.dealId],
-    [registry.deal.cv, EPOCH1.cv],
-    [registry.deal.unit, EPOCH1.unit],
-    [registry.deal.usdc, EPOCH1.usdc],
-  ].filter(([from, to]) => from !== to) as Array<[string, string]>;
-  console.log(`captured epoch ${registry.deal.epoch}; normalizing ${subs.length} key(s) → epoch 1`);
-
-  const acs: unknown[] = [];
-  const audit: unknown[] = [];
-  const updates: Record<string, unknown> = {};
-  const seenCids = new Set<string>();
-
-  for (const role of ROLES) {
-    const cookie = await login(role);
-    const h = { Cookie: cookie, 'Content-Type': 'application/json' };
-
-    const { offset } = await (await fetch(`${BASE}/api/v2/state/ledger-end`, { headers: h })).json();
-    const raw = await (await fetch(`${BASE}/api/v2/state/active-contracts`, {
-      method: 'POST',
-      headers: h,
-      body: JSON.stringify({ activeAtOffset: offset, filter: {}, verbose: false }),
-    })).json();
-
-    for (const e of Array.isArray(raw) ? raw : [raw]) {
-      const ce = e?.contractEntry?.JsActiveContract?.createdEvent;
-      if (!ce?.contractId || seenCids.has(ce.contractId)) continue;
-      seenCids.add(ce.contractId);
-      // Drop createdEventBlob: signed devnet bytes we cannot rewrite, and nothing in
-      // web/src consumes it (only scripts/close-minimal.ts, which never runs here).
-      acs.push({
-        contractId: ce.contractId,
-        templateId: ce.templateId,
-        args: normalize(ce.createArgument ?? {}, subs),
-      });
-    }
-
-    const rows = await (await fetch(`${BASE}/audit`, { headers: h })).json();
-    for (const row of rows as any[]) {
-      audit.push(row);
-      if (!row.updateId || updates[row.updateId]) continue;
-      const t = await fetch(`${BASE}/ledger/update/${encodeURIComponent(row.updateId)}`, { headers: h });
-      if (t.ok) updates[row.updateId] = normalize(await t.json(), subs);
-    }
-  }
-
+function main() {
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(`${OUT}/registry.json`, JSON.stringify({ ...registry, deal: { epoch: 1, ...EPOCH1 } }, null, 2));
   writeFileSync(`${OUT}/acs.json`, JSON.stringify(acs, null, 2));
   writeFileSync(`${OUT}/audit.json`, JSON.stringify(audit, null, 2));
   writeFileSync(`${OUT}/updates.json`, JSON.stringify(updates, null, 2));
   console.log(`wrote ${acs.length} contracts, ${audit.length} audit rows, ${Object.keys(updates).length} update trees → ${OUT}`);
 }
 
-main();
+// Export the built fixtures so the test can assert without reading disk.
+export { acs, audit, updates };
+if (process.argv[1] && process.argv[1].endsWith('generate-fixtures.ts')) main();
 ```
 
-- [ ] **Step 2: Run the capture against prod**
+- [ ] **Step 2: Write a test that guards the two things a designer would discover late**
 
-Run: `cd app && npx tsx scripts/capture-fixtures.ts`
-Expected: prints the captured epoch and e.g. `wrote 14 contracts, 9 audit rows, 6 update trees`.
+Create `app/scripts/generate-fixtures.test.ts`:
 
-If it prints `wrote 0 contracts`, prod's demo state is empty — click through a deal at
-https://continuum-custody.fly.dev first, then re-run.
+```ts
+import { describe, it, expect } from 'vitest';
+import { acs, audit, updates } from './generate-fixtures';
+import { MOCK_PARTIES, ROLES } from '../custody/mock/fixtures';
+import { MockLedgerStore } from '../custody/mock/store';
 
-- [ ] **Step 3: Verify no key material leaked, and that normalization worked**
+describe('generated fixtures', () => {
+  it('pins every dealId/cv to the epoch-1 keys', () => {
+    for (const row of acs) {
+      if ('dealId' in row.args) expect([('M1'), ('Meridian CV I')]).toContain(row.args.dealId as string);
+    }
+    const deal = acs.find((r) => r.templateId.endsWith('Deal:ContinuationDeal'))!;
+    expect(deal.args.cv).toBe('Meridian CV I');
+    expect(deal.args.clearingPrice).toBe('0.96');
+  });
+
+  it('makes every seat that needs content see something (no empty views)', () => {
+    const store = new MockLedgerStore();
+    store.seed(acs);
+    // gp: deal + valuation + issuance; buyer: bid + units; lp: election + cash; lpac:
+    // fairness/consent; roller: the deal (Sell-vs-Roll); valuer: the valuation.
+    for (const role of ROLES) {
+      expect(store.activeContracts(MOCK_PARTIES[role]).length, `${role} view is empty`).toBeGreaterThan(0);
+    }
+  });
+
+  it('projects the ValuationReport to gp (the NAV tile) — the classic empty-tile bug', () => {
+    const store = new MockLedgerStore();
+    store.seed(acs);
+    expect(store.activeContracts(MOCK_PARTIES.gp, { templateId: 'Valuation:ValuationReport' })).toHaveLength(1);
+  });
+
+  it('keeps SealedBid peer-blind (buyer sees it, gp does not)', () => {
+    const store = new MockLedgerStore();
+    store.seed(acs);
+    expect(store.activeContracts(MOCK_PARTIES.buyer, { templateId: 'Auction:SealedBid' })).toHaveLength(1);
+    expect(store.activeContracts(MOCK_PARTIES.gp, { templateId: 'Auction:SealedBid' })).toHaveLength(0);
+  });
+
+  it('every audit updateId is inspectable, and there is a failed specimen', () => {
+    for (const row of audit) expect(updates[row.updateId!]).toBeDefined();
+    expect(audit.some((r) => r.outcome === 'failed')).toBe(true);
+  });
+
+  it('leaks no key material', () => {
+    const blob = JSON.stringify({ acs, audit, updates });
+    expect(blob).not.toMatch(/mnemonic|abandon abandon|FN_SECRET/);
+  });
+});
+```
+
+- [ ] **Step 3: Run the test to verify it fails, then generate, then verify it passes**
+
+```bash
+cd app && npx vitest run scripts/generate-fixtures.test.ts   # FAIL: fixtures not built yet? No —
+```
+
+The test imports the built arrays directly (not the written files), so it runs without the
+JSON existing. Expected first run: PASS if the generator is correct. If `no empty views` fails
+for a role, that role's contracts lack it in their `stakeholders` array — fix the `c(...)`
+call, do **not** widen projection globally. Then generate the files:
+
+```bash
+cd app && npx tsx scripts/generate-fixtures.ts
+```
+
+Expected: `wrote 13 contracts, 9 audit rows, 9 update trees → .../custody/fixtures`.
+
+- [ ] **Step 4: Verify the written fixtures are clean and epoch-1**
 
 ```bash
 cd /Users/kirillmadorin/Projects/hackathons/canton/continuum-prototype
-grep -ril "mnemonic\|FN_SECRET\|private" app/custody/fixtures/ || echo "CLEAN"
-grep -o '"dealId": *"[^"]*"' app/custody/fixtures/acs.json | sort -u
+grep -ril "mnemonic\|FN_SECRET\|abandon abandon" app/custody/fixtures/ || echo "CLEAN"
+python3 -c "import json; a=json.load(open('app/custody/fixtures/acs.json')); print('dealIds:', sorted({r['args'].get('dealId') for r in a if 'dealId' in r['args']}))"
 ```
 
-Expected: `CLEAN`, and every `dealId` is `"M1"` (never `M2`/`M3`). If a non-M1 dealId
-survives, the `subs` list missed a key — fix before continuing.
+Expected: `CLEAN`, and `dealIds: ['M1']`.
 
-Then read `app/custody/fixtures/registry.json` in full. It is about to be public forever.
-
-- [ ] **Step 4: Ensure fixtures ship in the image**
+- [ ] **Step 5: Ensure fixtures ship in the Docker image**
 
 Read `app/.dockerignore`. If any pattern excludes `custody/fixtures/` (e.g. `*.json`,
 `fixtures`), add a negation so the fixtures are included:
@@ -788,14 +980,14 @@ cd app && docker build -t continuum-fixcheck . >/dev/null \
   && docker run --rm --entrypoint ls continuum-fixcheck custody/fixtures
 ```
 
-Expected: lists `acs.json  audit.json  registry.json  updates.json`.
+Expected: lists `acs.json  audit.json  updates.json`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 cd /Users/kirillmadorin/Projects/hackathons/canton/continuum-prototype
-git add app/scripts/capture-fixtures.ts app/custody/fixtures app/.dockerignore
-git commit -m "feat(mock): capture prod fixtures (blobs dropped, deal keys normalized to epoch 1)"
+git add app/scripts/generate-fixtures.ts app/scripts/generate-fixtures.test.ts app/custody/fixtures app/.dockerignore
+git commit -m "feat(mock): authored fixture generator (close-wallets shapes, epoch-1, explicit stakeholders)"
 ```
 
 ---
@@ -848,7 +1040,7 @@ describe('mock app', () => {
     app = createMockApp().app;
   });
 
-  it('serves /registry with the fixture parties at epoch 1', async () => {
+  it('serves /registry with the canonical mock parties at epoch 1', async () => {
     const body = await (await app.request('/registry')).json();
     expect(body.deal.epoch).toBe(1);
     expect(body.deal.dealId).toBe('M1');
@@ -984,7 +1176,7 @@ import { tenantsFromRecords } from './tenants';
 import { createApp, type AuditEntry, type Signer, type Reader } from './app';
 import { MockLedgerStore } from './mock/store';
 import { makeMockFetch, MOCK_LEDGER_BASE } from './mock/ledger-fetch';
-import { tenantRecordsFromRegistry, type RegistryFixture, type AcsFixture, type AuditFixture, type UpdatesFixture } from './mock/fixtures';
+import { mockTenantRecords, type AcsFixture, type AuditFixture, type UpdatesFixture } from './mock/fixtures';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = resolve(__dirname, '..');
@@ -992,6 +1184,11 @@ const FIXTURES = resolve(__dirname, 'fixtures');
 const PORT = Number(process.env.PORT ?? 8787);
 
 const BANNER = `<div style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#7c2d12;color:#fff;font:600 12px/1.6 system-ui,sans-serif;text-align:center;letter-spacing:.04em">PREVIEW — simulated ledger. Not on-chain.</div>`;
+
+// The epoch-1 deal block, identical to dealKeys(1) in app.ts:311. The inner app serves
+// this at /registry; /demo/reset echoes it so the SPA re-adopts the SAME keys (the mock
+// is pinned to epoch 1 — see the demoEpoch note below).
+const EPOCH1_DEAL = { epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' };
 
 /**
  * Refuse to boot if key material is in the environment. Mock mode and real keys must
@@ -1010,7 +1207,6 @@ export function assertMockEnv(env: Record<string, string | undefined>): void {
 const readFixture = <T>(name: string): T => JSON.parse(readFileSync(resolve(FIXTURES, name), 'utf8')) as T;
 
 export function createMockApp(opts: { indexHtml?: string } = {}) {
-  const registry = readFixture<RegistryFixture>('registry.json');
   const acs = readFixture<AcsFixture>('acs.json');
   const audit = readFixture<AuditFixture>('audit.json');
   const updates = readFixture<UpdatesFixture>('updates.json');
@@ -1022,8 +1218,9 @@ export function createMockApp(opts: { indexHtml?: string } = {}) {
   };
   seedStore();
 
-  // Tenants ADOPT the captured party ids (see mock/fixtures.ts for why that is sound).
-  const tenants = tenantsFromRecords(tenantRecordsFromRegistry(registry));
+  // Tenants come from the canonical MOCK_PARTIES map — the SAME party strings the fixtures
+  // reference (see mock/fixtures.ts). The inner app derives /registry from these + dealKeys(1).
+  const tenants = tenantsFromRecords(mockTenantRecords());
 
   // The signer ignores key/fingerprint — nothing verifies a signature here. It MUST
   // materialize creates: useLedger.pollForContract polls the ACS after every submit.
@@ -1064,7 +1261,7 @@ export function createMockApp(opts: { indexHtml?: string } = {}) {
     seedStore();
     auditLog.length = 0;
     auditLog.push(...audit);
-    return c.json({ deal: registry.deal });
+    return c.json({ deal: EPOCH1_DEAL });
   });
 
   const indexWithBanner = (): string | null => {
@@ -1111,7 +1308,8 @@ the missing field to the `signatory` chain — do **not** widen it to "visible t
 - [ ] **Step 5: Run the whole suite — nothing regressed**
 
 Run: `cd app && npx vitest run`
-Expected: PASS. Previously 22 custody tests; now 22 + 9 + 6 + 6 + 11 = 54.
+Expected: PASS. Previously 22 custody tests; now 22 + 10 (store) + 9 (fixtures) + 6
+(ledger-fetch) + 6 (generate-fixtures) + 11 (server.mock) = 64.
 
 - [ ] **Step 6: Commit**
 
@@ -1568,12 +1766,12 @@ Logins are the same as prod (`gp`/`gp-demo`, `buyer`/`buyer-demo`, `lpExiting`, 
   epoch — the preview is pinned to `M1` so fixtures always match).
 - Never run `fly secrets set` on the preview app. `server.mock.ts` refuses to boot when
   `FN_SECRET` or `CUSTODY_KEYS_JSON` is present, by design.
-- Re-capture fixtures after a demo-data change:
-  `cd app && npx tsx scripts/capture-fixtures.ts` (reads prod's public state, drops
-  `createdEventBlob`, normalizes deal keys to epoch 1). Read the diff before committing —
-  fixtures are public forever.
-- Known limit: the mock does **not** replay the full lifecycle (only `SetClearing` /
-  `OpenElections` exercise semantics). It is for designing views, not walking state machines.
+- Regenerate fixtures after changing the demo shape:
+  `cd app && npx tsx scripts/generate-fixtures.ts` (authors them offline from close-wallets
+  arg shapes — no network, no prod). Read the diff before committing; fixtures are public.
+- Known limit: the fixtures are an authored post-close SNAPSHOT; the mock does **not** replay
+  the full lifecycle (its exercise semantics are `SetClearing` / `OpenElections` only). It is
+  for designing views, not walking state machines.
 
 ### Seam freeze on `ui-ux` PRs
 
@@ -1618,12 +1816,15 @@ git commit -m "docs: CI/CD, designer preview, seam freeze, pre-merge devnet smok
 
 ## Degradation path (only if time runs out)
 
-**Cut fixtures (Task 4), keep the wrapper (Task 5).** Boot with an empty store and seed by
-replaying `scripts/close-wallets.ts`'s command shapes through `store.submit(...)`. Those
-shapes are proven against the real 1.1.0 contracts, so real *arg* shapes survive and only
-real devnet *response* shapes are lost. You get creates but not derived state. Every
-structural merge-safety property survives intact.
+The fixture generator (Task 4) is already the cheap path — offline, no prod, no network. If
+authoring all ~13 contracts is still too much, **thin the fixtures, keep the wrapper (Task
+5).** Ship a minimal `acs.json` — just the `ContinuationDeal` (Electing, clearing set, room =
+all seats) plus the buyer-units and lp-cash holdings and the ValuationReport. That already
+lights up the GP deal page, both LP positions, the buyer receipt, and the valuation tile;
+auction/consent tabs render thin rather than empty. Audit can start as a single seeded row.
 
 Do **not** improvise a different shortcut — cutting the wrapper instead breaks the epoch
-guarantee and the zero-frontend-diff property, which are the reasons this design exists.
+guarantee and the zero-frontend-diff property, which are the reasons this design exists. And
+do **not** fall back to capturing prod: its live state is thin and its audit log is empty, so
+a capture is strictly worse than an authored subset.
 </content>
