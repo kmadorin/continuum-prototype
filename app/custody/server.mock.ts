@@ -18,7 +18,7 @@ import { dirname, resolve } from 'node:path';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { tenantsFromRecords } from './tenants';
-import { createApp, type AuditEntry, type Signer, type Reader } from './app';
+import { createApp, type AuditEntry, type Signer } from './app';
 import { MockLedgerStore } from './mock/store';
 import { makeMockFetch, MOCK_LEDGER_BASE } from './mock/ledger-fetch';
 import { mockTenantRecords, type AcsFixture, type AuditFixture, type UpdatesFixture } from './mock/fixtures';
@@ -74,11 +74,9 @@ export function createMockApp(opts: { indexHtml?: string } = {}) {
       return { updateId: store.submit([party], commands).updateId };
     },
   };
-  const reads: Reader = {
-    async activeContracts(party, o) {
-      return store.activeContracts(party, o).map((c) => ({ contractId: c.contractId, args: c.args }));
-    },
-  };
+  // NB: no `reads` port is wired. createApp only uses deps.reads for the auto-seed
+  // idempotency check, and we set seedOnBoot:false + intercept /demo/reset, so that path
+  // never runs. Omitting it keeps the mock honest about what it actually exercises.
 
   const auditLog: AuditEntry[] = [...audit];
   const staticRoot = resolve(APP_DIR, 'web/dist');
