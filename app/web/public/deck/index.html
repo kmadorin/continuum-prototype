@@ -88,6 +88,15 @@
   .brandmark svg { display: block; height: 170px; width: auto; }
   .brandmark.sm svg { height: 110px; }
 
+  /* quiet wordmark in the bottom-left of every content slide. The first and last
+     slides are the title pages — they already carry the full brandmark, so they
+     are excluded. The HUD is centre-anchored, so this corner stays clear. */
+  .slide:not(:first-child):not(:last-child)::after {
+    content: ''; position: absolute; left: 96px; bottom: 46px; z-index: 1;
+    width: 147px; height: 16px; pointer-events: none; opacity: 0.34;
+    background: url(logo.svg) left center / contain no-repeat;
+  }
+
   /* ---------- slide 1 / 12 title ---------- */
   /* Everything anchors to an edge: logo top-left, headline spanning the left
      column, the lead bottom-aligned in the right column, foot pinned to the
@@ -395,6 +404,7 @@
       width: 100%; height: auto; min-height: 0;
       padding: 48px 22px 56px;
     }
+    .slide:not(:first-child):not(:last-child)::after { left: 22px; bottom: 20px; width: 110px; height: 12px; }
     .slide.live [data-reveal] { animation: none !important; }
     #progress, #hud, #hint, .edgezone { display: none !important; }
 
