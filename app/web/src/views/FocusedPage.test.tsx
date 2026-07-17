@@ -60,9 +60,10 @@ describe('FocusedPage — role-scoped shells', () => {
     // Projection-safe KPI strip: exactly the Clearing price tile (pending pre-auction).
     await waitFor(() => expect(screen.getByTestId('kpi-row')).toBeTruthy());
     await waitFor(() => expect(screen.getByText('Clearing price')).toBeTruthy(), { timeout: 2500 });
-    // A 3-cue mini-stepper (not the full 6-stage lifecycle).
-    expect(screen.getByTestId('lifecycle-stepper')).toBeTruthy();
-    expect(screen.getByText('Bid open')).toBeTruthy();
+    // A 3-cue mini-stepper (not the full 6-stage lifecycle). The Shell mounts it in
+    // two chrome slots — desktop page-head and the mobile header row — CSS shows one.
+    expect(screen.getAllByTestId('lifecycle-stepper').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bid open').length).toBeGreaterThan(0);
     // No Overview / Settlement full-page tabs.
     expect(screen.queryByRole('tab', { name: /Overview/ })).toBeNull();
     expect(screen.queryByRole('tab', { name: /Settlement/ })).toBeNull();
