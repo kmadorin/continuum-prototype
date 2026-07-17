@@ -279,21 +279,10 @@ export default function SignIn() {
         </ul>
 
         <div className="actions sb-actions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              const first = document.querySelector<HTMLButtonElement>('.accounts .account');
-              first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              first?.focus({ preventScroll: true });
-            }}
-          >
-            Enter demo workspace
-          </button>
           {/* ONE link to the pitch: the deck IS the "how it works" story, and the demo
               itself is entered by picking a seat. Served at the clean /deck/ path by
               both the dev server (web/public) and the custody spine (web/dist). */}
-          <a className="btn" href="/deck/" target="_blank" rel="noopener noreferrer">
+          <a className="btn primary" href="/deck/" target="_blank" rel="noopener noreferrer">
             Pitch deck
           </a>
         </div>
