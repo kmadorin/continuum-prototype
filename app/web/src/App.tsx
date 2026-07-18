@@ -4,6 +4,7 @@
 // which renders the shared application Shell (sidebar, page header, content):
 // the GP gets the full lifecycle Deal Page, every narrow seat a focused page.
 // All chrome that used to live here (topbar, trust footer) now lives in the Shell.
+import { useEffect } from 'react';
 import { SessionProvider, useSession } from './state/WalletSession';
 import { ToastProvider } from './state/Toast';
 import { InspectorProvider } from './state/Inspector';
@@ -57,6 +58,22 @@ function Gate() {
 const IS_PREVIEW = /localhost|^127\.|preview/.test(window.location.hostname);
 
 export default function App() {
+  // A demo reset in ANY tab advances the backend epoch; every other open seat must reload
+  // onto the new epoch or it keeps rendering the old deal and desyncs into cross-tab
+  // duplicates. SignIn's Reset broadcasts here (the sender reloads itself directly).
+  useEffect(() => {
+    let ch: BroadcastChannel | null = null;
+    try {
+      ch = new BroadcastChannel('continuum-demo');
+      ch.onmessage = (e) => {
+        if (e.data === 'reset') window.location.reload();
+      };
+    } catch {
+      /* BroadcastChannel unsupported — same-tab reset still works */
+    }
+    return () => ch?.close();
+  }, []);
+
   return (
     <InspectorProvider>
       <ToastProvider>

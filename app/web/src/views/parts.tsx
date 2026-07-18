@@ -22,6 +22,10 @@ export function useAction() {
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const alive = useRef(true);
+  // Synchronous re-entry lock: `busy` is React state, so it only disables a button on the
+  // NEXT render — a fast double-click (or a submit fired from two places) can slip a second
+  // call through before that lands and create a duplicate contract. The ref blocks it now.
+  const inFlight = useRef(false);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -30,6 +34,8 @@ export function useAction() {
   }, []);
 
   const run = useCallback(async (label: string, fn: () => Promise<string | void>) => {
+    if (inFlight.current) return; // a submit is already running — ignore the re-entry
+    inFlight.current = true;
     setBusy(label);
     setErr(null);
     setNote(null);
@@ -39,6 +45,7 @@ export function useAction() {
     } catch (e) {
       if (alive.current) setErr(e instanceof Error ? e.message : String(e));
     } finally {
+      inFlight.current = false;
       if (alive.current) setBusy(null);
     }
   }, []);
