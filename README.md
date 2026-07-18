@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Continuum — a secure closing room for GP-led continuation deals, built on Canton" width="100%" />
+</p>
+
 # Continuum
 
 **A secure closing room for GP-led continuation deals — built on [Canton](https://www.canton.network/).**
