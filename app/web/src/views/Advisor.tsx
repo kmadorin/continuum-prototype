@@ -110,6 +110,16 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
   // ── deal lifecycle ──────────────────────────────────────────────────────────
   const openRoom = () =>
     run('open', async () => {
+      // Create-if-absent: the demo advances epochs on Reset and runs in several tabs, so a
+      // deal for THIS epoch may already exist (another GP tab, a stale button, a retry).
+      // Creating unconditionally would stack a second ContinuationDeal on the same keys —
+      // check the ledger first and adopt the existing one instead of duplicating it.
+      const existing = pick(await L.myAcs(R.deal), (c) => c.args.cv === DEMO.cv);
+      if (existing) {
+        setDeal(existing);
+        await refresh();
+        return 'Closing room already open — adopted the existing deal.';
+      }
       await L.submit(
         [
           {

@@ -95,7 +95,37 @@ export default function Shell({
   // entering the shell — and switching sections — always starts at the top.
   useEffect(() => {
     window.scrollTo(0, 0);
+    // When the nav renders as a horizontal scroll row (mobile), the picked tab
+    // may sit past the edge — keep it in view. 'nearest' is a no-op on desktop.
+    const i = nav.findIndex((t) => t.id === current);
+    refs.current[i]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nav is read, not watched
   }, [current]);
+
+  // Mobile chrome auto-hide: a decisive scroll DOWN folds the pinned steps row and
+  // the settlement strip out of the way; any scroll up brings them back. The flag
+  // lives on <html> because the strip (Settlement) is a sibling of the Shell, not a
+  // child. Desktop is untouched — the class only matters inside the 960px media query.
+  useEffect(() => {
+    const root = document.documentElement;
+    let lastY = window.scrollY;
+    let run = 0; // accumulated same-direction scroll distance
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+      if (dy === 0) return;
+      if (dy > 0 !== run > 0) run = 0; // direction flip resets the run
+      run += dy;
+      if (y <= 8 || run <= -12) root.classList.remove('mob-chrome-hidden');
+      else if (run >= 24 && y > 64) root.classList.add('mob-chrome-hidden');
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      root.classList.remove('mob-chrome-hidden');
+    };
+  }, []);
 
   const move = (from: number, delta: number) => {
     const n = nav.length;
@@ -173,6 +203,14 @@ export default function Shell({
             );
           })}
         </nav>
+        {/* Mobile only (display:none on desktop): the deal steps ride the sticky
+            header under the menu row and fold away on scroll down. The page-head
+            copy of headSide is hidden on mobile, so only one is ever exposed. */}
+        {headSide ? (
+          <div className="side-steps">
+            <div className="side-steps-in">{headSide}</div>
+          </div>
+        ) : null}
         </div>
 
         <div className="side-foot">

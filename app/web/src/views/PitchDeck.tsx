@@ -6,6 +6,7 @@
 //
 // PUBLIC and read-only: no session, no ledger reads — App routes here on pathname
 // before the auth gate. "Enter the demo" returns to the sign-in at `/`.
+import { useEffect, useRef, useState } from 'react';
 import logo from '../assets/logo.svg';
 
 const LEGS = [
@@ -39,10 +40,43 @@ function Section({ n, tag, title, children }: { n: string; tag?: string; title: 
 }
 
 export default function PitchDeck() {
+  const logoRef = useRef<HTMLImageElement>(null);
+  const [stuck, setStuck] = useState(false);
+
+  // Once the hero wordmark scrolls above the top edge, morph in the sticky bar.
+  // IntersectionObserver keeps this off the scroll thread — no jank.
+  useEffect(() => {
+    const el = logoRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
+      threshold: 0,
+      rootMargin: '-24px 0px 0px 0px',
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className="pd">
+      <div className={`pd-topbar${stuck ? ' is-stuck' : ''}`} aria-hidden={!stuck}>
+        <div className="tb-inner">
+          <button
+            className="tb-logo"
+            type="button"
+            tabIndex={stuck ? 0 : -1}
+            aria-label="Back to top"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            <img className="logo" src={logo} alt="Continuum" />
+          </button>
+          <a className="btn primary tb-cta" href="/" tabIndex={stuck ? 0 : -1}>
+            Enter the demo
+          </a>
+        </div>
+      </div>
+
       <header className="pd-hero">
-        <img className="logo" src={logo} alt="Continuum" />
+        <img className="logo" src={logo} alt="Continuum" ref={logoRef} />
         <p className="pd-sub">
           A secure closing room for GP-led continuation deals — LPs and buyers commit privately, the system
           computes the close, and cash plus fund interests settle atomically on Canton.

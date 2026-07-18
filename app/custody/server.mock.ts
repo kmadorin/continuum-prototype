@@ -28,7 +28,9 @@ const APP_DIR = resolve(__dirname, '..');
 const FIXTURES = resolve(__dirname, 'fixtures');
 const PORT = Number(process.env.PORT ?? 8787);
 
-const BANNER = `<div style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#7c2d12;color:#fff;font:600 12px/1.6 system-ui,sans-serif;text-align:center;letter-spacing:.04em">PREVIEW — simulated ledger. Not on-chain.</div>`;
+// NB: the PREVIEW disclaimer is rendered by the SPA itself (App.tsx, host-gated to
+// preview/localhost) as an in-flow strip that pushes the layout down — the server no
+// longer injects a fixed overlay on top of it.
 
 // The epoch-1 deal block, identical to dealKeys(1) in app.ts:311. The inner app serves
 // this at /registry; /demo/reset echoes it so the SPA re-adopts the SAME keys (the mock
@@ -107,14 +109,14 @@ export function createMockApp(opts: { indexHtml?: string } = {}) {
     return c.json({ deal: EPOCH1_DEAL });
   });
 
-  const indexWithBanner = (): string | null => {
-    if (opts.indexHtml !== undefined) return opts.indexHtml.replace(/<body([^>]*)>/i, `<body$1>${BANNER}`);
+  const indexHtml = (): string | null => {
+    if (opts.indexHtml !== undefined) return opts.indexHtml;
     const index = resolve(staticRoot, 'index.html');
     if (!existsSync(index)) return null;
-    return readFileSync(index, 'utf8').replace(/<body([^>]*)>/i, `<body$1>${BANNER}`);
+    return readFileSync(index, 'utf8');
   };
   const serveIndex = (c: any) => {
-    const html = indexWithBanner();
+    const html = indexHtml();
     return html === null
       ? c.text('frontend build not found — run the Vite build (web/dist)', 404)
       : c.html(html);

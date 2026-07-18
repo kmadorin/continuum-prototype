@@ -134,6 +134,15 @@ export default function SignIn() {
     setResetting(true);
     try {
       await fetch('/demo/reset', { method: 'POST', credentials: 'include' });
+      // Reset advances the backend epoch. The demo runs in several tabs at once, and every
+      // OTHER open seat still holds the old epoch's keys — it would keep rendering the stale
+      // deal (and desync into cross-tab duplicates). Broadcast so they reload onto the fresh
+      // epoch too; BroadcastChannel never delivers to the sender, so this tab just reloads below.
+      try {
+        new BroadcastChannel('continuum-demo').postMessage('reset');
+      } catch {
+        /* BroadcastChannel unsupported — this tab still resets via the reload below */
+      }
       window.location.reload();
     } catch {
       setResetting(false);
@@ -279,19 +288,11 @@ export default function SignIn() {
         </ul>
 
         <div className="actions sb-actions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              const first = document.querySelector<HTMLButtonElement>('.accounts .account');
-              first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              first?.focus({ preventScroll: true });
-            }}
-          >
-            Enter demo workspace
-          </button>
-          <a className="btn" href="/pitch-deck">
-            See how it works
+          {/* ONE link to the pitch: the deck IS the "how it works" story, and the demo
+              itself is entered by picking a seat. Served at the clean /deck/ path by
+              both the dev server (web/public) and the custody spine (web/dist). */}
+          <a className="btn primary" href="/deck/" target="_blank" rel="noopener noreferrer">
+            Pitch deck
           </a>
         </div>
 

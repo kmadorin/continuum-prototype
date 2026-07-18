@@ -12,6 +12,7 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, resolve } from 'node:path';
@@ -153,6 +154,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.map': 'application/json; charset=utf-8',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
 };
 
 export function createApp(deps: AppDeps) {
@@ -388,6 +391,29 @@ export function createApp(deps: AppDeps) {
     return run;
   }
 
+  // Derive the live epoch from the LEDGER, not from process memory. `demoEpoch` starts
+  // at 1 on every boot, but reset seeds a ValuationReport per epoch under dealId `M{n}`,
+  // so the highest n on the valuer's ACS IS the current epoch. When Fly auto-stops an
+  // idle machine and the next request cold-starts it, this RESUMES the demo where it was
+  // instead of snapping every seat back to M1 — which is exactly what made "Reset" look
+  // like it silently reverted after the app sat idle.
+  async function deriveEpoch(): Promise<number> {
+    if (!deps.reads) return demoEpoch;
+    const valuer = deps.tenants.all.find((t) => t.role === 'valuer');
+    if (!valuer) return demoEpoch;
+    try {
+      const reports = await deps.reads.activeContracts(valuer.party, { templateId: VALUATION_SUFFIX });
+      let max = 1;
+      for (const c of reports) {
+        const m = /^M(\d+)$/.exec(String(c.args?.dealId ?? ''));
+        if (m) max = Math.max(max, Number(m[1]));
+      }
+      return max;
+    } catch {
+      return demoEpoch; // read failed → keep the in-memory value (worst case: epoch 1)
+    }
+  }
+
   // ── POST /demo/reset ── bump the epoch → the whole demo starts over ────────────
   // Landing-page "Reset demo" calls this (confirm-gated in the UI). No session needed:
   // it authorizes nothing beyond seeding the independent valuation and reveals no
@@ -539,17 +565,37 @@ export function createApp(deps: AppDeps) {
   // ── static SPA (single deployable) ── registered LAST so API routes win ────────
   if (deps.staticRoot) {
     const root = deps.staticRoot;
-    const serveFile = (_c: any, filePath: string) => {
+    // Text types are gzipped on the fly (the SPA bundle is ~330KB -> ~97KB) and
+    // everything gets a cache policy: hashed bundles are immutable, media caches
+    // for an hour, html always revalidates — repeat opens hit the browser cache.
+    const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.map']);
+    const serveFile = (c: any, filePath: string) => {
       const ext = filePath.slice(filePath.lastIndexOf('.'));
-      const data = new Uint8Array(readFileSync(filePath));
-      return new Response(data as any, {
-        status: 200,
-        headers: { 'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream' },
-      });
+      let data = new Uint8Array(readFileSync(filePath));
+      const headers: Record<string, string> = {
+        'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+        'Cache-Control':
+          ext === '.html'
+            ? 'no-cache'
+            : filePath.includes('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'public, max-age=3600',
+      };
+      if (COMPRESSIBLE.has(ext) && (c.req.header('accept-encoding') ?? '').includes('gzip')) {
+        data = new Uint8Array(gzipSync(data));
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+      }
+      return new Response(data as any, { status: 200, headers });
     };
     app.get('/*', (c) => {
       const pathname = decodeURIComponent(new URL(c.req.url).pathname);
-      const candidate = normalize(join(root, pathname === '/' ? '/index.html' : pathname));
+      let candidate = normalize(join(root, pathname === '/' ? '/index.html' : pathname));
+      // Directory URLs resolve to their index.html — this is how the pitch deck is
+      // served at the clean /deck/ path (dist/deck/index.html, no .html in the URL).
+      if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isDirectory()) {
+        candidate = join(candidate, 'index.html');
+      }
       if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isFile()) {
         return serveFile(c, candidate);
       }
@@ -559,10 +605,14 @@ export function createApp(deps: AppDeps) {
     });
   }
 
-  // Boot seed: anchor the current epoch's independent valuation on startup (covers a
-  // server restart mid-epoch). Best-effort + idempotent — never blocks boot.
+  // Boot seed: resume the live epoch from the ledger (a restart must not revert the demo
+  // to M1), then anchor that epoch's independent valuation. Best-effort + idempotent —
+  // never blocks boot.
   if (deps.seedOnBoot) {
-    void seedValuation(demoEpoch).catch((err) => console.error('[boot] valuation seed failed', err));
+    void (async () => {
+      demoEpoch = await deriveEpoch();
+      await seedValuation(demoEpoch);
+    })().catch((err) => console.error('[boot] epoch derive/seed failed', err));
   }
 
   return app;

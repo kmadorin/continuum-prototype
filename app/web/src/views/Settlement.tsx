@@ -157,8 +157,14 @@ export default function Settlement() {
     );
   }
 
+  // Guard both shared facts: a projection that omits clearingPct / totalUnits must
+  // never surface as the literal "undefined of NAV" or "NaN" — fall back to a dash.
   const clearingPctNum = Number(settled.clearingPct);
-  const clearingLabel = Number.isFinite(clearingPctNum) ? `${(clearingPctNum * 100).toFixed(0)}%` : settled.clearingPct;
+  const clearingLabel = Number.isFinite(clearingPctNum) ? `${(clearingPctNum * 100).toFixed(0)}% of NAV` : '—';
+  const totalUnitsNum = Number(settled.totalUnits);
+  const totalUnitsLabel = Number.isFinite(totalUnitsNum)
+    ? `${fmtM(settled.totalUnits)} (${totalUnitsNum.toLocaleString()})`
+    : '—';
 
   // Dismissed: the deal stays visibly settled, and the takeover is one click away again.
   if (dismissed) {
@@ -214,9 +220,9 @@ export default function Settlement() {
           <dt>Deal</dt>
           <dd className="mono">{settled.dealId}</dd>
           <dt>Clearing price</dt>
-          <dd>{clearingLabel} of NAV</dd>
+          <dd>{clearingLabel}</dd>
           <dt>Total units</dt>
-          <dd className="mono">{fmtM(settled.totalUnits)} ({Number(settled.totalUnits).toLocaleString()})</dd>
+          <dd className="mono">{totalUnitsLabel}</dd>
           {settled.fairnessHash && (
             <>
               <dt>Fairness hash</dt>

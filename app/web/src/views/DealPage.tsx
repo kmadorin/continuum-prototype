@@ -263,12 +263,24 @@ export default function DealPage() {
         }
       : { label: 'Elections', value: '— Pending Elections', pending: true },
     receipt
-      ? {
-          label: 'CV units issued',
-          value: Number(receipt.args.totalUnits).toLocaleString(),
-          sub: '@ $1.00',
-          asOf: DEMO.closeDate,
-        }
+      ? (() => {
+          // The receipt is authoritative when it carries the count; some ledger
+          // projections omit `totalUnits`, so never let Number(undefined) → "NaN"
+          // reach the tile. Units are issued @ $1.00 ≡ the clearing USD, so fall
+          // back to that (matches the on-ledger PSA price) before giving up to "—".
+          const fromReceipt = Number(receipt.args.totalUnits);
+          const units = Number.isFinite(fromReceipt)
+            ? fromReceipt
+            : clearingUsd != null
+              ? Math.round(clearingUsd)
+              : null;
+          return {
+            label: 'CV units issued',
+            value: units != null ? units.toLocaleString() : '—',
+            sub: '@ $1.00',
+            asOf: DEMO.closeDate,
+          };
+        })()
       : { label: 'CV units issued', value: '— Pending Issuance', pending: true },
   ];
 

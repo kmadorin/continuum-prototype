@@ -40,7 +40,7 @@ export default function Stepper({
           data-testid={`lc-step-${s.state}`}
         >
           <span className="lc-num" aria-hidden="true">
-            {s.state === 'done' ? <Check /> : i + 1}
+            {s.state === 'done' ? <Check /> : <span className="lc-digit">{i + 1}</span>}
           </span>
           <span className="lc-label">{s.label}</span>
         </li>
