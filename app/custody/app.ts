@@ -391,6 +391,29 @@ export function createApp(deps: AppDeps) {
     return run;
   }
 
+  // Derive the live epoch from the LEDGER, not from process memory. `demoEpoch` starts
+  // at 1 on every boot, but reset seeds a ValuationReport per epoch under dealId `M{n}`,
+  // so the highest n on the valuer's ACS IS the current epoch. When Fly auto-stops an
+  // idle machine and the next request cold-starts it, this RESUMES the demo where it was
+  // instead of snapping every seat back to M1 — which is exactly what made "Reset" look
+  // like it silently reverted after the app sat idle.
+  async function deriveEpoch(): Promise<number> {
+    if (!deps.reads) return demoEpoch;
+    const valuer = deps.tenants.all.find((t) => t.role === 'valuer');
+    if (!valuer) return demoEpoch;
+    try {
+      const reports = await deps.reads.activeContracts(valuer.party, { templateId: VALUATION_SUFFIX });
+      let max = 1;
+      for (const c of reports) {
+        const m = /^M(\d+)$/.exec(String(c.args?.dealId ?? ''));
+        if (m) max = Math.max(max, Number(m[1]));
+      }
+      return max;
+    } catch {
+      return demoEpoch; // read failed → keep the in-memory value (worst case: epoch 1)
+    }
+  }
+
   // ── POST /demo/reset ── bump the epoch → the whole demo starts over ────────────
   // Landing-page "Reset demo" calls this (confirm-gated in the UI). No session needed:
   // it authorizes nothing beyond seeding the independent valuation and reveals no
@@ -582,10 +605,14 @@ export function createApp(deps: AppDeps) {
     });
   }
 
-  // Boot seed: anchor the current epoch's independent valuation on startup (covers a
-  // server restart mid-epoch). Best-effort + idempotent — never blocks boot.
+  // Boot seed: resume the live epoch from the ledger (a restart must not revert the demo
+  // to M1), then anchor that epoch's independent valuation. Best-effort + idempotent —
+  // never blocks boot.
   if (deps.seedOnBoot) {
-    void seedValuation(demoEpoch).catch((err) => console.error('[boot] valuation seed failed', err));
+    void (async () => {
+      demoEpoch = await deriveEpoch();
+      await seedValuation(demoEpoch);
+    })().catch((err) => console.error('[boot] epoch derive/seed failed', err));
   }
 
   return app;
