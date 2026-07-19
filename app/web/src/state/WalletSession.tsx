@@ -4,14 +4,15 @@
 // { role, party, custodianName }.
 //
 // SECURITY (hard rule): NO key material, NO mnemonic, NO private key ever lives in
-// the browser now. Nothing is written to sessionStorage/localStorage. The session
-// is an httpOnly cookie set by the backend at /auth/login; the browser never reads
-// it. `GET /me` restores identity on reload; `signIn` posts credentials; `signOut`
-// drops local identity (the cookie is short-lived and re-`/me` would restore, which
-// is fine for the demo — a logout endpoint can be added later).
+// the browser. The session token IS stored — per-tab in sessionStorage — but it is
+// only the backend's HMAC-signed identity, never a secret (see lib/authToken.ts).
+// Per-tab storage is what lets two tabs hold two different seats at once; a shared
+// cookie could not. `signIn` posts credentials and saves the returned token; on
+// reload the token restores identity via `GET /me`; `signOut` drops it.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { loadRegistry } from '../lib/useLedger';
+import { authFetch, setToken, clearToken } from '../lib/authToken';
 
 /** The six demo seats (also the backend usernames). */
 export type Role = 'gp' | 'buyer' | 'lpExiting' | 'lpRolling' | 'lpac' | 'valuer';
@@ -52,11 +53,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Registry is public and required before any view renders; a failure here is
       // non-fatal to auth (the SignIn screen still works).
       await loadRegistry().catch(() => {});
+      // Restore this tab's session from its own Bearer token. No token (fresh tab) →
+      // /me 401 → stays at the seat picker instead of inheriting another tab's seat.
       try {
-        const r = await fetch('/me', { credentials: 'include' });
+        const r = await authFetch('/me');
         if (alive && r.ok) {
           const me = (await readJson(r)) as Identity;
           if (me?.party) setIdentity(me);
+        } else if (alive && r.status === 401) {
+          clearToken(); // stale/invalid token — drop it
         }
       } catch {
         /* offline / no session — stay signed out */
@@ -80,14 +85,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const r = await fetch('/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ username, password }),
         });
         const body = await readJson(r).catch(() => ({}));
         if (!r.ok) throw new Error(body?.error ?? `login failed (${r.status})`);
+        if (body.token) setToken(body.token); // per-tab bearer token
         setIdentity({ role: body.role, party: body.party, custodianName: body.custodianName });
       },
       signOut() {
+        clearToken();
         setIdentity(null);
       },
     }),

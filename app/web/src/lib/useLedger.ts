@@ -1,12 +1,13 @@
 // Custody seam: every persona view drives its OWN on-ledger actions, but signing
 // now happens in the CUSTODY BACKEND, not the browser. `submit(commands)` POSTs to
-// `/action`; the backend signs with the SESSION party's key (chosen from the
-// httpOnly cookie — the client cannot pick a party) and returns `{updateId}`.
+// `/action`; the backend signs with the SESSION party's key (chosen from this tab's
+// Bearer token — the client cannot pick a party) and returns `{updateId}`.
 // Reads go through the backend's per-party proxy (`HttpLedgerClient('/api')`, which
 // forces the session party's projection). Party ids come from the PUBLIC `/registry`.
 //
 // SECURITY: NO key material in the browser. There is no client-side signing, no
-// mnemonic, no private key, nothing in sessionStorage/localStorage. The command
+// mnemonic, no private key. Only the backend's non-secret signed identity token is
+// held (per-tab, in sessionStorage — see lib/authToken.ts). The command
 // shapes + demo economics are copied verbatim from app/scripts/close-wallets.ts,
 // proven against continuum-contracts 1.1.0 on 5N devnet.
 import { useMemo } from 'react';
@@ -15,10 +16,12 @@ import type { ActiveContract, JsCommand } from '../../../ledger-client/src/types
 import { VALUATION_SHA256, FAIRNESS_SHA256 } from '../../../custody/docs/hashes';
 import { useSession } from '../state/WalletSession';
 import { useToast } from '../state/Toast';
+import { authFetch, authHeaders } from './authToken';
 
-// Per-party reads proxy (session-scoped by the backend). Same-origin, so the
-// httpOnly session cookie rides along automatically (default `credentials`).
-export const reads = new HttpLedgerClient('/api');
+// Per-party reads proxy (session-scoped). Inject a fetchImpl that attaches this tab's
+// Bearer token so the backend can pick the party.
+export const reads = new HttpLedgerClient('/api', (input, init = {}) =>
+  fetch(input, { ...init, headers: authHeaders(init.headers) }));
 
 // Fully-qualified create/exercise template ids the deployed 1.1.0 contracts
 // expect (#package:Module:Entity). Verbatim from close-wallets.ts `T`.
@@ -223,10 +226,9 @@ export function useLedger() {
       submit: async (commands: JsCommand[], awaitTemplate?: string): Promise<SubmitResult> => {
         const tid = toast.show(`signing via ${custodianName ?? 'custodian'}…`, 'pending');
         try {
-          const r = await fetch('/action', {
+          const r = await authFetch('/action', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ commands }),
           });
           const txt = await r.text();

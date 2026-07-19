@@ -6,6 +6,8 @@
 //
 // SECURITY: read-only. These are GETs; no key material, nothing persisted client-side.
 
+import { authFetch } from './authToken';
+
 /** One manifest row — the shape `GET /docs/manifest` returns. */
 export type DocManifestEntry = {
   name: string;
@@ -50,7 +52,7 @@ export async function fetchManifest(): Promise<DocManifestEntry[]> {
 
 /** Verify one document against its on-ledger anchor (session-scoped recompute). */
 export async function verifyDoc(name: string): Promise<VerifyResult> {
-  const r = await fetch(`/verify/${encodeURIComponent(name)}`, { credentials: 'include' });
+  const r = await authFetch(`/verify/${encodeURIComponent(name)}`);
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((body as { error?: string })?.error ?? `/verify → ${r.status}`);
   return body as VerifyResult;

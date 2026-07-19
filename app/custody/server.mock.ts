@@ -92,7 +92,6 @@ export function createMockApp(opts: { indexHtml?: string } = {}) {
     fetchImpl: makeMockFetch(store),
     audit: auditLog,
     staticRoot,
-    secureCookie: process.env.NODE_ENV === 'production',
     // Fixtures already contain the ValuationReport; let them own it rather than
     // depending on the seed path's dedup behaviour against a mock store.
     seedOnBoot: false,

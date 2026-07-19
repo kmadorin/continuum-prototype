@@ -43,14 +43,14 @@ const CLOSE_DATE = '2026-06-30';
 type Ctr = { contractId: string; templateId: string; args: any };
 
 const { app } = createSandbox();
-const cookies: Record<string, string> = {};
+const tokens: Record<string, string> = {};
 let parties: Record<string, string>;
 let deal: { dealId: string; cv: string; unit: string; usdc: string };
 
 const req = (role: string, path: string, init: RequestInit = {}) =>
   app.request(path, {
     ...init,
-    headers: { ...(init.headers ?? {}), 'Content-Type': 'application/json', ...(cookies[role] ? { Cookie: cookies[role] } : {}) },
+    headers: { ...(init.headers ?? {}), 'Content-Type': 'application/json', ...(tokens[role] ? { Authorization: `Bearer ${tokens[role]}` } : {}) },
   });
 
 async function login(role: string): Promise<void> {
@@ -60,7 +60,7 @@ async function login(role: string): Promise<void> {
     body: JSON.stringify({ username: role, password: `${role}-demo` }),
   });
   expect(r.status).toBe(200);
-  cookies[role] = r.headers.get('set-cookie')!.split(';')[0]!;
+  tokens[role] = (await r.json()).token;
 }
 
 /** POST /action — the backend signs as the session party. Throws on refusal, like the UI. */

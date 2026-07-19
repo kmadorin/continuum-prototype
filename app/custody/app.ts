@@ -10,7 +10,9 @@
 //    party's ACS.
 //  - The audit log records the public key FINGERPRINT, never key material.
 import { Hono } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
+// Session identity travels as an `Authorization: Bearer` token (per-tab, from the
+// browser's sessionStorage), not a cookie — a cookie is shared across all tabs of an
+// origin, so it could hold only one seat at a time.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
@@ -18,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, resolve } from 'node:path';
 import type { JsCommand } from '../ledger-client/src/types';
 import type { Ed25519Key } from '../ledger-client/src/ed25519';
-import { SESSION_COOKIE, signSession, verifySession, type SessionData } from './session';
+import { signSession, verifySession, type SessionData } from './session';
 import type { TenantStore } from './tenants';
 import { VALUATION_SHA256 } from './docs/hashes';
 
@@ -66,8 +68,6 @@ export type AppDeps = {
   audit?: AuditEntry[];
   /** Absolute path to the built SPA (../web/dist). If set, served with SPA fallback. */
   staticRoot?: string;
-  /** Mark the session cookie Secure (set true behind HTTPS in prod). */
-  secureCookie?: boolean;
   /**
    * Absolute path to the anchored-documents directory (default: ./docs next to app.ts).
    * Holds the sample docs + manifest.json served by /docs/* and re-hashed by /verify.
@@ -163,8 +163,12 @@ export function createApp(deps: AppDeps) {
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const audit = deps.audit ?? [];
 
+  const bearer = (c: any): string | undefined => {
+    const h = c.req.header('authorization') ?? c.req.header('Authorization');
+    return h && h.startsWith('Bearer ') ? h.slice('Bearer '.length) : undefined;
+  };
   const session = (c: any): SessionData | null =>
-    verifySession(getCookie(c, SESSION_COOKIE), deps.sessionSecret);
+    verifySession(bearer(c), deps.sessionSecret);
 
   // ── POST /auth/login ────────────────────────────────────────────────────────
   app.post('/auth/login', async (c) => {
@@ -182,14 +186,8 @@ export function createApp(deps: AppDeps) {
       party: tenant.party,
       custodianName: tenant.custodianName,
     };
-    setCookie(c, SESSION_COOKIE, signSession(data, deps.sessionSecret), {
-      httpOnly: true,
-      sameSite: 'Lax',
-      secure: !!deps.secureCookie,
-      path: '/',
-      maxAge: 60 * 60 * 8,
-    });
-    return c.json({ role: tenant.role, party: tenant.party, custodianName: tenant.custodianName });
+    const token = signSession(data, deps.sessionSecret);
+    return c.json({ token, role: tenant.role, party: tenant.party, custodianName: tenant.custodianName });
   });
 
   // ── GET /me ───────────────────────────────────────────────────────────────────

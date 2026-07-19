@@ -42,7 +42,7 @@ export function installBackend(state: BackendState) {
       const u = state.users?.[username];
       if (!u || u.password !== password) return json({ error: 'invalid credentials' }, 401);
       state.me = { role: u.role, party: u.party, custodianName: u.custodianName };
-      return json({ role: u.role, party: u.party, custodianName: u.custodianName });
+      return json({ token: `mock-token-${username}`, role: u.role, party: u.party, custodianName: u.custodianName });
     }
     if (path === '/action') {
       const a = state.action ?? { updateId: 'update-abc123' };

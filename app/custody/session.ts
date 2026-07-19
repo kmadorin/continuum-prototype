@@ -12,8 +12,6 @@ export type SessionData = {
   custodianName: string;
 };
 
-export const SESSION_COOKIE = 'continuum_session';
-
 export function signSession(data: SessionData, secret: string): string {
   const payload = Buffer.from(JSON.stringify(data), 'utf8').toString('base64url');
   const mac = createHmac('sha256', secret).update(payload).digest('base64url');

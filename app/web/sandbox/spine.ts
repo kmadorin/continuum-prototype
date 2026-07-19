@@ -85,7 +85,6 @@ export function createSandbox(): Sandbox {
     fetchImpl,
     audit,
     docsRoot: DOCS_ROOT,
-    secureCookie: false,
     seedOnBoot: true,
   });
 

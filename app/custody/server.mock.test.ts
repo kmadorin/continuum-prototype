@@ -8,8 +8,9 @@ const login = async (app: any, username: string, password: string): Promise<stri
     body: JSON.stringify({ username, password }),
   });
   expect(res.status).toBe(200);
-  return (res.headers.get('set-cookie') ?? '').split(';')[0]!;
+  return (await res.json()).token;
 };
+const auth = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
 
 describe('assertMockEnv', () => {
   it('throws when CUSTODY_KEYS_JSON is present', () => {
@@ -39,8 +40,8 @@ describe('mock app', () => {
   });
 
   it('logs in with the documented demo credentials', async () => {
-    const cookie = await login(app, 'gp', 'gp-demo');
-    expect(cookie).toContain('continuum_session=');
+    const token = await login(app, 'gp', 'gp-demo');
+    expect(token).toContain('.'); // signed payload.mac
   });
 
   it('rejects a bad password', async () => {
@@ -53,22 +54,22 @@ describe('mock app', () => {
   });
 
   it('seeds the ACS so a role view has content', async () => {
-    const cookie = await login(app, 'gp', 'gp-demo');
-    const { offset } = await (await app.request('/api/v2/state/ledger-end', { headers: { Cookie: cookie } })).json();
+    const token = await login(app, 'gp', 'gp-demo');
+    const { offset } = await (await app.request('/api/v2/state/ledger-end', { headers: auth(token) })).json();
     const acs = await (await app.request('/api/v2/state/active-contracts', {
       method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ activeAtOffset: offset, filter: {}, verbose: false }),
     })).json();
     expect(acs.length).toBeGreaterThan(0);
   });
 
   it('closes the read/write loop: /action creates a contract a later ACS read sees', async () => {
-    const cookie = await login(app, 'gp', 'gp-demo');
+    const token = await login(app, 'gp', 'gp-demo');
     const reg = await (await app.request('/registry')).json();
     const before = await (await app.request('/api/v2/state/active-contracts', {
       method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ activeAtOffset: 0, filter: {}, verbose: false }),
     })).json();
 
@@ -76,7 +77,7 @@ describe('mock app', () => {
     // label itself via summarize(commands). Mirrors useLedger.ts:199.
     const act = await app.request('/action', {
       method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         commands: [{
           CreateCommand: {
@@ -91,34 +92,34 @@ describe('mock app', () => {
 
     const after = await (await app.request('/api/v2/state/active-contracts', {
       method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ activeAtOffset: 0, filter: {}, verbose: false }),
     })).json();
     expect(after.length).toBe(before.length + 1);
   });
 
   it('serves a seeded audit trail so AuditTrail/HoldingReceipt render', async () => {
-    const cookie = await login(app, 'gp', 'gp-demo');
-    const rows = await (await app.request('/audit', { headers: { Cookie: cookie } })).json();
+    const token = await login(app, 'gp', 'gp-demo');
+    const rows = await (await app.request('/audit', { headers: auth(token) })).json();
     expect(rows.length).toBeGreaterThan(0);
   });
 
   it('POST /demo/reset restores pristine state WITHOUT bumping the epoch', async () => {
-    const cookie = await login(app, 'gp', 'gp-demo');
+    const token = await login(app, 'gp', 'gp-demo');
     const reg = await (await app.request('/registry')).json();
     await app.request('/action', {
       method: 'POST',
-      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         commands: [{ CreateCommand: { templateId: '#continuum:Continuum.Registry:RegistryAllocationFactory', createArguments: { admin: reg.parties.gp } } }],
       }),
     });
-    const grown = await (await app.request('/api/v2/state/ledger-end', { headers: { Cookie: cookie } })).json();
+    const grown = await (await app.request('/api/v2/state/ledger-end', { headers: auth(token) })).json();
 
     const reset = await app.request('/demo/reset', { method: 'POST' });
     expect((await reset.json()).deal.epoch).toBe(1);
 
-    const back = await (await app.request('/api/v2/state/ledger-end', { headers: { Cookie: cookie } })).json();
+    const back = await (await app.request('/api/v2/state/ledger-end', { headers: auth(token) })).json();
     expect(back.offset).toBeLessThan(grown.offset);
     expect((await (await app.request('/registry')).json()).deal.dealId).toBe('M1');
   });

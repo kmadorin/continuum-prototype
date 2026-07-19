@@ -22,11 +22,13 @@ function wrapper({ children }: { children: ReactNode }) {
 
 let state: BackendState;
 beforeEach(() => {
+  sessionStorage.clear();
   state = { me: null, registry: REGISTRY, users: USERS };
   installBackend(state);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 describe('Session (custody backend)', () => {
@@ -50,8 +52,9 @@ describe('Session (custody backend)', () => {
     expect(result.current.role).toBe('gp');
     expect(result.current.party).toBe('gp::ns');
     expect(result.current.custodianName).toBe('Fireblocks — GP treasury');
-    // SECURITY: nothing secret is persisted client-side.
-    expect(sessionStorage.length).toBe(0);
+    // SECURITY: only the non-secret per-tab session token is persisted — no key
+    // material, and nothing in localStorage.
+    expect(sessionStorage.getItem('continuum-session-token')).toBe('mock-token-gp');
     expect(localStorage.length).toBe(0);
   });
 

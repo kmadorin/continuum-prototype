@@ -80,7 +80,6 @@ function main() {
     fetchImpl: globalThis.fetch.bind(globalThis),
     audit,
     staticRoot: resolve(APP_DIR, 'web/dist'),
-    secureCookie: process.env.NODE_ENV === 'production',
     // Server-initiated auto-seed of the independent valuation (idempotency read + boot).
     reads,
     seedOnBoot: true,

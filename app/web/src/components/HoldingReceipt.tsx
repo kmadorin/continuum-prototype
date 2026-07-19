@@ -13,6 +13,7 @@
 //
 // SECURITY: read-only — a manifest GET, a /verify GET, an /audit GET. No key material.
 import { useEffect, useState } from 'react';
+import { authFetch } from '../lib/authToken';
 import { fetchManifest, truncHash } from '../lib/docs';
 import { HashChip, VerifyBadge, useVerify } from './DocVerify';
 import { useInspector } from '../state/Inspector';
@@ -51,7 +52,7 @@ export default function HoldingReceipt({
     // Resolve a mint tx to inspect: the newest settled update in this party's custody
     // trail. It is the buyer's own signed action stream, so it may be the closest
     // resolvable proof rather than the GP's mint itself — flagged via `approxTx`.
-    fetch('/audit', { credentials: 'include' })
+    authFetch('/audit')
       .then((r) => (r.ok ? r.json() : []))
       .then((es: Array<{ updateId?: string }>) => {
         if (!on || !Array.isArray(es)) return;

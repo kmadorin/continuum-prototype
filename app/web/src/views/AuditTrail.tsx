@@ -8,6 +8,7 @@
 //
 // SECURITY: read-only. The fingerprint is a PUBLIC key fingerprint, never key material.
 import { useEffect, useState } from 'react';
+import { authFetch } from '../lib/authToken';
 import { useInspector } from '../state/Inspector';
 
 export type AuditEntry = {
@@ -36,7 +37,7 @@ export default function AuditTrail() {
 
   const load = async () => {
     try {
-      const r = await fetch('/audit', { credentials: 'include' });
+      const r = await authFetch('/audit');
       const txt = await r.text();
       if (!r.ok) {
         let msg = txt;

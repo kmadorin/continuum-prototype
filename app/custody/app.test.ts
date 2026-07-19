@@ -46,14 +46,14 @@ async function login(app: any, username: string, password: string): Promise<stri
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
-  const setCookie = res.headers.get('set-cookie') ?? '';
-  return setCookie.split(';')[0]; // "continuum_session=..."
+  return (await res.json()).token; // per-tab Bearer token
 }
+const auth = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
 
 const createCmd = { CreateCommand: { templateId: '#pkg:Continuum.Registry:RegistryAllocationFactory', createArguments: { admin: PARTY_A } } };
 
 describe('login', () => {
-  it('succeeds with valid creds and sets an httpOnly cookie', async () => {
+  it('succeeds with valid creds and returns a signed session token', async () => {
     const { app } = makeDeps();
     const res = await app.request('/auth/login', {
       method: 'POST',
@@ -63,9 +63,9 @@ describe('login', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json).toMatchObject({ role: 'gp', party: PARTY_A, custodianName: 'Fireblocks — GP Treasury' });
-    const cookie = res.headers.get('set-cookie') ?? '';
-    expect(cookie).toContain('continuum_session=');
-    expect(cookie.toLowerCase()).toContain('httponly');
+    expect(typeof json.token).toBe('string');
+    expect(json.token).toContain('.'); // payload.mac
+    expect(res.headers.get('set-cookie')).toBeNull(); // no cookie — the token is per-tab
   });
 
   it('rejects wrong password with 401', async () => {
@@ -97,11 +97,11 @@ describe('session enforcement', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects a forged/tampered session cookie', async () => {
+  it('rejects a forged/tampered session token', async () => {
     const { app } = makeDeps();
     const res = await app.request('/me', {
       method: 'GET',
-      headers: { Cookie: 'continuum_session=eyJmb28iOiJiYXIifQ.deadbeef' },
+      headers: auth('eyJmb28iOiJiYXIifQ.deadbeef'),
     });
     expect(res.status).toBe(401);
   });
@@ -110,12 +110,12 @@ describe('session enforcement', () => {
 describe('per-party signing enforcement (the critical one)', () => {
   it('ALWAYS signs with the session party — never a client-supplied party', async () => {
     const { app, submitSigned } = makeDeps();
-    const cookie = await login(app, 'gp', 'gp-demo'); // session = party A
+    const token = await login(app, 'gp', 'gp-demo'); // session = party A
 
     // Client tries to smuggle party B in the body; deal args also NAME party B as data.
     const res = await app.request('/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       body: JSON.stringify({
         party: PARTY_B, // <-- ignored for signing
         commands: [{ CreateCommand: { templateId: '#pkg:Continuum.Deal:ContinuationDeal', createArguments: { gp: PARTY_A, buyer: PARTY_B } } }],
@@ -129,10 +129,10 @@ describe('per-party signing enforcement (the critical one)', () => {
 
   it('signs with session party A even when args legitimately reference other parties', async () => {
     const { app, submitSigned } = makeDeps();
-    const cookie = await login(app, 'gp', 'gp-demo'); // session = party A
+    const token = await login(app, 'gp', 'gp-demo'); // session = party A
     const res = await app.request('/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       // legitimate: a deal that names buyer B as DATA (not as an acting party)
       body: JSON.stringify({ commands: [{ CreateCommand: { templateId: '#pkg:Continuum.Deal:ContinuationDeal', createArguments: { gp: PARTY_A, buyer: PARTY_B } } }] }),
     });
@@ -149,10 +149,10 @@ describe('per-party signing enforcement (the critical one)', () => {
 
   it('refuses actAs naming another party → 403, does not sign', async () => {
     const { app, submitSigned } = makeDeps();
-    const cookie = await login(app, 'gp', 'gp-demo'); // session = party A
+    const token = await login(app, 'gp', 'gp-demo'); // session = party A
     const res = await app.request('/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       body: JSON.stringify({ actAs: [PARTY_B], commands: [createCmd] }),
     });
     expect(res.status).toBe(403);
@@ -163,10 +163,10 @@ describe('per-party signing enforcement (the critical one)', () => {
 describe('audit', () => {
   it('appends a signed entry (fingerprint, updateId) on a successful action', async () => {
     const { app, audit } = makeDeps();
-    const cookie = await login(app, 'gp', 'gp-demo');
+    const token = await login(app, 'gp', 'gp-demo');
     const res = await app.request('/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       body: JSON.stringify({ commands: [createCmd] }),
     });
     expect(res.status).toBe(200);
@@ -190,10 +190,10 @@ describe('audit', () => {
       throw new Error('ledger rejected: boom');
     });
     const { app, audit } = makeDeps({ signer: { submitSigned } });
-    const cookie = await login(app, 'gp', 'gp-demo');
+    const token = await login(app, 'gp', 'gp-demo');
     const res = await app.request('/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       body: JSON.stringify({ commands: [createCmd] }),
     });
     expect(res.status).toBe(502);
@@ -202,12 +202,12 @@ describe('audit', () => {
 
   it('/audit only returns the session tenant’s entries', async () => {
     const { app } = makeDeps();
-    const gpCookie = await login(app, 'gp', 'gp-demo');
-    await app.request('/action', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: gpCookie }, body: JSON.stringify({ commands: [createCmd] }) });
-    const buyerCookie = await login(app, 'buyer', 'buyer-demo');
-    const res = await app.request('/audit', { method: 'GET', headers: { Cookie: buyerCookie } });
+    const gpToken = await login(app, 'gp', 'gp-demo');
+    await app.request('/action', { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth(gpToken) }, body: JSON.stringify({ commands: [createCmd] }) });
+    const buyerToken = await login(app, 'buyer', 'buyer-demo');
+    const res = await app.request('/audit', { method: 'GET', headers: auth(buyerToken) });
     expect(await res.json()).toEqual([]); // buyer sees none of gp's entries
-    const gpRes = await app.request('/audit', { method: 'GET', headers: { Cookie: gpCookie } });
+    const gpRes = await app.request('/audit', { method: 'GET', headers: auth(gpToken) });
     expect((await gpRes.json())).toHaveLength(1);
   });
 });
@@ -273,8 +273,8 @@ describe('anchored documents', () => {
       );
     });
     const { app } = makeDeps({ fetchImpl: fetchImpl as any });
-    const cookie = await login(app, 'gp', 'gp-demo');
-    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: { Cookie: cookie } });
+    const token = await login(app, 'gp', 'gp-demo');
+    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: auth(token) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.docSha256).toBe(VALUATION_SHA256);
@@ -291,8 +291,8 @@ describe('anchored documents', () => {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     const { app } = makeDeps({ fetchImpl: fetchImpl as any });
-    const cookie = await login(app, 'gp', 'gp-demo');
-    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: { Cookie: cookie } });
+    const token = await login(app, 'gp', 'gp-demo');
+    const res = await app.request('/verify/valuation-report', { method: 'GET', headers: auth(token) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.matches).toBe(false);
@@ -309,10 +309,10 @@ describe('reads proxy', () => {
       new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     );
     const { app } = makeDeps({ fetchImpl: fetchImpl as any });
-    const cookie = await login(app, 'gp', 'gp-demo'); // party A
+    const token = await login(app, 'gp', 'gp-demo'); // party A
     const res = await app.request('/api/v2/state/active-contracts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: { 'Content-Type': 'application/json', ...auth(token) },
       // client tries to read party B's ACS
       body: JSON.stringify({ activeAtOffset: 5, filter: { filtersByParty: { [PARTY_B]: { cumulative: [] } } } }),
     });

@@ -11,6 +11,7 @@
 // SECURITY: read-only. No key material, no transport token — the backend holds those.
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { authFetch } from '../lib/authToken';
 
 const short = (s?: string, head = 10, tail = 6): string =>
   !s ? '—' : s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s;
@@ -132,7 +133,7 @@ export default function LedgerInspector({ updateId, onClose }: { updateId: strin
     setErr('');
     (async () => {
       try {
-        const r = await fetch(`/ledger/update/${encodeURIComponent(updateId)}`, { credentials: 'include' });
+        const r = await authFetch(`/ledger/update/${encodeURIComponent(updateId)}`);
         const txt = await r.text();
         if (!alive) return;
         if (!r.ok) {
