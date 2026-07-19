@@ -356,6 +356,7 @@ describe('valuation auto-seed', () => {
   const SEED_RECORDS: TenantRecord[] = [
     { tenant: 'gp', custodianName: 'Fireblocks — GP Treasury', role: 'gp', party: PARTY_A, mnemonic: MNEM_A, fingerprint: FP_A, username: 'gp', password: 'gp-demo' },
     { tenant: 'valuer', custodianName: 'Kroll Valuation Services', role: 'valuer', party: VALUER_PARTY, mnemonic: VALUER_MNEM, fingerprint: 'fp-valuer', username: 'valuer', password: 'valuer-demo' },
+    { tenant: 'lpac', custodianName: 'State Street — LPAC', role: 'lpac', party: PARTY_B, mnemonic: MNEM_B, fingerprint: 'fp-lpac', username: 'lpac', password: 'lpac-demo' },
   ];
 
   function seedDeps(existing: Array<{ contractId: string; args: Record<string, unknown> }> = []) {
@@ -382,7 +383,7 @@ describe('valuation auto-seed', () => {
     expect(party).toBe(VALUER_PARTY); // the REAL valuer party signs
     const args = commands[0].CreateCommand.createArguments;
     expect(commands[0].CreateCommand.templateId).toContain('Continuum.Valuation:ValuationReport');
-    expect(args).toMatchObject({ agent: VALUER_PARTY, gp: PARTY_A, dealId: 'M2', contentHash: VALUATION_SHA256 });
+    expect(args).toMatchObject({ agent: VALUER_PARTY, gp: PARTY_A, lpac: PARTY_B, dealId: 'M2', contentHash: VALUATION_SHA256 });
   });
 
   it('is idempotent — skips the create when a report for the epoch dealId already exists', async () => {

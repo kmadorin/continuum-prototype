@@ -356,7 +356,8 @@ export function createApp(deps: AppDeps) {
     const run = (async () => {
       const valuer = deps.tenants.all.find((t) => t.role === 'valuer');
       const gp = deps.tenants.all.find((t) => t.role === 'gp');
-      if (!valuer || !gp) return; // no valuer/gp tenant (e.g. minimal test set) → skip
+      const lpac = deps.tenants.all.find((t) => t.role === 'lpac');
+      if (!valuer || !gp || !lpac) return; // missing valuer/gp/lpac tenant → skip
       const keys = dealKeys(epoch);
       // Idempotency: if the valuer's ACS already holds a report for THIS epoch's dealId,
       // do nothing (covers restarts + reset replays).
@@ -375,6 +376,7 @@ export function createApp(deps: AppDeps) {
             createArguments: {
               agent: valuer.party,
               gp: gp.party,
+              lpac: lpac.party,
               dealId: keys.dealId,
               navLow: SEED_NAV.navLow,
               navHigh: SEED_NAV.navHigh,

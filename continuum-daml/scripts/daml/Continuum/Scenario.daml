@@ -94,7 +94,7 @@ setupPreClose = do
   -- antecedent DAG for the issuance basis
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "M1"; navLow = 48000000.0; navHigh = 56000000.0
+      agent; gp; lpac; dealId = "M1"; navLow = 48000000.0; navHigh = 56000000.0
       asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with

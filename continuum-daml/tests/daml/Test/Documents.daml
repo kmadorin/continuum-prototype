@@ -38,7 +38,7 @@ valuationAgentMustDiffer = do
   gp <- allocateParty "GP"
   submitMustFail gp do
     createCmd ValuationReport with
-      agent = gp; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0
+      agent = gp; gp; lpac = gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0
       asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
 
 -- 9.2: dropping the valuation antecedent fails the gate.
@@ -57,7 +57,7 @@ clearingOutsideFairnessFails = do
   let asOf = date 2026 Jun 30
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+      agent; gp; lpac; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
   -- fairness range that EXCLUDES 0.96
   fo <- submit fair do
     createCmd FairnessOpinion with
@@ -80,17 +80,17 @@ twoValuationsReconcile = do
   ants <- stdAntecedents gp fair lpac asOf
   vrWide <- submit a1 do
     createCmd ValuationReport with
-      agent = a1; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v1"
+      agent = a1; gp; lpac; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v1"
   vrNarrow <- submit a2 do
     createCmd ValuationReport with
-      agent = a2; gp; dealId = "D"; navLow = 48000000.0; navHigh = 50000000.0; asOfDate = asOf; contentHash = hashOf "v2"
+      agent = a2; gp; lpac; dealId = "D"; navLow = 48000000.0; navHigh = 50000000.0; asOfDate = asOf; contentHash = hashOf "v2"
   -- 52M outside the narrow [48,50] → fails
   bBad <- submit gp do createCmd (mkBasis gp [vrWide, vrNarrow] ants asOf 120)
   submitMustFail gp do exerciseCmd bBad ValidateIssuance
   -- both wide → passes
   vrWide2 <- submit a2 do
     createCmd ValuationReport with
-      agent = a2; gp; dealId = "D"; navLow = 50000000.0; navHigh = 54000000.0; asOfDate = asOf; contentHash = hashOf "v3"
+      agent = a2; gp; lpac; dealId = "D"; navLow = 50000000.0; navHigh = 54000000.0; asOfDate = asOf; contentHash = hashOf "v3"
   bOk <- submit gp do createCmd (mkBasis gp [vrWide, vrWide2] ants asOf 120)
   _ <- submit gp do exerciseCmd bOk ValidateIssuance
   pure ()
@@ -103,7 +103,7 @@ staleValuationFails = do
       closeD = date 2026 Jun 30           -- ~180 days later
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+      agent; gp; lpac; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
   (_, ac, lc, psa) <- stdAntecedents gp fair lpac closeD
   fo <- submit fair do
     createCmd FairnessOpinion with
@@ -114,9 +114,9 @@ staleValuationFails = do
 -- 9.9: a disclosed valuation is invisible to non-stakeholders (a buyer).
 disclosedValuationInvisible : Script ()
 disclosedValuationInvisible = do
-  gp <- allocateParty "GP"; agent <- allocateParty "Agent"; buyer <- allocateParty "Buyer"
+  gp <- allocateParty "GP"; agent <- allocateParty "Agent"; buyer <- allocateParty "Buyer"; lpac <- allocateParty "LPAC"
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
+      agent; gp; lpac; dealId = "D"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
   seen <- queryContractId buyer vr
   assert (seen == None)

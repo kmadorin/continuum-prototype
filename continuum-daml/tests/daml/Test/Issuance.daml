@@ -18,7 +18,7 @@ issuanceBasisValidates = do
       closeD = date 2026 Jun 30
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+      agent; gp; lpac; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with
       provider = fair; gp; lpac; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"

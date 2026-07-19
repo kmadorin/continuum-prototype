@@ -6,6 +6,7 @@ template ValuationReport
   with
     agent       : Party         -- independent; MUST differ from gp
     gp          : Party
+    lpac        : Party         -- ILPA: the LPAC oversees the independent valuation
     dealId      : Text
     navLow      : Decimal
     navHigh     : Decimal
@@ -13,7 +14,7 @@ template ValuationReport
     contentHash : BytesHex
   where
     signatory agent
-    observer gp
+    observer gp, lpac
     ensure navLow <= navHigh && agent /= gp
 
 template FairnessOpinion

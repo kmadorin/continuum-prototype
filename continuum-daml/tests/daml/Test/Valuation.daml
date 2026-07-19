@@ -13,7 +13,7 @@ valuationIsIndependentAndReconciles = do
   lpac  <- allocateParty "LPAC"
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0
+      agent; gp; lpac; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0
       asOfDate = date 2026 Jun 30; contentHash = hashOf "val"
   fo <- submit fair do
     createCmd FairnessOpinion with

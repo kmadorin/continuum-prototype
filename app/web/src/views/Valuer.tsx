@@ -45,6 +45,7 @@ export default function Valuer() {
               createArguments: {
                 agent: L.me,
                 gp: counter.gp,
+                lpac: counter.lpac,
                 dealId: DEAL_ID,
                 navLow: DEMO.navLow,
                 navHigh: DEMO.navHigh,
@@ -69,10 +70,10 @@ export default function Valuer() {
   return (
     <Card title="Independent Valuation Agent · Kroll Valuation Services">
       <div className="stack g3">
-        {/* It used to say the GP, buyer, LPs and LPAC "each verify" this document. They cannot:
-            ValuationReport is `signatory agent, observer gp`, so the report reaches the GP and
-            nobody else. Claiming an audience the projection does not give it is the one thing a
-            seat about verifiable anchoring must not do. */}
+        {/* ValuationReport is `signatory agent, observer gp, lpac` — the report reaches the GP
+            and the LPAC oversight body, and nobody else (buyers/LPs never see it). Claiming an
+            audience the projection does not give it is the one thing a seat about verifiable
+            anchoring must not do. */}
         <p className="hint" style={{ marginTop: 0 }}>
           You are the independent agent. The GP opened the closing room for Project Continuum CV I, L.P. —
           that is the request for your independent valuation. Your sole action is to respond: sign and anchor
