@@ -94,17 +94,17 @@ setupPreClose = do
   -- antecedent DAG for the issuance basis
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; lpac; dealId = "M1"; navLow = 48000000.0; navHigh = 56000000.0
+      agent; gp; lpac = Some lpac; dealId = "M1"; navLow = 48000000.0; navHigh = 56000000.0
       asOfDate = date 2026 Jun 30; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; lpac; dealId = "M1"; fairLow = 0.92; fairHigh = 1.0
+      provider = fair; gp; lpac = lpac; dealId = "M1"; fairLow = 0.92; fairHigh = 1.0
       opinionDate = date 2026 Jun 30; contentHash = hashOf "f"
   ac <- submit gp do
     createCmd AuctionCertificate with
-      gp; lpac; dealId = "M1"; clearingPct = 0.96; leadBuyer = head buyers; bidTabulationHash = hashOf "b"
+      gp; lpac = lpac; dealId = "M1"; clearingPct = 0.96; leadBuyer = head buyers; bidTabulationHash = hashOf "b"
   lc <- submit lpac do
-    createCmd LPACConsent with gp; lpac; dealId = "M1"; recusals = []; granted = True
+    createCmd LPACConsent with gp; lpac = lpac; dealId = "M1"; recusals = []; granted = True
   psa <- submit gp do
     createCmd PurchaseAgreement with
       oldFund = gp; vehicle = gp; dealId = "M1"; price = 49920000.0
@@ -153,7 +153,7 @@ setupPreClose = do
         <> zip execBuyers  unitBuyAllocs
       burns = zip accLPs interests
   pure ClosePrep with
-    gp; agent; fair; lpac; regulator = reg
+    gp; agent; fair; lpac = lpac; regulator = reg
     buyers; rollers; exiting; dealCid; basisCid
     vrCid = vr; foCid = fo; acCid = ac; lcCid = lc; psaCid = psa
     legExecs; burns; cashInAllocs; valHash

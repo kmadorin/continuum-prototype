@@ -1,20 +1,21 @@
 module Continuum.Valuation where
 
 import DA.Crypto.Text (BytesHex)
+import DA.Optional (optionalToList)
 
 template ValuationReport
   with
-    agent       : Party         -- independent; MUST differ from gp
+    agent       : Party            -- independent; MUST differ from gp
     gp          : Party
-    lpac        : Party         -- ILPA: the LPAC oversees the independent valuation
     dealId      : Text
     navLow      : Decimal
     navHigh     : Decimal
     asOfDate    : Date
     contentHash : BytesHex
+    lpac        : Optional Party   -- ILPA: the LPAC oversees the independent valuation (added v1.1.1, at end for upgrade)
   where
     signatory agent
-    observer gp, lpac
+    observer gp, optionalToList lpac
     ensure navLow <= navHigh && agent /= gp
 
 template FairnessOpinion

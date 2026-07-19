@@ -18,16 +18,16 @@ issuanceBasisValidates = do
       closeD = date 2026 Jun 30
   vr <- submit agent do
     createCmd ValuationReport with
-      agent; gp; lpac; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
+      agent; gp; lpac = Some lpac; dealId = "D1"; navLow = 48000000.0; navHigh = 56000000.0; asOfDate = asOf; contentHash = hashOf "v"
   fo <- submit fair do
     createCmd FairnessOpinion with
-      provider = fair; gp; lpac; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
+      provider = fair; gp; lpac = lpac; dealId = "D1"; fairLow = 0.92; fairHigh = 1.0; opinionDate = asOf; contentHash = hashOf "f"
   ac <- submit gp do
     createCmd AuctionCertificate with
-      gp; lpac; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
+      gp; lpac = lpac; dealId = "D1"; clearingPct = 0.96; leadBuyer = gp; bidTabulationHash = hashOf "b"
   lc <- submit lpac do
     createCmd LPACConsent with
-      gp; lpac; dealId = "D1"; recusals = []; granted = True
+      gp; lpac = lpac; dealId = "D1"; recusals = []; granted = True
   psa <- submit gp do
     createCmd PurchaseAgreement with
       oldFund = gp; vehicle = gp; dealId = "D1"; price = 49920000.0; refNav = 52000000.0; clearingPct = 0.96; asOfDate = asOf
