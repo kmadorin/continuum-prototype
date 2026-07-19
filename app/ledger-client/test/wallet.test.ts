@@ -135,8 +135,28 @@ describe('WalletClient.submitSigned', () => {
     const f = vi.fn().mockResolvedValueOnce(okJson(prepResp)).mockResolvedValueOnce(okJson({})) as any;
     const w = new WalletClient('http://p', new HttpLedgerClient('http://p', f), f, 'sync::1');
     const disclosed = [{ contractId: 'c', createdEventBlob: 'b', templateId: '#p:M:T', synchronizerId: 'sync::1' }];
-    await w.submitSigned('buyer::ns', key, 'fp', [] as any, disclosed);
+    const cmd = { CreateCommand: { templateId: '#p:M:T', createArguments: {} } };
+    await w.submitSigned('buyer::ns', key, 'fp', [cmd] as any, disclosed);
     const prepBody = JSON.parse((f.mock.calls[0][1] as any).body);
     expect(prepBody.disclosedContracts).toEqual(disclosed);
+    expect(prepBody.commands).toEqual([cmd]); // one command per prepare
+  });
+
+  it('splits a multi-command batch into sequential single-command submissions', async () => {
+    const key = keyFromMnemonic(MNEMONIC);
+    const prepResp = {
+      preparedTransaction: 'X', preparedTransactionHash: Buffer.from(new Uint8Array(32)).toString('base64'),
+      hashingSchemeVersion: 'HASHING_SCHEME_VERSION_V2',
+    };
+    // 2 commands → 2 prepare + 2 execute = 4 posts, each prepare carrying ONE command.
+    const f = vi.fn().mockResolvedValue(okJson(prepResp)) as any;
+    const w = new WalletClient('http://p', new HttpLedgerClient('http://p', f), f, 'sync::1');
+    const a = { CreateCommand: { templateId: '#p:M:SealedBid', createArguments: {} } };
+    const b = { CreateCommand: { templateId: '#p:M:BidFiled', createArguments: {} } };
+    await w.submitSigned('buyer::ns', key, 'fp', [a, b] as any);
+    const prepareCalls = f.mock.calls.filter((c: any) => String(c[0]).endsWith('/prepare'));
+    expect(prepareCalls).toHaveLength(2);
+    expect(JSON.parse((prepareCalls[0][1] as any).body).commands).toEqual([a]);
+    expect(JSON.parse((prepareCalls[1][1] as any).body).commands).toEqual([b]);
   });
 });

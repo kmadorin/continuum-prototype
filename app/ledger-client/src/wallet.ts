@@ -140,15 +140,42 @@ export class WalletClient {
     opts: SubmitOptions = {},
   ): Promise<SubmitResult> {
     const sync = this.resolveSync(opts.synchronizer);
-    const commandId = `wallet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    // Interactive submission prepares ONE command per transaction ("Preparing multiple
+    // commands is currently not supported"). A batch (e.g. SealedBid + its BidFiled
+    // marker, or LPElection + ElectionFiled) is submitted as sequential single-command
+    // txs — these are independent creates, and the only atomic step (Close) is a single
+    // nested-exercise command that stays whole.
+    let updateId: string | undefined;
+    for (const command of commands) {
+      updateId = await this.submitOneSigned(party, key, fingerprint, command, sync, disclosedContracts);
+    }
+
+    const result: SubmitResult = { updateId };
+    if (opts.awaitTemplate) {
+      const contract = await this.pollForContract(party, opts.awaitTemplate, opts.tries, opts.delayMs);
+      if (contract) result.contract = contract;
+    }
+    return result;
+  }
+
+  /** Prepare → sign → execute a SINGLE command (the interactive-submission unit). */
+  private async submitOneSigned(
+    party: string,
+    key: Ed25519Key,
+    fingerprint: string,
+    command: JsCommand,
+    sync: string,
+    disclosedContracts?: Disclosed[],
+  ): Promise<string | undefined> {
+    const commandId = `wallet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const prepBody: Record<string, unknown> = {
       commandId,
       actAs: [party],
       synchronizerId: sync,
       packageIdSelectionPreference: [],
       verboseHashing: false,
-      commands,
+      commands: [command],
     };
     if (disclosedContracts && disclosedContracts.length) {
       prepBody.disclosedContracts = disclosedContracts;
@@ -166,13 +193,7 @@ export class WalletClient {
       hashingSchemeVersion: prep.hashingSchemeVersion,
       deduplicationPeriod: { Empty: {} },
     });
-
-    const result: SubmitResult = { updateId: exec?.transaction?.updateId ?? exec?.updateId };
-    if (opts.awaitTemplate) {
-      const contract = await this.pollForContract(party, opts.awaitTemplate, opts.tries, opts.delayMs);
-      if (contract) result.contract = contract;
-    }
-    return result;
+    return exec?.transaction?.updateId ?? exec?.updateId;
   }
 
   private async pollForContract(
