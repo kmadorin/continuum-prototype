@@ -14,7 +14,7 @@
 // Spec: docs/superpowers/specs/2026-07-11-continuum-role-scoped-ia.ts
 import { useEffect, useState } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, R, DEMO, positionNav, atClearing } from '../lib/useLedger';
+import { useLedger, R, DEMO, DEAL_ID, positionNav, atClearing } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
@@ -197,9 +197,12 @@ export default function FocusedPage() {
         const units = h.filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit).reduce((s, c) => s + Number(c.args.amount), 0);
         const usdc = h.filter((c) => c.args.owner === L.me && c.args.instId === DEMO.usdc).reduce((s, c) => s + Number(c.args.amount), 0);
         setFacts({
-          deal: pick(d, (c) => c.args.cv === DEMO.cv) ?? pick(d),
-          hasReceipt: rec.length > 0,
-          ownElection: !!pick(el, (c) => c.args.lp === L.me),
+          // Scope to THIS epoch — the shared devnet keeps prior-epoch contracts, so an
+          // unscoped fallback (deal `?? pick(d)`, receipt count, election) leaks a stale
+          // deal / marks a fresh deal "Closed" / shows a prior election in five seats at once.
+          deal: pick(d, (c) => c.args.cv === DEMO.cv),
+          hasReceipt: rec.some((c) => c.args.dealId === DEMO.cv),
+          ownElection: !!pick(el, (c) => c.args.lp === L.me && c.args.dealId === DEAL_ID),
           ownUnits: units,
           ownUsdc: usdc,
         });
@@ -208,11 +211,14 @@ export default function FocusedPage() {
         /* transient read error — next tick retries */
       }
     };
-    void tick();
-    const id = setInterval(tick, 3000);
+    void tick(); // initial load always runs; only the recurring poll pauses when hidden
+    const id = setInterval(() => { if (!document.hidden) void tick(); }, 5000);
+    const onVis = () => { if (!document.hidden) void tick(); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       on = false;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [L, role]);
 

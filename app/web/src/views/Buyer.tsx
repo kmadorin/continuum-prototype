@@ -38,8 +38,11 @@ export default function Buyer({ embedded }: { embedded?: BuyerSection[] } = {}) 
       L.myAcs(R.holding),
     ]);
     if (!alive()) return;
-    setDeal(pick(d));
-    setBid(pick(b, (c) => c.args.buyer === L.me));
+    // Scope to the CURRENT epoch's deal — the shared devnet still holds prior-epoch
+    // contracts (reset bumps dealId but never archives), so an unscoped pick would show
+    // a stale SealedBid ("Your bid is in") on a fresh deal and hide the submit control.
+    setDeal(pick(d, (c) => c.args.cv === DEMO.cv));
+    setBid(pick(b, (c) => c.args.buyer === L.me && c.args.dealId === DEAL_ID));
     setProp(pick(p, (c) => c.args.party === L.me));
     setDeleg(pick(dg, (c) => c.args.party === L.me));
     const mine = h.filter((c) => c.args.owner === L.me && c.args.instId === DEMO.unit);

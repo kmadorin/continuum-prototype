@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ActiveContract } from '../../../ledger-client/src/types';
-import { useLedger, R, DEMO, custodians, shortParty } from '../lib/useLedger';
+import { useLedger, R, DEMO, DEAL_ID, custodians, shortParty } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { useInspector } from '../state/Inspector';
 import { pick } from './parts';
@@ -194,23 +194,35 @@ export default function DealPage() {
           L.myAcs(R.opinion),
         ]);
         if (!on) return;
+        // Scope every read to the CURRENT epoch — the shared devnet keeps prior-epoch
+        // contracts (reset bumps the id but never archives them), so an unscoped read
+        // leaks stale bids/valuations/receipts into the feed + KPI tiles. Markers,
+        // valuations, opinions and consents key on the short dealId (DEAL_ID = "M6");
+        // SettlementReceipt keys on the cv name (Deal.daml creates it with dealId = cv).
+        const inDeal = (c: ActiveContract) => c.args.dealId === DEAL_ID;
         setDeal(pick(d, (c) => c.args.cv === DEMO.cv));
-        setReceipts(rec);
-        setElections(el);
-        setBids(sb);
-        setConsents(cons);
-        setValuations(val);
-        setOpinions(op);
+        setReceipts(rec.filter((c) => c.args.dealId === DEMO.cv));
+        setElections(el.filter(inDeal));
+        setBids(sb.filter(inDeal));
+        setConsents(cons.filter(inDeal));
+        setValuations(val.filter(inDeal));
+        setOpinions(op.filter(inDeal));
         setLoaded(true);
       } catch {
         /* transient read error — next tick retries */
       }
     };
-    void tick();
-    const id = setInterval(tick, 3000);
+    void tick(); // initial load ALWAYS runs (even hidden) so a backgrounded tab isn't blank
+    // Recurring poll only while visible — 5 of the 6 seat tabs sit backgrounded and idle.
+    const id = setInterval(() => { if (!document.hidden) void tick(); }, 5000);
+    // Refetch immediately when the tab regains focus, so a backgrounded seat is current the
+    // moment you look at it despite the paused polling above.
+    const onVis = () => { if (!document.hidden) void tick(); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       on = false;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [L]);
 

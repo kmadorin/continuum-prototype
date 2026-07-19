@@ -13,11 +13,25 @@ export class HttpLedgerClient implements LedgerClient {
     if (!r.ok) throw new Error(`${path} → ${r.status}: ${txt}`);
     return JSON.parse(txt);
   }
+  // In-flight dedup: a single UI poll fires ~7 activeContracts reads in parallel, each of
+  // which calls ledgerEnd() first. Without this they'd issue 7 identical ledger-end GETs per
+  // tick. Sharing the one in-flight promise collapses them to a single GET. NOT a time cache
+  // — the promise clears as soon as it resolves, so the NEXT tick (and every sequential poll,
+  // e.g. pollForContract) still reads a fresh offset. No staleness risk.
+  private endInflight?: Promise<{ offset: number }>;
   async ledgerEnd() {
-    const r = await this.fetchImpl(`${this.base}/v2/state/ledger-end`);
-    const txt = await r.text();
-    if (!r.ok) throw new Error(`/v2/state/ledger-end → ${r.status}: ${txt}`);
-    return JSON.parse(txt);
+    if (this.endInflight) return this.endInflight;
+    this.endInflight = (async () => {
+      const r = await this.fetchImpl(`${this.base}/v2/state/ledger-end`);
+      const txt = await r.text();
+      if (!r.ok) throw new Error(`/v2/state/ledger-end → ${r.status}: ${txt}`);
+      return JSON.parse(txt);
+    })();
+    try {
+      return await this.endInflight;
+    } finally {
+      this.endInflight = undefined;
+    }
   }
   async submit(cmd: SubmitReq) { return this.post('/v2/commands/submit-and-wait', cmd); }
   async activeContracts(party: string, opts: { templateId?: string; includeBlob?: boolean } = {}) {

@@ -24,7 +24,7 @@ import { reads, R, DEMO } from '../lib/useLedger';
 import { useSession, type Role } from '../state/WalletSession';
 import { fmtM } from './shared';
 
-const POLL_MS = 1000;
+const POLL_MS = 5000;
 
 type Settled = {
   /** The shared settlement id shown big in every window (identical across parties). */
@@ -99,7 +99,9 @@ export default function Settlement() {
         ]);
         if (!on) return;
 
-        const d = deal.find((c) => c.args.cv === DEMO.cv) ?? deal[deal.length - 1] ?? null;
+        // Scope to THIS epoch only — no `?? deal[last]` fallback, or a prior-epoch deal's
+        // stage leaks into the "awaiting settlement" strip on a fresh deal.
+        const d = deal.find((c) => c.args.cv === DEMO.cv) ?? null;
         setStage((d?.args.stage as string) ?? null);
 
         // Prefer the room's SettlementReceipt (its cid is the shared proof value).
@@ -124,11 +126,14 @@ export default function Settlement() {
       }
     };
 
-    void poll();
-    const id = setInterval(poll, POLL_MS);
+    void poll(); // initial check always runs (catches an already-settled deal even while hidden)
+    const id = setInterval(() => { if (!document.hidden) void poll(); }, POLL_MS);
+    const onVis = () => { if (!document.hidden) void poll(); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       on = false;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [party, role]);
 

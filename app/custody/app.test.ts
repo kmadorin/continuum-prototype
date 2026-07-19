@@ -337,12 +337,15 @@ describe('demo epoch reset', () => {
     expect(json.deal).toEqual({ epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' });
   });
 
-  it('POST /demo/reset bumps the epoch and rotates every join/identity key', async () => {
+  it('POST /demo/reset bumps the epoch and rotates the scoping keys (unit id stays fixed)', async () => {
     const { app } = makeDeps();
     const reset = await app.request('/demo/reset', { method: 'POST' });
     expect(reset.status).toBe(200);
     const bumped = (await reset.json()).deal;
-    expect(bumped).toEqual({ epoch: 2, dealId: 'M2', cv: 'Meridian CV I #2', unit: 'MERIDIAN-CV-I-2', usdc: 'USDC-2' });
+    // dealId/cv/usdc rotate per epoch; the UNIT id is pinned to the Daml's hardcoded
+    // `unitId = "MERIDIAN-CV-I"` (Registry.daml:13) so the atomic Close's conservation
+    // assert (`sum unit legs == psaPrice`) can identify the unit legs on every epoch.
+    expect(bumped).toEqual({ epoch: 2, dealId: 'M2', cv: 'Meridian CV I #2', unit: 'MERIDIAN-CV-I', usdc: 'USDC-2' });
     // The new epoch is now what /registry serves — reads scope to the fresh, empty deal.
     const reg = await (await app.request('/registry')).json();
     expect(reg.deal.epoch).toBe(2);

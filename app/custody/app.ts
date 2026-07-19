@@ -163,6 +163,25 @@ export function createApp(deps: AppDeps) {
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const audit = deps.audit ?? [];
 
+  // ── short-TTL read cache ── collapse every seat/tab's identical ledger reads into ONE
+  // devnet round-trip. Single fly machine (min_machines_running=1), so this in-memory map is
+  // shared across all sessions. Keyed so a party NEVER sees another party's ACS; ledger-end is
+  // party-independent so it shares one 'le' key. Busted on a party's own write (POST /action)
+  // so post-action reads are fresh. Only the two hot read endpoints are cached; everything else
+  // on /api/* passes straight through.
+  type ReadHit = { until: number; status: number; ctype: string; body: string };
+  const readCache = new Map<string, ReadHit>();
+  const readInflight = new Map<string, Promise<ReadHit>>();
+  const READ_TTL_MS = 1500;
+  // Cache ONLY the fat active-contracts POST (the real payload cost). ledger-end stays
+  // uncached: it is a tiny GET, must stay fresh (callers assert its offset advances), and the
+  // client already dedups its parallel ledger-end GETs in-flight.
+  const readCacheKey = (rest: string, party: string): string | null =>
+    rest === '/v2/state/active-contracts' ? `ac:${party}` : null;
+  const bustReadCache = (party: string) => {
+    readCache.delete(`ac:${party}`);
+  };
+
   const bearer = (c: any): string | undefined => {
     const h = c.req.header('authorization') ?? c.req.header('Authorization');
     return h && h.startsWith('Bearer ') ? h.slice('Bearer '.length) : undefined;
@@ -244,6 +263,7 @@ export function createApp(deps: AppDeps) {
         outcome: 'signed',
       };
       audit.push(entry);
+      bustReadCache(s.party); // this party just wrote — its next read must see the new contract
       return c.json({ updateId: res?.updateId });
     } catch (e: any) {
       const msg = e?.message ?? String(e);
@@ -290,6 +310,37 @@ export function createApp(deps: AppDeps) {
 
     const init: RequestInit = { method, headers };
     if (bodyText !== undefined) init.body = bodyText;
+
+    // Cache the two hot read endpoints (ledger-end, active-contracts). A slightly stale
+    // snapshot (≤ READ_TTL_MS) is fine for a polling UI, and the acting party's cache is busted
+    // on its own /action so post-write reads stay correct.
+    const cacheKey = readCacheKey(rest, s.party);
+    if (cacheKey) {
+      const now = Date.now();
+      const cached = readCache.get(cacheKey);
+      if (cached && cached.until > now) {
+        return new Response(cached.body, { status: cached.status, headers: { 'Content-Type': cached.ctype } });
+      }
+      let flight = readInflight.get(cacheKey);
+      if (!flight) {
+        flight = (async (): Promise<ReadHit> => {
+          const rr = await fetchImpl(target, init);
+          const body = await rr.text();
+          const hit: ReadHit = {
+            until: Date.now() + READ_TTL_MS,
+            status: rr.status,
+            ctype: rr.headers.get('content-type') ?? 'application/json',
+            body,
+          };
+          if (rr.ok) readCache.set(cacheKey, hit); // never cache errors
+          return hit;
+        })().finally(() => readInflight.delete(cacheKey));
+        readInflight.set(cacheKey, flight);
+      }
+      const hit = await flight;
+      return new Response(hit.body, { status: hit.status, headers: { 'Content-Type': hit.ctype } });
+    }
+
     const r = await fetchImpl(target, init);
     const txt = await r.text();
     return new Response(txt, {
@@ -302,16 +353,22 @@ export function createApp(deps: AppDeps) {
   // The ledger is append-only, so "start over" can't delete history. Instead every
   // demo run is scoped by an EPOCH that rotates the four on-ledger JOIN/IDENTITY keys
   // the UI filters on: the deal id, the human cv, and the two instrument ids (holdings
-  // are filtered by instId, so those must rotate too or old units/cash would still
-  // show). A fresh epoch → the new keys have zero contracts → every seat's view is
-  // pristine and the GP re-opens the room. Old contracts linger invisibly on devnet.
-  // Epoch 1 == the original hardcoded constants (no change for existing state).
+  // are filtered by instId, so those rotate to keep post-close balances epoch-clean).
+  // A fresh epoch → the new keys have zero contracts → every seat's view is pristine and
+  // the GP re-opens the room. Old contracts linger invisibly on devnet.
+  //
+  // ⚠️ The UNIT instrument id MUST stay the fixed "MERIDIAN-CV-I": Deal.daml's atomic Close
+  // asserts `sum(unit-leg amounts) == basis.psaPrice`, and it identifies the unit legs by the
+  // HARDCODED `unitId = "MERIDIAN-CV-I"` constant (Registry.daml:13, the only place it's used).
+  // If the unit id is epoch-suffixed, no leg matches → unitTotal 0 ≠ psaPrice → the Close aborts
+  // (AssertionFailed) on every epoch but 1. So the unit id does NOT rotate; only usdc + the
+  // scoping keys do. (usdcId is defined in the Daml but never compared, so USDC can rotate.)
   // In-memory (single machine); a restart falls back to epoch 1.
   let demoEpoch = 1;
   const dealKeys = (e: number) =>
     e <= 1
       ? { epoch: 1, dealId: 'M1', cv: 'Meridian CV I', unit: 'MERIDIAN-CV-I', usdc: 'USDC' }
-      : { epoch: e, dealId: `M${e}`, cv: `Meridian CV I #${e}`, unit: `MERIDIAN-CV-I-${e}`, usdc: `USDC-${e}` };
+      : { epoch: e, dealId: `M${e}`, cv: `Meridian CV I #${e}`, unit: 'MERIDIAN-CV-I', usdc: `USDC-${e}` };
 
   // ── GET /registry ── PUBLIC party ids + custodian names + demo keys (no session) ─
   // The frontend needs every party id (the deal room references buyer/lpExiting/…),

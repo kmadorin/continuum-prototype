@@ -41,6 +41,11 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
   const [deal, setDeal] = useState<ActiveContract | null>(null);
   const [have, setHave] = useState<Record<string, boolean>>({});
   const [price, setPrice] = useState<string>(DEMO.clearingPct);
+  // Allocation leg ids are epoch-scoped: a RegistryAllocation carries no dealId, and its
+  // legId ('unit-buyer') is what the ceremony gating + the Close pairing match on. Without the
+  // dealId suffix a PRIOR epoch's allocations (which used the old rotated instrument id) satisfy
+  // this epoch's "already allocated" checks and get reused by the Close → conservation fails.
+  const LEG = { unit: `unit-buyer-${DEAL_ID}`, roll: `unit-roller-${DEAL_ID}`, cash: `cash-lp-${DEAL_ID}` };
   // Ceremony state: the on-chain FACTS behind each gate check + issuance outcome.
   const [receipt, setReceipt] = useState<ActiveContract | null>(null);
   const [closeUpdateId, setCloseUpdateId] = useState<string | null>(null);
@@ -84,9 +89,9 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       cert: !!certC,
       psa: !!psaC,
       basis: !!basisC,
-      allocUnit: !!pick(allocs, (c) => legId(c) === 'unit-buyer'),
-      allocRoll: !!pick(allocs, (c) => legId(c) === 'unit-roller'),
-      allocCash: !!pick(allocs, (c) => legId(c) === 'cash-lp'),
+      allocUnit: !!pick(allocs, (c) => legId(c) === LEG.unit),
+      allocRoll: !!pick(allocs, (c) => legId(c) === LEG.roll),
+      allocCash: !!pick(allocs, (c) => legId(c) === LEG.cash),
       valuation: !!valC,
       opinion: !!opC,
       // Consent counts only when the LPAC actually GRANTED it (not merely present).
@@ -94,7 +99,10 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       interestExiting: !!pick(interestOffer, (c) => c.args.lp === counter.lpExiting),
       interestRolling: !!pick(interestOffer, (c) => c.args.lp === counter.lpRolling),
     });
-    setReceipt(pick(receiptC, forDeal) ?? pick(receiptC));
+    // SettlementReceipt keys on the cv name (Deal.daml creates it with dealId = cv),
+    // not the short DEAL_ID — and NO unscoped fallback, or a prior-epoch receipt leaks
+    // into this deal's Provenance line.
+    setReceipt(pick(receiptC, (c) => c.args.dealId === DEMO.cv));
     setFacts({
       valuationHash: (valC?.args.contentHash as string) || '',
       fairnessHash: (opC?.args.contentHash as string) || '',
@@ -249,15 +257,15 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
   // on-ledger, so an incoherent cap table cannot settle: it aborts the whole transaction.
   const allocUnit = () =>
     step('allocUnit', 'Unit leg minted + allocated to the buyer.', () =>
-      allocateLeg(counter.buyer, DEMO.unit, DEMO.buyerUnits, 'unit-buyer'),
+      allocateLeg(counter.buyer, DEMO.unit, DEMO.buyerUnits, LEG.unit),
     );
   const allocRoll = () =>
     step('allocRoll', 'Rolled-unit leg minted + allocated to the rolling LP.', () =>
-      allocateLeg(counter.lpRolling, DEMO.unit, DEMO.rollerUnits, 'unit-roller'),
+      allocateLeg(counter.lpRolling, DEMO.unit, DEMO.rollerUnits, LEG.roll),
     );
   const allocCash = () =>
     step('allocCash', 'Cash leg minted + allocated to the exiting LP.', () =>
-      allocateLeg(counter.lpExiting, DEMO.usdc, DEMO.cashAmt, 'cash-lp'),
+      allocateLeg(counter.lpExiting, DEMO.usdc, DEMO.cashAmt, LEG.cash),
     );
 
   const createBasis = () =>
@@ -330,9 +338,9 @@ export default function Advisor({ embedded }: { embedded?: AdvisorSection[] } = 
       const execBuyerCid = await need(R.execDeleg, (c) => c.args.party === counter.buyer, "buyer's accepted ExecDelegation");
       const execExitingCid = await need(R.execDeleg, (c) => c.args.party === counter.lpExiting, "exiting LP's accepted ExecDelegation");
       const execRollingCid = await need(R.execDeleg, (c) => c.args.party === counter.lpRolling, "rolling LP's accepted ExecDelegation");
-      const allocUnitCid = await need(R.alloc, (c) => legId(c) === 'unit-buyer', "allocated unit leg (buyer's)");
-      const allocRollCid = await need(R.alloc, (c) => legId(c) === 'unit-roller', "allocated rolled-unit leg (rolling LP's)");
-      const allocCashCid = await need(R.alloc, (c) => legId(c) === 'cash-lp', 'allocated cash leg');
+      const allocUnitCid = await need(R.alloc, (c) => legId(c) === LEG.unit, "allocated unit leg (buyer's)");
+      const allocRollCid = await need(R.alloc, (c) => legId(c) === LEG.roll, "allocated rolled-unit leg (rolling LP's)");
+      const allocCashCid = await need(R.alloc, (c) => legId(c) === LEG.cash, 'allocated cash leg');
       const accExitingCid = await need(R.accPart, (c) => c.args.lp === counter.lpExiting, "exiting LP's AcceptedParticipation");
       const accRollingCid = await need(R.accPart, (c) => c.args.lp === counter.lpRolling, "rolling LP's AcceptedParticipation");
       const interestExitingCid = await need(R.interest, (c) => c.args.lp === counter.lpExiting, "exiting LP's accepted OldFundInterest");

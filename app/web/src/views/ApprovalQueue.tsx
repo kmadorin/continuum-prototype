@@ -190,11 +190,14 @@ export function usePendingApprovals(): { items: PendingItem[]; refresh: () => vo
         })
         .catch(() => {});
     };
-    tick();
-    const id = setInterval(tick, 2000);
+    tick(); // initial load always; recurring poll pauses when hidden
+    const id = setInterval(() => { if (!document.hidden) tick(); }, 4000);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       on = false;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [build]);
 
