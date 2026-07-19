@@ -57,9 +57,18 @@ export function useAction() {
 export function useRefresh(fn: (alive: () => boolean) => Promise<void>, deps: unknown[]) {
   useEffect(() => {
     let on = true;
-    void fn(() => on);
+    const tick = () => { if (!document.hidden) void fn(() => on); };
+    void fn(() => on); // initial load ALWAYS (even hidden) so a backgrounded seat isn't blank
+    // Keep the seat live: a settled close (or any cross-seat change) lands here on the next tick
+    // instead of only after a manual reload — this is what makes the buyer's holding + the SETTLED
+    // takeover appear once the GP fires Close. Only the VISIBLE tab polls; refetch on refocus.
+    const id = setInterval(tick, 5000);
+    const onVis = () => { if (!document.hidden) void fn(() => on); };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       on = false;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

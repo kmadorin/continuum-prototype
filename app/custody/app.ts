@@ -178,8 +178,14 @@ export function createApp(deps: AppDeps) {
   // client already dedups its parallel ledger-end GETs in-flight.
   const readCacheKey = (rest: string, party: string): string | null =>
     rest === '/v2/state/active-contracts' ? `ac:${party}` : null;
-  const bustReadCache = (party: string) => {
-    readCache.delete(`ac:${party}`);
+  // Bust EVERY party's snapshot on any write, not just the actor's: a write commonly creates
+  // (or archives) contracts observed by OTHER seats — e.g. the LPAC's RecordConsent archives the
+  // deal the GP then reads to OpenElections. Actor-only busting left cross-seat readers serving a
+  // pre-write snapshot for up to the TTL (read-after-write across parties broke). Clearing all is
+  // cheap: actions are rare, and this still coalesces the CONTINUOUS between-action polling — the
+  // actual load win. (The parameter is kept for call-site clarity.)
+  const bustReadCache = (_party: string) => {
+    readCache.clear();
   };
 
   const bearer = (c: any): string | undefined => {
