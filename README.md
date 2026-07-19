@@ -12,7 +12,7 @@ LPs and buyers commit privately, the system computes the close, and cash plus fu
 | | |
 |---|---|
 | **Live app** (Canton 5N devnet) | **https://continuum-custody.fly.dev/** |
-| **Pitch deck** | **https://continuum-pitch.pages.dev/** |
+| **Pitch deck** | **https://continuum-custody.fly.dev/deck** |
 
 ---
 
