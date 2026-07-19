@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { ROLES, useSession, type Role } from '../state/WalletSession';
 import { custodians } from '../lib/useLedger';
+import { navigate } from '../lib/nav';
 import { AVATAR } from '../lib/avatars';
 import logo from '../assets/logo.svg';
 
@@ -156,7 +157,8 @@ export default function SignIn() {
     setError(null);
   }
 
-  // One-click entry: the demo credentials are known, so a seat signs in directly.
+  // One-click entry: the demo credentials are known, so a seat signs in directly, then
+  // the URL becomes /<role> (Back returns to '/', the picker).
   async function enter(role: Role) {
     if (busy) return;
     setPicked(role);
@@ -164,20 +166,18 @@ export default function SignIn() {
     setError(null);
     try {
       await signIn(role, demoPassword(role));
-      // On success the app re-renders into the role workspace (App gate).
+      navigate(`/${role}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
   }
 
-  // Deep link: /?seat=<role> — the per-role "open in a new window" links land here.
-  // With the login form hidden it enters the seat directly; otherwise it opens the panel.
+  // Legacy deep link: /?seat=<role> — redirect to the /<role> path (replace, so Back
+  // still goes to '/'). The App gate then handles the actual sign-in.
   useEffect(() => {
     const seat = new URLSearchParams(window.location.search).get('seat');
-    if (!seat || !(ROLES as readonly string[]).includes(seat)) return;
-    if (SHOW_LOGIN_FORM) choose(seat as Role);
-    else void enter(seat as Role);
+    if (seat && (ROLES as readonly string[]).includes(seat)) navigate(`/${seat}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 
@@ -342,7 +342,7 @@ export default function SignIn() {
                     role can open in its own window, with the login panel ready. */}
                 <a
                   className="acc-newwin"
-                  href={`/?seat=${role}`}
+                  href={`/${role}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Open this seat in a new window"

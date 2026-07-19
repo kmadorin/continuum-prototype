@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useSession } from '../state/WalletSession';
+import { navigate } from '../lib/nav';
 import TrustPanel from '../views/TrustPanel';
 import { AVATAR } from '../lib/avatars';
 import logo from '../assets/logo.svg';
@@ -87,7 +88,10 @@ export default function Shell({
   const onSignOut = () => {
     if (leaving) return;
     setLeaving(true);
-    setTimeout(signOut, 260);
+    setTimeout(() => {
+      signOut();
+      navigate('/');
+    }, 260);
   };
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 

@@ -4,8 +4,9 @@
 // which renders the shared application Shell (sidebar, page header, content):
 // the GP gets the full lifecycle Deal Page, every narrow seat a focused page.
 // All chrome that used to live here (topbar, trust footer) now lives in the Shell.
-import { useEffect } from 'react';
-import { SessionProvider, useSession } from './state/WalletSession';
+import { useEffect, useRef } from 'react';
+import { SessionProvider, useSession, ROLES, type Role } from './state/WalletSession';
+import { usePath, navigate } from './lib/nav';
 import { ToastProvider } from './state/Toast';
 import { InspectorProvider } from './state/Inspector';
 import DealPage from './views/DealPage';
@@ -16,12 +17,31 @@ import Settlement from './views/Settlement';
 import './styles.css';
 
 function Gate() {
-  const { isSignedIn, role, ready } = useSession();
+  const { isSignedIn, role, ready, signIn } = useSession();
+  const path = usePath();
+
+  // The URL path drives the seat: '' (on '/') → landing picker; a role slug → that
+  // role's workspace. `/pitch-deck` is a separate public page.
+  const slug = path.replace(/^\/+|\/+$/g, '');
+  const target = (ROLES as readonly string[]).includes(slug) ? (slug as Role) : null;
+
+  // On /<role> while not signed in as that role, auto sign-in (demo creds are known).
+  // Gated on `ready` so it never races the initial /me restore; a ref guards against
+  // firing twice for the same target (StrictMode double-invoke / re-render).
+  const signingIn = useRef<Role | null>(null);
+  useEffect(() => {
+    if (!ready || !target || role === target || signingIn.current === target) return;
+    signingIn.current = target;
+    void signIn(target, `${target}-demo`)
+      .catch(() => navigate('/'))
+      .finally(() => {
+        if (signingIn.current === target) signingIn.current = null;
+      });
+  }, [ready, target, role, signIn]);
 
   // Temporary internal route: the pitch, as a public read-only page (linked from the
-  // presentation deck at /deck/). Resolved on pathname so it works in dev and behind
-  // the custody spine's SPA fallback alike — no router needed for one page.
-  if (window.location.pathname === '/pitch-deck') return <PitchDeck />;
+  // presentation deck at /deck/).
+  if (path === '/pitch-deck') return <PitchDeck />;
 
   // Wait for the initial /me restore + registry load so a reload doesn't flash the
   // SignIn screen for an already-authenticated session.
@@ -36,7 +56,21 @@ function Gate() {
     );
   }
 
-  if (!isSignedIn || !role) return <SignIn />;
+  // '/' (or any unknown path) → landing picker, even with a live session — this is what
+  // browser Back from /<role> lands on.
+  if (!target) return <SignIn />;
+
+  // On /<role> but the auto sign-in above hasn't landed yet.
+  if (!isSignedIn || role !== target) {
+    return (
+      <div className="boot">
+        <div className="boot-inner">
+          <span className="toast-spinner" aria-hidden="true" />
+          Signing in…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
