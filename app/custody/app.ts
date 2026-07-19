@@ -657,6 +657,13 @@ export function createApp(deps: AppDeps) {
       // Directory URLs resolve to their index.html — this is how the pitch deck is
       // served at the clean /deck/ path (dist/deck/index.html, no .html in the URL).
       if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isDirectory()) {
+        // A directory URL WITHOUT a trailing slash (/deck) makes the browser resolve the
+        // page's relative asset paths against the site root (/shots/x.webp) instead of the
+        // directory (/deck/shots/x.webp) — those 404 to the SPA fallback and render as broken
+        // images. Redirect to the trailing-slash form so relative paths resolve correctly.
+        if (!pathname.endsWith('/')) {
+          return c.redirect(pathname + '/' + (new URL(c.req.url).search || ''), 301);
+        }
         candidate = join(candidate, 'index.html');
       }
       if (candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isFile()) {
