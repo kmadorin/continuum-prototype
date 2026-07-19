@@ -397,7 +397,7 @@
   }
 
   /* ---------- mobile: the deck becomes a naturally-scrolling document ---------- */
-  @media (max-width: 760px) {
+  @media screen and (max-width: 760px) {
     html, body { overflow: auto; height: auto; overscroll-behavior: auto; }
     #stage { position: static; width: 100%; height: auto; transform: none !important; overflow: visible; background: var(--bg); }
     #strip { position: static; transform: none !important; }
@@ -589,7 +589,7 @@
   .kv .hash { color: var(--mute); }
 
   /* ---------- appendix mobile ---------- */
-  @media (max-width: 760px) {
+  @media screen and (max-width: 760px) {
     .mirror4 .mhead, .mirror4 .mrow2 { grid-template-columns: 1fr; }
     .mirror4 .mhead div { display: none; }
     .mirror4 .mrow2 > span { border-right: 0; border-bottom: 1px solid var(--border-soft); padding: 10px 16px; font-size: 14px; }
